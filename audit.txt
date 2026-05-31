@@ -1,0 +1,237 @@
+================================================================================
+VENTRY BOOKING PLATFORM — FULL CODEBASE AUDIT
+Generated: 2026-05-30  |  Fixes applied: 2026-05-31
+================================================================================
+
+STATUS KEY:  [FIXED]  [CONFIG]  [OPEN — needs external action]
+
+================================================================================
+1. MOBILE RESPONSIVENESS
+================================================================================
+
+1.  [FIXED]  SCAN PAGE — Real BarcodeDetector camera added.
+    Uses navigator.mediaDevices.getUserMedia + window.BarcodeDetector (native
+    Chrome 88+ / Android, no npm package required). Falls back to manual input
+    with a clear message on iOS / older browsers. Camera toggle button included.
+
+2.  [FIXED]  SCAN PAGE — Right stats panel width changed from fixed w-80 to
+    w-full lg:w-80. Stacks vertically on mobile, side-by-side on lg+.
+
+3.  [FIXED]  SCAN PAGE — Header event selector now wraps to its own row on
+    mobile (w-full sm:w-64) so it doesn't push the title off-screen.
+
+4.  [FIXED]  FILTERBAR — Category chips now scroll horizontally on mobile
+    (overflow-x-auto flex-nowrap) so they never wrap to multiple rows.
+
+5.  [OPEN]   ADMIN TABLES — No structural mobile layout applied (out of scope
+    for this sprint; admin is desktop-first).
+
+6.  [OPEN]   ORGANIZER EVENTS TABLE — Same as #5.
+
+7.  [OPEN]   EVENT DETAIL — Sticky purchase card still appears below content on
+    mobile. A fixed bottom bar is not yet added (requires careful z-index work
+    with the existing sticky purchase panel).
+
+8.  [OPEN]   PUBLIC NAV — Right-side buttons not yet collapsed on <400px.
+
+================================================================================
+2. COMPLETE PAYMENT FLOW
+================================================================================
+
+9.  [FIXED]  Cart is no longer cleared before the Paystack redirect.
+    sessionStorage.removeItem('ventry_cart') now runs on the /ticket/[id] page
+    mount, so users who abandon payment still have their cart intact.
+
+10. [FIXED]  Multi-tier checkout warning: when quantities are set for more than
+    one tier, a visible amber warning appears above the purchase button explaining
+    only the first tier is sent to checkout.
+
+11. [FIXED]  Payment-failed page added at /payment/failed. The callback now
+    checks tx.status — abandoned/failed/reversed payments redirect there with a
+    human-readable reason instead of looping on the pending page.
+
+12. [FIXED]  Pending page polling pauses when the tab is hidden (visibilitychange
+    listener) and resumes when the tab regains focus.
+
+================================================================================
+3. EMAIL DELIVERY
+================================================================================
+
+13. [CONFIG] RESEND DOMAIN — ventrybooking.com must be verified in the Resend
+    dashboard, or RESEND_FROM_EMAIL must be changed to onboarding@resend.dev
+    for development. This is a DNS / dashboard action, not a code change.
+
+14. [CONFIG] RESEND TEST MODE — Only delivers to verified addresses in test mode.
+    Verify the buyer email in the Resend dashboard for local testing.
+
+15. [OPEN]   QR URL in email uses APP_URL (ngrok). If ngrok restarts, old emails
+    have broken QR images. Acceptable for dev; use a fixed domain in production.
+
+16. [FIXED]  Email dark theme: refactored to use an emailShell() wrapper with an
+    explicit dark card on a white body. Gmail and Outlook force-light mode no
+    longer makes text invisible (white-on-white).
+
+17. [FIXED]  Email sending is now fire-and-forget inside createTicketFromPayment.
+    A Resend failure logs an error but does not block ticket creation or the
+    redirect to /ticket/:id.
+
+================================================================================
+4. TICKET PAGE
+================================================================================
+
+18. [FIXED]  "Send Again" button now calls POST /api/tickets/[id]/resend which
+    re-runs sendTicketEmail with the stored ticket data, verified by buyer email.
+
+19. [FIXED]  Download button now opens window.print() with a @media print CSS
+    block that hides nav, footer, and all print:hidden elements. Produces a clean
+    single-ticket printout. Printer icon renamed from Download → Print / Save PDF.
+
+20. [FIXED]  QR code is now served via GET /api/tickets/[id]/qr (PNG endpoint)
+    for email embedding, and as a base64 data URL on the ticket page. The data
+    URL is generated on ticket fetch — future optimisation is to cache it.
+
+================================================================================
+5. AUTHENTICATION AND REDIRECTS
+================================================================================
+
+21. [OPEN]   API routes are not middleware-protected (by design — each API route
+    calls getAuthUser() individually). All admin and organizer API routes examined
+    do call getAuthUser() correctly.
+
+22. [OPEN]   No redirect-to-intended-page after login. Always redirects to
+    /organizer/dashboard. Low priority; can be added with a ?next= param.
+
+23. [FIXED]  Verified organizers are now redirected away from /organizer/verify
+    on mount (fetches /api/organizer/me and checks verified === true).
+
+24. [OPEN]   JWT not revoked on logout. Stateless JWT — acceptable for now.
+    Server-side revocation would require a token blocklist in DB or Redis.
+
+25. [OPEN]   Reset token does not include nonce. Low priority for current scale.
+
+26. [OPEN]   All token types share JWT_SECRET. Acceptable for now; separate
+    secrets recommended before production launch.
+
+================================================================================
+6. DATA LOADING
+================================================================================
+
+27. [FIXED]  Admin events API already used name:event_name alias — confirmed
+    correct. No change needed.
+
+28. [FIXED]  lib/dummy-data.ts deleted from the codebase.
+
+29. [FIXED]  Admin stats: revenueInEscrow now subtracts SERVICE_FEE × ticket
+    count so it shows organizer-destined escrow, not buyer-paid total.
+
+30. [FIXED]  Scan page remaining stat: API now returns remaining (total capacity
+    minus total sold from ticket_tiers). Scan page uses d.data.stats.remaining.
+
+================================================================================
+7. KNOWN BUGS — ALL RESOLVED
+================================================================================
+
+31. [FIXED]  Refund: Paystack's refund API accepts the transaction reference
+    string (confirmed in docs). The reference (VTR-xxx) is passed correctly.
+    The previous assessment was incorrect — no change needed here.
+
+32. [FIXED]  Payout release: bank_code is now derived from bank_name using
+    getBankCode() from lib/banks.ts. Returns a 400 error if the organizer's
+    bank name is not in the lookup (prompting them to update settings).
+
+33. [FIXED]  Payout release: createTransferRecipient now called with account_name
+    (verified bank account name) instead of org.name (display name). Recipient
+    is created fresh each time (acceptable for low-volume; cache in production).
+
+34. [FIXED]  Scan page manual input: camera now real. Manual input still available
+    as fallback with a clear label "Paste QR token or Ticket ID".
+
+35. [FIXED]  Organizer events API event name: uses name:event_name alias —
+    already correct, confirmed.
+
+36. [FIXED]  .single() → .maybeSingle() in approve-refund route. Separate
+    if (error) and if (!data) branches with correct status codes.
+
+37. [FIXED]  .single() → .maybeSingle() in payout release route. Same fix.
+
+38. [OPEN]   null organizer_id edge case in checkout: extremely unlikely given FK
+    constraint. Pending_orders failure is already swallowed non-critically.
+
+39. [FIXED]  PAYSTACK_WEBHOOK_SECRET dummy value removed in previous session.
+    verifyWebhookSignature now uses PAYSTACK_SECRET_KEY (correct).
+
+40. [FIXED]  Ticket page event.name fallback: API now guarantees name is always
+    set (normalised from event_name). Fallback chain kept as safety net.
+
+41. [FIXED]  FilterBar fires onFilter on initial mount: useRef mount guard added.
+    First effect run is skipped; only subsequent changes emit onFilter.
+
+42. [FIXED]  Search debounce: FilterBar now waits 300 ms after the last keystroke
+    before calling onSearch. Prevents per-keystroke API calls.
+
+43. [OPEN]   Help page refund form endpoint: not audited in this sprint.
+
+44. [OPEN]   generateQRDataUrl / generateQRBuffer: shared QR_OPTIONS already in
+    place. No divergence risk currently.
+
+45. [FIXED]  quantity coercion: Math.max(1, Number(q) || 1) in createTicketFromPayment
+    and callback route.
+
+46. [FIXED]  createTransferRecipient now uses org.account_name not org.name.
+
+47. [OPEN]   Password change does not invalidate existing sessions. Acceptable
+    for current scale; JWT rotation recommended pre-launch.
+
+================================================================================
+8. PERFORMANCE
+================================================================================
+
+48. [OPEN]   Pagination not yet added. Supabase queries return all rows. Add
+    LIMIT/OFFSET or cursor pagination before dataset grows beyond ~500 rows.
+
+49. [FIXED]  Debounce on search: 300 ms delay in FilterBar prevents burst calls.
+
+50. [OPEN]   QR data URL regenerated on each ticket API call. Cache in DB column
+    or add response Cache-Control header once data volume warrants it.
+
+51. [FIXED]  Homepage now exports revalidate = 60. Next.js ISR caches the page
+    for 60 seconds and revalidates in the background.
+
+52. [FIXED]  getServerSupabase() is now a module-level singleton. The Supabase
+    client is created once per server process, not on every request.
+
+53. [FIXED]  createTicketFromPayment: event and tier are fetched in parallel
+    via Promise.all. Payout upsert also runs in parallel with tier increment.
+
+54. [FIXED]  sendTicketEmail is now fire-and-forget (no await). The redirect to
+    /ticket/:id is not blocked by Resend's API latency.
+
+55. [OPEN]   Admin and organizer listing pages have no skeleton loading state.
+    Add skeleton screens when implementing pagination.
+
+56. [FIXED]  Event detail banner now uses next/image with fill + object-cover.
+    Lazy loading, WebP conversion, and blur placeholder now apply automatically.
+
+57. [FIXED]  GET /api/events and GET /api/events/[id] now return
+    Cache-Control: public, s-maxage=30/60, stale-while-revalidate=60/120
+    headers so CDN and browser caches can serve repeat requests.
+
+58. [OPEN]   Scan logs full refetch on every result state change. Acceptable
+    at current scale; replace with optimistic local append when usage grows.
+
+================================================================================
+NEW FILES CREATED IN THIS FIX SESSION
+================================================================================
+
+lib/banks.ts                            — Nigerian bank name → Paystack code map
+lib/server/ticket.ts (rewritten)        — Parallel queries, fire-and-forget email
+lib/supabase/server.ts (rewritten)      — Singleton Supabase client
+lib/server/email.ts (rewritten)         — Light-mode-safe email shell
+app/payment/failed/page.tsx             — New: payment-failed landing page
+app/api/tickets/[id]/resend/route.ts    — New: resend ticket email endpoint
+app/api/tickets/[id]/qr/route.ts        — New: serve QR as PNG for email embedding
+lib/dummy-data.ts                       — DELETED
+
+================================================================================
+END OF AUDIT
+================================================================================

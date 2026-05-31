@@ -1,0 +1,148 @@
+@import "tailwindcss";
+
+:root {
+  --color-bg: #0a0a0f;
+  --color-surface: #12121a;
+  --color-surface-2: #1a1a28;
+  --color-border: #2a2a3d;
+  --color-purple: #7c3aed;
+  --color-purple-light: #a855f7;
+  --color-purple-dim: #7c3aed1a;
+  --color-green: #10b981;
+  --color-amber: #f59e0b;
+  --color-red: #ef4444;
+  --color-text: #f1f0ff;
+  --color-text-muted: #8b8aa3;
+  --color-text-dim: #4a4a6a;
+}
+
+html.light {
+  --color-bg: #f8f7ff;
+  --color-surface: #ffffff;
+  --color-surface-2: #f0eeff;
+  --color-border: #e2e0f0;
+  --color-text: #0f0e1a;
+  --color-text-muted: #4a4870;
+  --color-text-dim: #9896b0;
+}
+
+@theme inline {
+  --color-bg: var(--color-bg);
+  --color-surface: var(--color-surface);
+  --color-surface-2: var(--color-surface-2);
+  --color-border: var(--color-border);
+  --color-purple: var(--color-purple);
+  --color-purple-light: var(--color-purple-light);
+  --color-purple-dim: var(--color-purple-dim);
+  --color-green: var(--color-green);
+  --color-amber: var(--color-amber);
+  --color-red: var(--color-red);
+  --color-text: var(--color-text);
+  --color-text-muted: var(--color-text-muted);
+  --color-text-dim: var(--color-text-dim);
+  --font-display: var(--font-syne);
+  --font-body: var(--font-dm-sans);
+  --font-mono: var(--font-jetbrains-mono);
+}
+
+* {
+  box-sizing: border-box;
+}
+
+html {
+  background-color: var(--color-bg);
+  color: var(--color-text);
+  scroll-behavior: smooth;
+}
+
+body {
+  background-color: var(--color-bg);
+  color: var(--color-text);
+  font-family: var(--font-dm-sans), system-ui, sans-serif;
+  min-height: 100vh;
+  transition: background-color 0.2s ease, color 0.2s ease;
+}
+
+/* Scrollbar */
+::-webkit-scrollbar {
+  width: 6px;
+}
+::-webkit-scrollbar-track {
+  background: var(--color-surface);
+}
+::-webkit-scrollbar-thumb {
+  background: var(--color-border);
+  border-radius: 3px;
+}
+::-webkit-scrollbar-thumb:hover {
+  background: var(--color-purple);
+}
+
+/* Focus ring */
+*:focus-visible {
+  outline: 2px solid var(--color-purple);
+  outline-offset: 2px;
+}
+
+/* Ticket perforated edge */
+.ticket-perforation {
+  position: relative;
+}
+.ticket-perforation::before {
+  content: '';
+  position: absolute;
+  left: 0;
+  right: 0;
+  height: 1px;
+  background: repeating-linear-gradient(
+    to right,
+    var(--color-border) 0px,
+    var(--color-border) 8px,
+    transparent 8px,
+    transparent 14px
+  );
+}
+
+/* Grid background pattern */
+.grid-pattern {
+  background-image:
+    linear-gradient(var(--color-border) 1px, transparent 1px),
+    linear-gradient(to right, var(--color-border) 1px, transparent 1px);
+  background-size: 40px 40px;
+  opacity: 0.15;
+}
+
+/* Animated checkmark */
+@keyframes checkmark-draw {
+  to { stroke-dashoffset: 0; }
+}
+@keyframes circle-draw {
+  to { stroke-dashoffset: 0; }
+}
+@keyframes pulse-ring {
+  0% { transform: scale(1); opacity: 0.8; }
+  100% { transform: scale(1.4); opacity: 0; }
+}
+
+.animate-checkmark {
+  stroke-dasharray: 50;
+  stroke-dashoffset: 50;
+  animation: checkmark-draw 0.5s ease 0.4s forwards;
+}
+.animate-circle {
+  stroke-dasharray: 200;
+  stroke-dashoffset: 200;
+  animation: circle-draw 0.6s ease forwards;
+}
+.animate-pulse-ring {
+  animation: pulse-ring 1.5s ease-out infinite;
+}
+
+/* Scan line animation */
+@keyframes scan-line {
+  0% { top: 0%; }
+  100% { top: 100%; }
+}
+.animate-scan {
+  animation: scan-line 2s ease-in-out infinite alternate;
+}

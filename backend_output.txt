@@ -1,0 +1,388 @@
+VENTRY BACKEND BUILD — SESSION OUTPUT
+======================================
+Date: 2026-05-28
+Final build status: PASSED (0 TypeScript errors, 58 pages)
+
+=====================================
+WHAT WAS BUILT (FULL BACKEND + WIRING)
+=====================================
+
+--- LIB / SERVER UTILITIES ---
+
+lib/supabase/server.ts
+  - getServerSupabase() using service role key, session persistence disabled
+
+lib/server/jwt.ts
+  - signAuthToken / verifyAuthToken (cookie auth, payload: { sub, role, email })
+  - signQrToken / verifyQrToken (QR codes embed JWT, never raw ticket IDs)
+  - signResetToken / verifyResetToken (password reset flow)
+
+lib/server/password.ts
+  - hashPassword / verifyPassword using Node.js crypto.pbkdf2Sync
+  - Format: "salt:hash" — no bcrypt dependency
+
+lib/server/ids.ts
+  - generateTicketId()  → TKT-XXXX-XXXX
+  - generateRefundCode() → RF-XXXX-XX
+  - generatePayoutRef()  → VTR-PAY-YEAR-XXXXXX
+
+lib/server/fees.ts
+  - SERVICE_FEE = 100 (NGN, buyer-paid, never refunded)
+  - PLATFORM_FEE_RATE = 0.025 (2.5% deducted from organizer net)
+  - calculateFees(gross) → { gross, fee, net }
+  - buyerTotal(price, qty) → { subtotal, serviceFee, total }
+
+lib/server/paystack.ts
+  - initializeTransaction
+  - verifyTransaction
+  - refundTransaction
+  - createTransferRecipient
+  - initiateTransfer
+  - verifyWebhookSignature (HMAC-SHA512)
+
+lib/server/qr.ts
+  - generateQRDataUrl(data) → base64 PNG data URL using 'qrcode' npm package
+
+lib/server/email.ts (via Resend)
+  - sendTicketEmail (QR image embedded inline)
+  - sendKYCApprovedEmail / sendKYCRejectedEmail
+  - sendEventApprovedEmail / sendEventRejectedEmail
+  - sendRefundConfirmationEmail
+  - sendPasswordResetEmail
+
+lib/server/auth.ts
+  - getAuthCookie() — reads ventry_token httpOnly cookie
+  - getAuthUser()   — verifies JWT, returns { sub, role, email } or null
+  - cookieOptions() — httpOnly, secure in prod, sameSite: lax
+
+middleware.ts
+  - Protects /organizer/* (except login, register, verify, forgot-password, reset-password)
+  - Protects /admin/* (except /admin/login)
+  - Redirects unauthenticated → login page
+  - Redirects already-logged-in away from auth pages
+
+--- AUTH API ROUTES ---
+
+POST /api/auth/organizer/register
+  - Validates fields, checks email uniqueness, hashes password, inserts user, returns JWT cookie
+
+POST /api/auth/organizer/login
+  - Verifies password hash, sets ventry_token cookie, returns user data
+
+POST /api/auth/admin/login
+  - Checks against ADMIN_EMAIL / ADMIN_PASSWORD env vars (no DB row for admin)
+
+POST /api/auth/logout
+  - Clears ventry_token cookie (maxAge: 0)
+
+GET  /api/auth/me
+  - Returns organizer or admin profile based on role in token
+
+POST /api/auth/forgot-password
+  - Creates reset_tokens DB entry, sends password reset email via Resend
+  - Always returns success (avoids email enumeration)
+
+POST /api/auth/reset-password
+  - Verifies JWT token + DB entry, updates password hash, marks token used
+
+POST /api/auth/change-password
+  - Authenticated route, verifies current password, updates hash
+
+--- PUBLIC API ROUTES ---
+
+GET  /api/events
+  - Query params: q (search), category, city
+  - Returns approved events with organizer join and tiers
+
+GET  /api/events/[id]
+  - Returns single event with full details
+
+POST /api/checkout
+  - Verifies event approved + tier availability
+  - Calls Paystack initializeTransaction
+  - Creates pending_orders record (non-critical)
+  - Returns authorizationUrl for Paystack redirect
+
+POST /api/paystack/webhook
+  - Verifies HMAC-SHA512 signature
+  - Processes charge.success events only
+  - Idempotency check on paystack_reference
+  - Generates ticketId (TKT-XXXX-XXXX), refundCode (RF-XXXX-XX), qrToken (JWT)
+  - Generates QR data URL, inserts ticket, increments tier sold count
+  - Creates/updates payout record for the organizer
+  - Sends ticket confirmation email with QR code embedded
+
+GET  /api/paystack/callback
+  - Redirects to /payment/pending?ref=... (webhook is source of truth)
+
+GET  /api/tickets/[id]
+  - Fetches ticket with event + organizer + tier joins
+  - Generates QR data URL on demand from stored qr_token
+
+POST /api/tickets/retrieve
+  - Looks up ticket by id + email pair (buyer verification)
+
+GET  /api/tickets/by-reference
+  - Polls for ticket by paystack_reference (used by /payment/pending page)
+
+POST /api/help/refund
+  - Verifies ticket + refundCode + email
+  - Checks for existing open complaint
+  - Inserts complaint record with priority (Fraud = high)
+
+--- ORGANIZER API ROUTES ---
+
+GET  /api/organizer/me
+  - Returns organizer profile from users table
+
+GET  /api/organizer/stats
+  - Returns ticketsSold, revenueInEscrow, activeEvents, payoutDue
+
+GET  /api/organizer/events
+POST /api/organizer/events
+  - GET: filtered by status, returns tiers
+  - POST: multipart form with banner upload to Supabase Storage (event-assets bucket)
+  - Requires kyc_status = approved before allowing event creation
+
+PATCH /api/organizer/events/[id]
+DELETE /api/organizer/events/[id]
+  - Both verify organizer_id ownership before acting
+
+POST /api/organizer/scan
+  - Five-check QR validation:
+    1. JWT signature valid
+    2. Ticket exists in DB
+    3. Ticket belongs to correct event
+    4. Status is 'valid' (not already used/refunded/cancelled)
+    5. Event not expired more than 24h ago
+  - Marks ticket status = 'used', logs scan to scan_logs table
+
+GET  /api/organizer/scan/logs
+  - Returns scan logs + stats (scanned, rejected) for a given eventId
+
+GET  /api/organizer/payouts
+  - Returns payout history for organizer
+
+POST /api/organizer/bank
+  - Validates 10-digit account number format
+  - Saves bank_name, account_number, account_name to users table
+
+PATCH /api/organizer/settings
+  - Updates name, phone, bio, notification preferences
+
+POST /api/organizer/kyc
+  - Multipart, handles steps 1–5:
+    Step 1: gov ID + selfie (upload to kyc-documents bucket, images only, max 5MB)
+    Step 2: phone number
+    Step 3: social media handles
+    Step 4: venue proof document (images + PDF, max 5MB)
+    Step 5: final submission → sets kyc_status = 'pending'
+
+--- ADMIN API ROUTES ---
+
+GET  /api/admin/stats
+  - Returns totalEvents, activeEvents, totalTicketsSold, revenueInEscrow, pendingKYC, openComplaints
+
+GET  /api/admin/organizers
+  - Optional ?status= filter (pending/approved/rejected)
+
+POST /api/admin/organizers/[id]/approve
+  - Sets kyc_status = approved, verified = true, sends KYC approved email
+
+POST /api/admin/organizers/[id]/reject
+  - Sets kyc_status = rejected with reason, sends KYC rejected email
+
+GET  /api/admin/events
+  - Optional ?status= filter
+
+POST /api/admin/events/[id]/approve
+  - Sets status = approved, sends event approved email to organizer
+
+POST /api/admin/events/[id]/reject
+  - Sets status = rejected with reason, sends event rejected email
+
+GET  /api/admin/complaints
+  - Sorted by priority (high first) then submitted_at
+
+POST /api/admin/complaints/[id]/approve-refund
+  - Calls Paystack refund (total_paid minus SERVICE_FEE)
+  - Marks ticket status = refunded, complaint status = resolved
+  - Sends refund confirmation email to buyer
+
+POST /api/admin/complaints/[id]/reject
+  - Marks complaint status = rejected with admin notes
+
+GET  /api/admin/payouts
+  - Optional ?status= filter
+
+POST /api/admin/payouts/[id]/confirm-event
+  - Moves payout pending → processing, event approved → completed
+
+POST /api/admin/payouts/[id]/release
+  - Calls Paystack createTransferRecipient + initiateTransfer
+  - Marks payout completed
+
+GET  /api/admin/payout-settings
+PATCH /api/admin/payout-settings
+  - Reads/writes payout percentage from platform_config table (key='payout_percentage')
+
+--- FRONTEND PAGES WIRED TO REAL APIs ---
+
+app/organizer/(auth)/login/page.tsx
+  - POSTs to /api/auth/organizer/login, sets cookie, redirects to dashboard
+
+app/organizer/(auth)/register/page.tsx
+  - Wired to /api/auth/organizer/register
+
+app/organizer/(auth)/verify/page.tsx
+  - Full 5-step KYC flow, each step POSTs FormData to /api/organizer/kyc
+
+app/organizer/(auth)/forgot-password/page.tsx  [NEW]
+  - Posts email to /api/auth/forgot-password, shows sent confirmation
+
+app/organizer/(auth)/reset-password/page.tsx  [NEW]
+  - Reads token from URL params, POSTs to /api/auth/reset-password
+
+components/layout/OrganizerSidebar.tsx
+  - Logout button POSTs /api/auth/logout then redirects to /organizer/login
+
+app/organizer/(app)/dashboard/page.tsx
+  - Fetches stats, recent events, me from real APIs
+
+app/organizer/(app)/events/page.tsx
+  - Fetches from /api/organizer/events
+
+app/organizer/(app)/events/create/page.tsx
+  - Full form with FormData (banner file upload), POSTs to /api/organizer/events
+
+app/organizer/(app)/settings/page.tsx
+  - Fetches me from /api/organizer/me
+  - Saves profile → /api/organizer/settings
+  - Saves bank → /api/organizer/bank
+  - Changes password → /api/auth/change-password
+
+app/organizer/(app)/payouts/page.tsx
+  - Fetches from /api/organizer/payouts and /api/organizer/stats
+  - Bank details section fetches/saves via /api/organizer/me and /api/organizer/bank
+
+app/organizer/(app)/scan/page.tsx
+  - Loads approved events from /api/organizer/events
+  - Validates via POST /api/organizer/scan (real JWT 5-step validation)
+  - Loads recent scan logs from /api/organizer/scan/logs
+
+app/events/page.tsx
+  - Fetches from /api/events?q=...
+
+app/events/[id]/page.tsx
+  - Fetches from /api/events/[id]
+  - Cart bug fixed: stores sessionStorage('ventry_cart') before routing to /checkout
+
+app/checkout/page.tsx
+  - Reads cart from sessionStorage
+  - POSTs to /api/checkout, redirects to Paystack authorizationUrl
+
+app/ticket/[id]/page.tsx
+  - Fixed to use route param via use(params)
+  - Fetches from /api/tickets/${id}, shows real QR image
+
+app/retrieve/page.tsx
+  - Now POSTs to /api/tickets/retrieve to validate email+ticketId before navigating
+
+app/payment/pending/page.tsx  [NEW]
+  - Polls /api/tickets/by-reference every 2s until ticket created by webhook
+  - Redirects to /ticket/[id] when ticket appears
+
+app/admin/login/page.tsx  [NEW]
+  - Admin credential form, POSTs to /api/auth/admin/login
+
+app/admin/page.tsx
+  - Wired to /api/admin/stats, /api/admin/organizers?status=pending, /api/admin/events?status=under_review
+
+app/admin/organizers/page.tsx
+  - Wired to /api/admin/organizers with filter
+  - Approve/reject with confirmation drawer, live reload
+
+app/admin/events/page.tsx
+  - Wired to /api/admin/events with filter
+  - Approve/reject with reason, live reload
+
+app/admin/complaints/page.tsx
+  - Wired to /api/admin/complaints
+  - Approve refund / reject claim buttons call real endpoints
+
+app/admin/payouts/page.tsx
+  - Wired to /api/admin/payouts and /api/admin/payout-settings
+  - Confirm Event / Release Payout buttons call real endpoints
+
+app/admin/fraud/page.tsx  [NEW]
+  - Filters high-priority/Fraud complaints from /api/admin/complaints
+
+app/admin/settings/page.tsx  [NEW]
+  - Payout percentage slider, saves to /api/admin/payout-settings
+
+--- COMPONENT UPDATES ---
+
+components/tickets/QRDisplay.tsx
+  - Now accepts dataUrl?: string | null prop
+  - Renders <img src={dataUrl}> when data URL present
+  - Stable loading fallback (no more random Math.random() grid)
+
+components/tickets/TicketCard.tsx
+  - Passes ticket.qrDataUrl to QRDisplay
+
+types/index.ts
+  - Ticket: added qrDataUrl?: string | null
+  - Event: added banner_url?: string | null
+  - Organizer: added member_since?, events_hosted? (snake_case aliases for API responses)
+
+--- BUGS FIXED ---
+
+1. Cart state between event detail and checkout
+   → sessionStorage('ventry_cart') stores { eventId, tierId, quantity, tierName, eventName, eventDate, tierPrice }
+
+2. Ticket page ignoring route param
+   → Converted to 'use client' with use(params) + useEffect fetch
+
+3. Scanner using Math.random() fake validation
+   → Real POST to /api/organizer/scan with 5-step JWT validation
+
+4. KYC only had step 1
+   → Full 5-step flow in /organizer/verify with FormData + file uploads
+
+5. Missing forgot-password page
+   → Created /organizer/(auth)/forgot-password/page.tsx
+
+6. Missing admin login page
+   → Created /admin/login/page.tsx
+
+7. Missing admin fraud monitor page
+   → Created /admin/fraud/page.tsx
+
+8. Logout button doing nothing
+   → OrganizerSidebar now calls /api/auth/logout and redirects
+
+9. Settings page using hardcoded data
+   → Fetches from /api/organizer/me on mount, saves to real endpoints
+
+10. QR codes were fake random
+    → generateQRDataUrl() creates real QR codes from JWT tokens
+
+--- SECURITY ---
+
+- Service role key never exposed to client (server.ts only)
+- Paystack secret key never exposed to client
+- Webhook signature verified via HMAC-SHA512 before processing
+- File uploads validate type (images/PDF) and size (max 5MB)
+- All protected routes return 401 (unauthenticated) or 403 (wrong role)
+- All API responses: { success, data } or { error, details }
+- httpOnly cookies prevent XSS token theft
+- Password hashing: pbkdf2Sync with random salt, 100,000 iterations
+
+--- BUILD RESULT ---
+
+✓ Compiled successfully
+✓ TypeScript: 0 errors
+✓ 58 pages generated (static + dynamic)
+✓ All API routes registered
+
+Run with: npm run dev (from ventry/ directory)

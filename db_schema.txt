@@ -1,0 +1,197 @@
+DATABASE COLUMN AUDIT — VENTRY BOOKING SYSTEM
+Generated: 2026-05-29
+================================================================================
+All columns referenced in INSERT, SELECT, or UPDATE operations across every API
+route. Compare against actual Supabase schema to identify missing columns.
+================================================================================
+
+
+TABLE: users
+------------
+Column                  | Operations
+------------------------|-----------------------------
+id                      | SELECT, UPDATE
+email                   | SELECT, INSERT, UPDATE
+name                    | SELECT, INSERT, UPDATE
+phone                   | SELECT, INSERT, UPDATE
+password_hash           | SELECT, INSERT, UPDATE
+tier                    | SELECT, INSERT
+verified                | SELECT, UPDATE
+member_since            | SELECT, INSERT
+events_hosted           | SELECT, INSERT
+kyc_status              | SELECT, UPDATE
+email_notifications     | SELECT, INSERT, UPDATE
+sms_alerts              | SELECT, INSERT, UPDATE
+bio                     | SELECT, UPDATE
+bank_name               | SELECT, UPDATE
+account_number          | SELECT, UPDATE
+account_name            | SELECT, UPDATE
+kyc_gov_id_path         | SELECT, INSERT, UPDATE
+kyc_selfie_path         | SELECT, INSERT, UPDATE
+kyc_step                | SELECT, UPDATE
+kyc_phone_verified      | UPDATE
+kyc_social_twitter      | UPDATE
+kyc_social_instagram    | UPDATE
+kyc_social_facebook     | UPDATE
+kyc_venue_proof_path    | UPDATE
+kyc_submitted_at        | SELECT, UPDATE
+kyc_rejection_reason    | UPDATE
+created_at              | INSERT
+
+
+TABLE: events
+-------------
+Column                  | Operations
+------------------------|-----------------------------
+id                      | SELECT, INSERT, UPDATE, DELETE
+name                    | SELECT, INSERT, UPDATE
+category                | SELECT, INSERT, UPDATE
+description             | SELECT, INSERT, UPDATE
+date                    | SELECT, INSERT, UPDATE
+time                    | SELECT, INSERT
+venue                   | SELECT, INSERT
+address                 | SELECT, INSERT, UPDATE
+city                    | SELECT, INSERT, UPDATE
+status                  | SELECT, INSERT, UPDATE
+badge                   | SELECT
+total_sold              | SELECT, INSERT
+banner_color            | SELECT, INSERT
+banner_url              | SELECT, INSERT
+organizer_id            | SELECT, INSERT, UPDATE
+rejection_reason        | UPDATE
+created_at              | SELECT, INSERT
+
+
+TABLE: ticket_tiers
+-------------------
+Column                  | Operations
+------------------------|-----------------------------
+id                      | SELECT, INSERT
+name                    | SELECT, INSERT
+price                   | SELECT, INSERT
+available               | SELECT, INSERT
+sold                    | SELECT
+event_id                | INSERT
+
+NOTE: RPC function `increment_tier_sold` is also called on this table.
+
+
+TABLE: tickets
+--------------
+Column                  | Operations
+------------------------|-----------------------------
+id                      | SELECT, INSERT, UPDATE
+event_id                | SELECT, INSERT
+tier_id                 | SELECT, INSERT
+organizer_id            | SELECT, INSERT
+buyer_name              | SELECT, INSERT
+buyer_email             | SELECT, INSERT
+quantity                | SELECT, INSERT
+total_paid              | SELECT, INSERT
+status                  | SELECT, UPDATE
+purchased_at            | SELECT, INSERT
+refund_code             | SELECT, INSERT
+qr_token                | SELECT, INSERT
+paystack_reference      | SELECT, INSERT
+
+
+TABLE: scan_logs
+----------------
+Column                  | Operations
+------------------------|-----------------------------
+id                      | SELECT
+event_id                | SELECT, INSERT
+ticket_id               | SELECT, INSERT
+attendee_name           | SELECT, INSERT
+ticket_type             | SELECT, INSERT
+scanned_at              | SELECT, INSERT
+scanned_by              | SELECT, INSERT
+result                  | SELECT, INSERT
+
+
+TABLE: payouts
+--------------
+Column                  | Operations
+------------------------|-----------------------------
+id                      | SELECT, UPDATE
+event_id                | SELECT, INSERT, UPDATE
+organizer_id            | SELECT, INSERT
+organizer_name          | SELECT, INSERT
+event_name              | SELECT, INSERT
+date                    | SELECT, INSERT
+gross                   | SELECT, INSERT, UPDATE
+fee                     | SELECT, INSERT, UPDATE
+net                     | SELECT, INSERT, UPDATE
+status                  | SELECT, UPDATE
+reference               | SELECT, INSERT, UPDATE
+released_at             | UPDATE
+
+
+TABLE: complaints
+-----------------
+Column                  | Operations
+------------------------|-----------------------------
+id                      | SELECT, INSERT, UPDATE
+ticket_id               | SELECT, INSERT
+type                    | SELECT, INSERT
+buyer_name              | SELECT
+buyer_email             | SELECT, INSERT, UPDATE
+event_name              | SELECT, INSERT
+event_id                | INSERT
+submitted_at            | SELECT, INSERT
+status                  | SELECT, UPDATE
+priority                | SELECT, INSERT
+notes                   | SELECT, INSERT, UPDATE
+
+
+TABLE: reset_tokens
+-------------------
+Column                  | Operations
+------------------------|-----------------------------
+id                      | SELECT, UPDATE
+email                   | SELECT, INSERT
+token                   | SELECT, INSERT
+expires_at              | SELECT
+used                    | SELECT, UPDATE
+
+
+TABLE: pending_orders
+---------------------
+Column                  | Operations
+------------------------|-----------------------------
+reference               | INSERT
+event_id                | INSERT
+tier_id                 | INSERT
+quantity                | INSERT
+buyer_email             | INSERT
+buyer_name              | INSERT
+subtotal                | INSERT
+service_fee             | INSERT
+total                   | INSERT
+organizer_id            | INSERT
+created_at              | INSERT
+
+
+TABLE: platform_config
+----------------------
+Column                  | Operations
+------------------------|-----------------------------
+key                     | SELECT, UPSERT
+value                   | SELECT, UPSERT
+
+
+================================================================================
+SUMMARY
+================================================================================
+Total tables  : 10
+Total columns : 83
+API routes    : 38
+
+High-risk columns to verify (less obvious, easy to miss):
+  users         — kyc_step, kyc_phone_verified, kyc_social_twitter,
+                  kyc_social_instagram, kyc_social_facebook,
+                  kyc_venue_proof_path, kyc_rejection_reason
+  payouts       — released_at
+  complaints    — buyer_name (SELECT only, no INSERT — verify intentional)
+  tickets       — organizer_id (inserted by webhook, verify FK constraint)
+================================================================================
