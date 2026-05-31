@@ -26,14 +26,41 @@ const jetbrainsMono = JetBrains_Mono({
 });
 
 export const metadata: Metadata = {
-  title: 'Ventry — Secure Event Ticketing for Nigeria',
-  description:
-    'Buy tickets with confidence. Ventry holds every naira in escrow until your event happens.',
   metadataBase: new URL('https://ventrybooking.com'),
+
+  title: 'Ventry — The Party Starts Here',
+  description:
+    'Discover and buy tickets to the best parties, concerts and events across Nigeria. Every payment protected in escrow.',
+
   openGraph: {
-    title: 'Ventry — Secure Event Ticketing for Nigeria',
-    description: 'Buy tickets with confidence. Your money is protected by escrow.',
+    title: 'Ventry — The Party Starts Here',
+    description:
+      'Discover and buy tickets to the best parties, concerts and events across Nigeria. Every payment protected in escrow.',
     siteName: 'Ventry',
+    url: 'https://ventrybooking.com',
+    type: 'website',
+    locale: 'en_NG',
+    images: [
+      {
+        url: '/opengraph-image',
+        width: 1200,
+        height: 630,
+        alt: 'Ventry — The Party Starts Here',
+      },
+    ],
+  },
+
+  twitter: {
+    card: 'summary_large_image',
+    title: 'Ventry — The Party Starts Here',
+    description:
+      'Discover and buy tickets to the best parties, concerts and events across Nigeria. Every payment protected in escrow.',
+    images: ['/opengraph-image'],
+  },
+
+  icons: {
+    icon:  '/icon',
+    apple: '/icon',
   },
 };
 

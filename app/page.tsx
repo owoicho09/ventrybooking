@@ -152,7 +152,7 @@ export default async function HomePage() {
               className="w-1.5 h-1.5 rounded-full animate-pulse"
               style={{ backgroundColor: 'var(--color-purple-light)' }}
             />
-            Nigeria&apos;s trust-first ticketing platform
+            Vibes on Vibes
           </div>
 
           <h1
