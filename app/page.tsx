@@ -81,32 +81,46 @@ export default async function HomePage() {
     .order('created_at', { ascending: false })
     .limit(3);
 
-  const featuredEvents = (rawEvents ?? []).map((row) => {
-    const tiers = (row.tiers as { available: number; sold: number }[] | null) ?? [];
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  function one<T>(v: T[] | T | null | undefined): T | null {
+    if (v == null) return null;
+    return Array.isArray(v) ? (v[0] ?? null) : v;
+  }
+
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  const featuredEvents = (rawEvents ?? []).map((row: any) => {
+    const tiers: { id: string; name: string; price: number; available: number; sold: number }[] =
+      (Array.isArray(row.tiers) ? row.tiers : []) ?? [];
     const totalAvailable = tiers.reduce((s, t) => s + t.available, 0);
-    const totalSold = tiers.reduce((s, t) => s + t.sold, 0);
-    const remaining = totalAvailable - totalSold;
+    const totalSold      = tiers.reduce((s, t) => s + t.sold, 0);
+    const remaining      = totalAvailable - totalSold;
     const badge =
-      remaining === 0 ? ('sold_out' as const)
-      : totalAvailable > 0 && remaining / totalAvailable <= 0.2 ? ('limited' as const)
-      : totalAvailable > 0 && totalSold / totalAvailable >= 0.5 ? ('selling_fast' as const)
+      remaining === 0                                             ? ('sold_out'     as const)
+      : totalAvailable > 0 && remaining / totalAvailable <= 0.2  ? ('limited'      as const)
+      : totalAvailable > 0 && totalSold  / totalAvailable >= 0.5 ? ('selling_fast' as const)
       : undefined;
+
+    const organizer = one(row.organizer) ?? {
+      id: '', name: '', email: '', phone: '', tier: 'Standard',
+      verified: false, memberSince: '', eventsHosted: 0, kycStatus: 'pending',
+    };
+
     return {
-      id: row.id,
-      name: row.event_name,
-      category: row.category,
+      id:          row.id,
+      name:        row.event_name,
+      category:    row.category,
       description: row.description,
-      date: row.date,
-      time: row.time,
-      venue: row.venue,
-      address: row.address,
-      city: row.city,
-      status: row.status,
+      date:        row.date,
+      time:        row.time,
+      venue:       row.venue,
+      address:     row.address,
+      city:        row.city,
+      status:      row.status,
       bannerColor: row.banner_color,
-      banner_url: row.banner_url ?? null,
-      totalSold: row.total_sold,
+      banner_url:  row.banner_url ?? null,
+      totalSold:   row.total_sold,
       badge,
-      organizer: row.organizer,
+      organizer,
       tiers,
     };
   });

@@ -240,7 +240,7 @@ export default function ScanPage() {
           {/* Camera toggle button */}
           {hasCamera && (
             <Button
-              variant={cameraActive ? 'outline' : 'default'}
+              variant={cameraActive ? 'outline' : 'primary'}
               onClick={cameraActive ? stopCamera : startCamera}
             >
               <Camera size={15} />
