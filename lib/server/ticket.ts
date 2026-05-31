@@ -1,7 +1,5 @@
 import { getServerSupabase } from '@/lib/supabase/server';
 import { generateTicketId, generateRefundCode } from '@/lib/server/ids';
-import { signQrToken } from '@/lib/server/jwt';
-import { generateQRDataUrl } from '@/lib/server/qr';
 import { sendTicketEmail } from '@/lib/server/email';
 import { calculateFees } from '@/lib/server/fees';
 
@@ -55,8 +53,6 @@ export async function createTicketFromPayment(p: PaymentData): Promise<string | 
 
   const ticketId   = generateTicketId();
   const refundCode = generateRefundCode();
-  const qrToken    = signQrToken({ ticketId, eventId: p.eventId });
-  const qrDataUrl  = await generateQRDataUrl(qrToken);
   const totalPaid  = p.totalPaidKobo / 100;
   const subtotal   = tierRow.price * p.quantity;
   const { fee, net } = calculateFees(subtotal);
@@ -74,7 +70,7 @@ export async function createTicketFromPayment(p: PaymentData): Promise<string | 
     status:             'valid',
     purchased_at:       new Date().toISOString(),
     refund_code:        refundCode,
-    qr_token:           qrToken,
+    qr_token:           ticketId,
     paystack_reference: p.reference,
   });
 
@@ -96,7 +92,6 @@ export async function createTicketFromPayment(p: PaymentData): Promise<string | 
     quantity:   p.quantity,
     totalPaid,
     refundCode,
-    qrDataUrl,
   }).catch(err => console.error('createTicketFromPayment: email error (ticket created)', err));
 
   return ticketId;

@@ -1,6 +1,5 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { getServerSupabase } from '@/lib/supabase/server';
-import { generateQRDataUrl } from '@/lib/server/qr';
 import { sendTicketEmail } from '@/lib/server/email';
 
 export async function POST(
@@ -15,7 +14,7 @@ export async function POST(
     const { data, error } = await db
       .from('tickets')
       .select(`
-        id, buyer_name, buyer_email, quantity, total_paid, refund_code, qr_token,
+        id, buyer_name, buyer_email, quantity, total_paid, refund_code,
         event:events!tickets_event_id_fkey(event_name, date, venue),
         tier:ticket_tiers!tickets_tier_id_fkey(name)
       `)
@@ -30,8 +29,6 @@ export async function POST(
     if (!data) {
       return NextResponse.json({ error: 'Ticket not found or email mismatch' }, { status: 404 });
     }
-
-    const qrDataUrl = data.qr_token ? await generateQRDataUrl(data.qr_token) : '';
 
     // Supabase infers FK-joined rows as arrays even for many-to-one relations.
     // Normalise to a single object by taking [0] when an array is returned.
@@ -53,7 +50,6 @@ export async function POST(
       quantity:   data.quantity,
       totalPaid:  data.total_paid,
       refundCode: data.refund_code,
-      qrDataUrl,
     });
 
     return NextResponse.json({ success: true });

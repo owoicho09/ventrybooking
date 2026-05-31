@@ -40,7 +40,6 @@ export async function sendTicketEmail(params: {
   quantity: number;
   totalPaid: number;
   refundCode: string;
-  qrDataUrl: string;
 }) {
   const fmt = (n: number) =>
     new Intl.NumberFormat('en-NG', { style: 'currency', currency: 'NGN', minimumFractionDigits: 0 }).format(n);

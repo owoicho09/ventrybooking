@@ -26,7 +26,7 @@ export async function GET(
     const { data, error } = await db
       .from('tickets')
       .select(`
-        id, quantity, buyer_name, buyer_email, total_paid, status, purchased_at, refund_code, qr_token,
+        id, quantity, buyer_name, buyer_email, total_paid, status, purchased_at, refund_code,
         event:events!tickets_event_id_fkey(
           id, event_name, category, date, time, venue, address, city, banner_color,
           organizer:users!events_organizer_id_fkey(id, name, tier, verified)
@@ -45,7 +45,7 @@ export async function GET(
       return NextResponse.json({ error: 'Ticket not found' }, { status: 404 });
     }
 
-    const qrDataUrl = data.qr_token ? await generateQRDataUrl(data.qr_token) : null;
+    const qrDataUrl = await generateQRDataUrl(data.id);
 
     const rawEvent  = one(data.event  as EventRow[] | EventRow | null);
     const rawTier   = one(data.tier   as TierRow[]  | TierRow  | null);

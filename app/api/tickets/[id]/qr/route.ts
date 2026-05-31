@@ -1,5 +1,4 @@
 import { NextRequest, NextResponse } from 'next/server';
-import { getServerSupabase } from '@/lib/supabase/server';
 import { generateQRBuffer } from '@/lib/server/qr';
 
 export async function GET(
@@ -8,19 +7,7 @@ export async function GET(
 ) {
   try {
     const { id } = await params;
-    const db = getServerSupabase();
-
-    const { data } = await db
-      .from('tickets')
-      .select('qr_token')
-      .eq('id', id)
-      .maybeSingle();
-
-    if (!data?.qr_token) {
-      return new NextResponse(null, { status: 404 });
-    }
-
-    const buffer = await generateQRBuffer(data.qr_token);
+    const buffer = await generateQRBuffer(id);
 
     return new NextResponse(new Uint8Array(buffer), {
       headers: {
