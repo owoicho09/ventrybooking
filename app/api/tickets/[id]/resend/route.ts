@@ -32,8 +32,15 @@ export async function POST(
     }
 
     const qrDataUrl = data.qr_token ? await generateQRDataUrl(data.qr_token) : '';
-    const ev = data.event as { event_name: string; date: string; venue: string } | null;
-    const tier = data.tier as { name: string } | null;
+
+    // Supabase infers FK-joined rows as arrays even for many-to-one relations.
+    // Normalise to a single object by taking [0] when an array is returned.
+    type EvRow   = { event_name: string; date: string; venue: string };
+    type TierRow = { name: string };
+    const evRaw   = data.event   as EvRow[] | EvRow   | null | undefined;
+    const tierRaw = data.tier    as TierRow[] | TierRow | null | undefined;
+    const ev   = (Array.isArray(evRaw)   ? evRaw[0]   : evRaw)   ?? null;
+    const tier = (Array.isArray(tierRaw) ? tierRaw[0] : tierRaw) ?? null;
 
     await sendTicketEmail({
       to:         data.buyer_email,
