@@ -12,9 +12,12 @@ export async function GET(req: NextRequest) {
     .from('tickets')
     .select('id')
     .eq('paystack_reference', ref)
-    .maybeSingle();
+    .order('purchased_at', { ascending: true });
 
-  if (!data) return NextResponse.json({ success: false, data: null });
+  if (!data || data.length === 0) {
+    return NextResponse.json({ success: false, data: null });
+  }
 
-  return NextResponse.json({ success: true, data: { id: data.id } });
+  const ids = data.map(t => t.id);
+  return NextResponse.json({ success: true, data: { ids, id: ids[0] } });
 }

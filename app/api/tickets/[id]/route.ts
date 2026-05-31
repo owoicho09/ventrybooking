@@ -26,7 +26,7 @@ export async function GET(
     const { data, error } = await db
       .from('tickets')
       .select(`
-        id, quantity, buyer_name, buyer_email, total_paid, status, purchased_at, refund_code,
+        id, quantity, buyer_name, buyer_email, total_paid, status, purchased_at, refund_code, paystack_reference,
         event:events!tickets_event_id_fkey(
           id, event_name, category, date, time, venue, address, city, banner_color,
           organizer:users!events_organizer_id_fkey(id, name, tier, verified)
@@ -45,10 +45,18 @@ export async function GET(
       return NextResponse.json({ error: 'Ticket not found' }, { status: 404 });
     }
 
-    const APP_URL   = process.env.NEXT_PUBLIC_APP_URL;
-    const qrDataUrl = APP_URL
-      ? await generateQRDataUrl(`${APP_URL}/scan/${data.id}`)
-      : null;
+    const [qrDataUrl, siblingRes] = await Promise.all([
+      process.env.NEXT_PUBLIC_APP_URL
+        ? generateQRDataUrl(`${process.env.NEXT_PUBLIC_APP_URL}/scan/${data.id}`)
+        : Promise.resolve(null),
+      // Count how many tickets share this Paystack reference so the page can
+      // offer a "view all N tickets" link without a second round-trip.
+      db.from('tickets')
+        .select('id', { count: 'exact', head: true })
+        .eq('paystack_reference', data.paystack_reference),
+    ]);
+
+    const transactionTicketCount = siblingRes.count ?? 1;
 
     const rawEvent  = one(data.event  as EventRow[] | EventRow | null);
     const rawTier   = one(data.tier   as TierRow[]  | TierRow  | null);
@@ -60,7 +68,7 @@ export async function GET(
 
     return NextResponse.json({
       success: true,
-      data: { ...data, event, tier: rawTier, qrDataUrl },
+      data: { ...data, event, tier: rawTier, qrDataUrl, transactionTicketCount },
     });
   } catch (err) {
     console.error('GET /api/tickets/[id] error:', err);

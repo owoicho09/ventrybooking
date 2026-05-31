@@ -130,8 +130,10 @@ CREATE TABLE IF NOT EXISTS tickets (
 
   purchased_at        TIMESTAMPTZ NOT NULL,
   refund_code         TEXT        NOT NULL,      -- RF-XXXX-XX
-  qr_token            TEXT        NOT NULL,      -- signed JWT
-  paystack_reference  TEXT        NOT NULL UNIQUE
+  qr_token            TEXT        NOT NULL,      -- ticket ID (used as QR payload)
+  -- Multiple rows per Paystack transaction (one row per individual ticket).
+  -- NOT UNIQUE — a single payment creates quantity separate ticket records.
+  paystack_reference  TEXT        NOT NULL
 );
 
 CREATE INDEX IF NOT EXISTS idx_tickets_event_id           ON tickets (event_id);

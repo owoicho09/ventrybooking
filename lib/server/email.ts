@@ -32,41 +32,85 @@ function emailShell(content: string) {
 export async function sendTicketEmail(params: {
   to: string;
   buyerName: string;
-  ticketId: string;
+  /** One entry per individual ticket purchased. */
+  tickets: Array<{ ticketId: string; refundCode: string }>;
+  paystackRef: string;
   eventName: string;
   eventDate: string;
   eventVenue: string;
   tierName: string;
-  quantity: number;
   totalPaid: number;
-  refundCode: string;
 }) {
   const fmt = (n: number) =>
     new Intl.NumberFormat('en-NG', { style: 'currency', currency: 'NGN', minimumFractionDigits: 0 }).format(n);
 
-  const html = emailShell(`
-    <h1 style="color:#a855f7;font-size:22px;margin:0 0 6px;">Your ticket is confirmed ✓</h1>
-    <p class="label" style="margin:0 0 24px;">Hi ${params.buyerName || params.to}, here are your tickets.</p>
+  const { tickets } = params;
+  const count = tickets.length;
 
-    <table width="100%" cellpadding="0" cellspacing="0" style="background:#12121a;border:1px solid #2d2d3d;border-radius:8px;margin-bottom:24px;">
+  const ticketBlocks = tickets.map(({ ticketId, refundCode }, i) => `
+    <table width="100%" cellpadding="0" cellspacing="0"
+      style="background:#12121a;border:1px solid #2d2d3d;border-radius:8px;margin-bottom:20px;">
+      <tr><td style="padding:20px;">
+        <p style="font-size:13px;font-weight:700;color:#a855f7;margin:0 0 12px;text-transform:uppercase;letter-spacing:0.05em;">
+          Ticket ${i + 1} of ${count} &mdash; ${params.tierName}
+        </p>
+        <div style="text-align:center;margin-bottom:16px;">
+          <img src="${APP_URL}/api/tickets/${ticketId}/qr"
+               alt="QR Code" width="180" height="180"
+               style="border-radius:8px;display:block;margin:0 auto;border:4px solid #ffffff;" />
+          <p style="color:#9ca3af;font-size:11px;margin:8px 0 0;">Present at the venue entrance</p>
+        </div>
+        <p style="margin:4px 0;color:#f1f0ff;font-size:13px;">
+          <strong>Ticket&nbsp;ID:</strong> <span class="mono">${ticketId}</span>
+        </p>
+        <p style="margin:4px 0;color:#f1f0ff;font-size:13px;">
+          <strong>Refund&nbsp;Code:</strong> <span class="mono">${refundCode}</span>
+        </p>
+        <a href="${APP_URL}/ticket/${ticketId}"
+           style="display:inline-block;margin-top:12px;color:#a855f7;font-size:12px;text-decoration:underline;">
+          View this ticket online
+        </a>
+      </td></tr>
+    </table>
+  `).join('');
+
+  const viewAllBtn = count > 1
+    ? `<a href="${APP_URL}/tickets?ref=${params.paystackRef}" class="btn" style="margin-bottom:16px;">
+         View All ${count} Tickets Online
+       </a><br/>`
+    : `<a href="${APP_URL}/ticket/${tickets[0].ticketId}" class="btn" style="margin-bottom:16px;">
+         View Ticket Online
+       </a><br/>`;
+
+  const subject = count === 1
+    ? `Your ticket for ${params.eventName} — ${tickets[0].ticketId}`
+    : `Your ${count} tickets for ${params.eventName}`;
+
+  const html = emailShell(`
+    <h1 style="color:#a855f7;font-size:22px;margin:0 0 6px;">
+      ${count === 1 ? 'Your ticket is confirmed ✓' : `Your ${count} tickets are confirmed ✓`}
+    </h1>
+    <p class="label" style="margin:0 0 24px;">
+      Hi ${params.buyerName || params.to}, here ${count === 1 ? 'is your ticket' : 'are your tickets'}.
+    </p>
+
+    <table width="100%" cellpadding="0" cellspacing="0"
+      style="background:#12121a;border:1px solid #2d2d3d;border-radius:8px;margin-bottom:24px;">
       <tr><td style="padding:20px;">
         <p style="font-size:17px;font-weight:700;margin:0 0 4px;color:#f1f0ff;">${params.eventName}</p>
-        <p class="label" style="margin:0 0 16px;">${params.eventDate} &bull; ${params.eventVenue}</p>
-        <p style="margin:4px 0;color:#f1f0ff;font-size:13px;"><strong>Ticket&nbsp;Type:</strong> ${params.tierName} &times; ${params.quantity}</p>
-        <p style="margin:4px 0;color:#f1f0ff;font-size:13px;"><strong>Total&nbsp;Paid:</strong> ${fmt(params.totalPaid)}</p>
-        <p style="margin:4px 0;color:#f1f0ff;font-size:13px;"><strong>Ticket&nbsp;ID:</strong> <span class="mono">${params.ticketId}</span></p>
-        <p style="margin:4px 0;color:#f1f0ff;font-size:13px;"><strong>Refund&nbsp;Code:</strong> <span class="mono">${params.refundCode}</span></p>
+        <p class="label" style="margin:0 0 12px;">${params.eventDate} &bull; ${params.eventVenue}</p>
+        <p style="margin:4px 0;color:#f1f0ff;font-size:13px;">
+          <strong>Ticket&nbsp;Type:</strong> ${params.tierName} &times; ${count}
+        </p>
+        <p style="margin:4px 0;color:#f1f0ff;font-size:13px;">
+          <strong>Total&nbsp;Paid:</strong> ${fmt(params.totalPaid)}
+        </p>
       </td></tr>
     </table>
 
-    <div style="text-align:center;margin-bottom:24px;">
-      <img src="${APP_URL}/api/tickets/${params.ticketId}/qr"
-           alt="QR Code" width="200" height="200"
-           style="border-radius:8px;display:block;margin:0 auto;border:4px solid #ffffff;" />
-      <p class="label" style="font-size:12px;margin:8px 0 0;">Present this QR code at the venue entrance.</p>
-    </div>
+    ${ticketBlocks}
 
-    <a href="${APP_URL}/ticket/${params.ticketId}" class="btn">View Ticket Online</a>
+    ${viewAllBtn}
 
     <p class="footer">Your payment is held in escrow by Ventry and only released to the organizer after the event occurs.</p>
   `);
@@ -74,7 +118,7 @@ export async function sendTicketEmail(params: {
   await resend.emails.send({
     from: `Ventry <${FROM}>`,
     to: params.to,
-    subject: `Your ticket for ${params.eventName} — ${params.ticketId}`,
+    subject,
     html,
   });
 }

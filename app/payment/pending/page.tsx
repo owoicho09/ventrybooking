@@ -22,9 +22,10 @@ function PendingContent() {
         try {
           const res = await fetch(`/api/tickets/by-reference?ref=${ref}`);
           const data = await res.json();
-          if (data.success && data.data?.id) {
+          if (data.success && data.data?.ids?.length) {
             clearInterval(timerRef.current!);
-            router.push(`/ticket/${data.data.id}`);
+            const { ids } = data.data as { ids: string[] };
+            router.push(ids.length === 1 ? `/ticket/${ids[0]}` : `/tickets?ref=${ref}`);
           }
         } catch { /* keep polling */ }
         setAttempts(a => a + 1);

@@ -1,7 +1,6 @@
 import { NextResponse } from 'next/server';
 import { getAuthUser } from '@/lib/server/auth';
 import { getServerSupabase } from '@/lib/supabase/server';
-import { SERVICE_FEE } from '@/lib/server/fees';
 
 export async function GET() {
   const user = await getAuthUser();
@@ -14,7 +13,7 @@ export async function GET() {
   const [eventsRes, ticketsRes, escrowRes, kycRes, complaintsRes] = await Promise.all([
     db.from('events').select('id, status'),
     db.from('tickets').select('quantity').in('status', ['valid', 'used']),
-    db.from('tickets').select('total_paid').eq('status', 'valid'),
+    db.from('tickets').select('total_paid').in('status', ['valid', 'used']),
     db.from('users').select('id').eq('kyc_status', 'pending'),
     db.from('complaints').select('id').in('status', ['open', 'investigating']),
   ]);
@@ -23,17 +22,13 @@ export async function GET() {
   const tickets = ticketsRes.data || [];
   const escrow  = escrowRes.data  || [];
 
-  // Subtract the non-refundable service fee from escrow — that goes to Ventry, not organizers
-  const escrowTotal = escrow.reduce((s, t) => s + t.total_paid, 0);
-  const escrowNet   = escrowTotal - escrow.length * SERVICE_FEE;
-
   return NextResponse.json({
     success: true,
     data: {
       totalEvents:      events.length,
       activeEvents:     events.filter(e => e.status === 'approved').length,
       totalTicketsSold: tickets.reduce((s, t) => s + t.quantity, 0),
-      revenueInEscrow:  Math.max(0, escrowNet),
+      revenueInEscrow:  escrow.reduce((s, t) => s + t.total_paid, 0),
       pendingKYC:       kycRes.data?.length  || 0,
       openComplaints:   complaintsRes.data?.length || 0,
     },

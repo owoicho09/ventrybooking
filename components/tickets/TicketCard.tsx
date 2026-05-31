@@ -70,14 +70,16 @@ export function TicketCard({ ticket }: TicketCardProps) {
                 {ticket.tier.name}
               </p>
             </div>
-            <div>
-              <p className="text-[10px] uppercase tracking-wider mb-0.5" style={{ color: 'var(--color-text-dim)' }}>
-                Quantity
-              </p>
-              <p className="font-semibold" style={{ color: 'var(--color-text)' }}>
-                {ticket.quantity}x
-              </p>
-            </div>
+            {ticket.quantity > 1 && (
+              <div>
+                <p className="text-[10px] uppercase tracking-wider mb-0.5" style={{ color: 'var(--color-text-dim)' }}>
+                  Quantity
+                </p>
+                <p className="font-semibold" style={{ color: 'var(--color-text)' }}>
+                  {ticket.quantity}×
+                </p>
+              </div>
+            )}
             <div>
               <p className="text-[10px] uppercase tracking-wider mb-0.5" style={{ color: 'var(--color-text-dim)' }}>
                 Attendee
@@ -88,7 +90,7 @@ export function TicketCard({ ticket }: TicketCardProps) {
             </div>
             <div>
               <p className="text-[10px] uppercase tracking-wider mb-0.5" style={{ color: 'var(--color-text-dim)' }}>
-                Total Paid
+                Ticket Price
               </p>
               <p className="font-semibold" style={{ color: 'var(--color-text)' }}>
                 {formatNGN(ticket.totalPaid)}

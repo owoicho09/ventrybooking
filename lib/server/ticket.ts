@@ -15,20 +15,21 @@ export interface PaymentData {
 }
 
 /**
- * Idempotently creates a ticket from a verified Paystack payment.
- * Returns the ticket ID (existing or newly created).
- * Returns null when the event/tier cannot be found.
+ * Idempotently creates individual ticket records from a verified Paystack payment.
+ * One row is inserted per ticket — quantity=2 creates two rows with separate IDs,
+ * QR codes, and refund codes. Returns the first ticket ID or null on failure.
  */
 export async function createTicketFromPayment(p: PaymentData): Promise<string | null> {
   const db = getServerSupabase();
 
-  // Idempotency — return existing ticket ID if already processed
+  // Idempotency — if any ticket rows already exist for this reference the webhook
+  // has already been processed. Return the first ticket ID without re-inserting.
   const { data: existing } = await db
     .from('tickets')
     .select('id')
     .eq('paystack_reference', p.reference)
-    .maybeSingle();
-  if (existing) return existing.id;
+    .order('purchased_at', { ascending: true });
+  if (existing && existing.length > 0) return existing[0].id;
 
   // Fetch event and tier in parallel
   const [{ data: eventRow, error: eventErr }, { data: tierRow, error: tierErr }] = await Promise.all([
@@ -51,50 +52,64 @@ export async function createTicketFromPayment(p: PaymentData): Promise<string | 
     return null;
   }
 
-  const ticketId   = generateTicketId();
-  const refundCode = generateRefundCode();
-  const totalPaid  = p.totalPaidKobo / 100;
-  const subtotal   = tierRow.price * p.quantity;
-  const { fee, net } = calculateFees(subtotal);
-  const email = (p.buyerEmail || p.customerEmail || '').toLowerCase().trim();
+  const qty = Math.max(1, p.quantity);
 
-  await db.from('tickets').insert({
-    id:                 ticketId,
+  // Split total_paid evenly across tickets using integer kobo arithmetic so the
+  // sum of all per-ticket total_paid equals the original transaction amount exactly.
+  const baseKobo    = Math.floor(p.totalPaidKobo / qty);
+  const lastKobo    = p.totalPaidKobo - baseKobo * (qty - 1);
+
+  const subtotal    = tierRow.price * qty;
+  const { fee, net } = calculateFees(subtotal);
+  const email       = (p.buyerEmail || p.customerEmail || '').toLowerCase().trim();
+  const purchasedAt = new Date().toISOString();
+
+  // Build one row per ticket
+  const ticketIds: string[]   = [];
+  const refundCodes: string[] = [];
+  for (let i = 0; i < qty; i++) {
+    ticketIds.push(generateTicketId());
+    refundCodes.push(generateRefundCode());
+  }
+
+  const rows = ticketIds.map((id, i) => ({
+    id,
     event_id:           p.eventId,
     tier_id:            p.tierId,
     organizer_id:       eventRow.organizer_id,
     buyer_name:         p.buyerName || email,
     buyer_email:        email,
-    quantity:           p.quantity,
-    total_paid:         totalPaid,
+    quantity:           1,
+    total_paid:         (i < qty - 1 ? baseKobo : lastKobo) / 100,
     status:             'valid',
-    purchased_at:       new Date().toISOString(),
-    refund_code:        refundCode,
-    qr_token:           ticketId,
+    purchased_at:       purchasedAt,
+    refund_code:        refundCodes[i],
+    qr_token:           id,
     paystack_reference: p.reference,
-  });
+  }));
 
-  // These three can run in parallel
+  await db.from('tickets').insert(rows);
+
+  // These run once per transaction, not once per individual ticket
   await Promise.all([
-    db.rpc('increment_tier_sold', { tier_id: p.tierId, amount: p.quantity }),
+    db.rpc('increment_tier_sold', { tier_id: p.tierId, amount: qty }),
     upsertPayout(db, p.eventId, eventRow, subtotal, fee, net),
   ]);
 
-  // Fire-and-forget email — a Resend failure must never block the redirect
+  // Fire-and-forget — email failure must never block the webhook response
   sendTicketEmail({
-    to:         email,
-    buyerName:  p.buyerName || '',
-    ticketId,
-    eventName:  eventRow.event_name,
-    eventDate:  eventRow.date,
-    eventVenue: eventRow.venue,
-    tierName:   tierRow.name,
-    quantity:   p.quantity,
-    totalPaid,
-    refundCode,
+    to:          email,
+    buyerName:   p.buyerName || '',
+    tickets:     ticketIds.map((id, i) => ({ ticketId: id, refundCode: refundCodes[i] })),
+    paystackRef: p.reference,
+    eventName:   eventRow.event_name,
+    eventDate:   eventRow.date,
+    eventVenue:  eventRow.venue,
+    tierName:    tierRow.name,
+    totalPaid:   p.totalPaidKobo / 100,
   }).catch(err => console.error('createTicketFromPayment: email error (ticket created)', err));
 
-  return ticketId;
+  return ticketIds[0];
 }
 
 async function upsertPayout(

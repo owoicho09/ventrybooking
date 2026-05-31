@@ -10,7 +10,9 @@ import { Button } from '@/components/ui/Button';
 
 export default function TicketPage() {
   const { id } = useParams<{ id: string }>();
-  const [ticket, setTicket] = useState<Parameters<typeof TicketCard>[0]['ticket'] | null>(null);
+  const [ticket,    setTicket]    = useState<Parameters<typeof TicketCard>[0]['ticket'] | null>(null);
+  const [txRef,     setTxRef]     = useState<string>('');
+  const [txCount,   setTxCount]   = useState(1);
   const [loading,   setLoading]   = useState(true);
   const [notFound,  setNotFound]  = useState(false);
   const [resending, setResending] = useState(false);
@@ -26,6 +28,8 @@ export default function TicketPage() {
       .then(d => {
         if (d.success) {
           const raw = d.data;
+          setTxRef(raw.paystack_reference || '');
+          setTxCount(raw.transactionTicketCount ?? 1);
           setTicket({
             id:          raw.id,
             eventId:     raw.event?.id || '',
@@ -122,6 +126,19 @@ export default function TicketPage() {
             <span className="font-medium" style={{ color: 'var(--color-text)' }}>{ticket.buyerEmail}</span>
           </p>
         </div>
+
+        {txCount > 1 && (
+          <div className="mb-4 rounded-xl border px-4 py-3 flex items-center justify-between print:hidden"
+            style={{ backgroundColor: 'var(--color-purple-dim)', borderColor: 'var(--color-purple)' }}>
+            <p className="text-sm font-medium" style={{ color: 'var(--color-purple-light)' }}>
+              This is 1 of {txCount} tickets from your purchase.
+            </p>
+            <Link href={`/tickets?ref=${txRef}`}
+              className="text-sm font-bold hover:underline" style={{ color: 'var(--color-purple-light)' }}>
+              View all →
+            </Link>
+          </div>
+        )}
 
         <TicketCard ticket={ticket} />
 
