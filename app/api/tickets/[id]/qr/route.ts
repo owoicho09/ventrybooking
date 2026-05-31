@@ -22,7 +22,7 @@ export async function GET(
 
     const buffer = await generateQRBuffer(data.qr_token);
 
-    return new NextResponse(buffer, {
+    return new NextResponse(new Uint8Array(buffer), {
       headers: {
         'Content-Type': 'image/png',
         'Cache-Control': 'public, max-age=31536000, immutable',
