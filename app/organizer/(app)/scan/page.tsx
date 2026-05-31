@@ -12,8 +12,14 @@ interface ScanLog { id: string; ticket_id: string; attendee_name: string; ticket
 interface EventOption { value: string; label: string; }
 type ScanResultType = 'success' | 'already_used' | 'invalid';
 
-// How often (ms) to run jsQR against a captured frame. 10fps is plenty for QR scanning.
-const DECODE_INTERVAL_MS = 100;
+// Decode at ~6-7fps. More headroom per frame is more important than frequency for
+// dense QR codes, since each frame attempt may run jsQR twice (two-pass strategy).
+const DECODE_INTERVAL_MS = 150;
+
+// Never send more than this many pixels wide to jsQR — keeps decode time <100ms on
+// mobile even when the camera stream is 4K. Downscaling a 4K source to 1920px still
+// gives sharper edges than a native 1080p camera because of antialiased downsampling.
+const DECODE_MAX_WIDTH = 1920;
 
 export default function ScanPage() {
   const [manualId, setManualId]         = useState('');
@@ -132,6 +138,8 @@ export default function ScanPage() {
     const ctx = canvas.getContext('2d', { willReadFrequently: true });
     if (!ctx) return;
 
+    const jsqrOpts = { inversionAttempts: 'attemptBoth' as const };
+
     const tick = (now: number) => {
       // Bail if camera was stopped externally
       if (!streamRef.current) return;
@@ -139,16 +147,43 @@ export default function ScanPage() {
       if (!pausedRef.current && now - lastDecodeRef.current >= DECODE_INTERVAL_MS) {
         lastDecodeRef.current = now;
 
-        // Only decode once the video has actual frame data
         if (video.readyState >= video.HAVE_ENOUGH_DATA && video.videoWidth > 0) {
-          canvas.width  = video.videoWidth;
-          canvas.height = video.videoHeight;
-          ctx.drawImage(video, 0, 0);
+          const vw = video.videoWidth;
+          const vh = video.videoHeight;
 
-          const imageData = ctx.getImageData(0, 0, canvas.width, canvas.height);
-          const code = jsQR(imageData.data, imageData.width, imageData.height, {
-            inversionAttempts: 'attemptBoth', // handle light-on-dark and dark-on-light
-          });
+          // --- Pass 1: full frame, downscaled to DECODE_MAX_WIDTH if needed,
+          //     with contrast boost so jsQR's threshold step is more reliable. ---
+          const scale = Math.min(1, DECODE_MAX_WIDTH / vw);
+          const dw = Math.floor(vw * scale);
+          const dh = Math.floor(vh * scale);
+          canvas.width  = dw;
+          canvas.height = dh;
+          ctx.filter = 'contrast(160%) grayscale(1)';
+          ctx.drawImage(video, 0, 0, dw, dh);
+          ctx.filter = 'none';
+          let imageData = ctx.getImageData(0, 0, dw, dh);
+          let code = jsQR(imageData.data, dw, dh, jsqrOpts);
+
+          // --- Pass 2: center-60% crop, 2× upscaled, heavier contrast.
+          //     The QR code is almost always held near the center, and upscaling
+          //     gives jsQR more pixels per module for dense / high-version codes. ---
+          if (!code) {
+            const cx = Math.floor(vw * 0.2);
+            const cy = Math.floor(vh * 0.2);
+            const cw = Math.floor(vw * 0.6);
+            const ch = Math.floor(vh * 0.6);
+            const upW = Math.min(cw * 2, DECODE_MAX_WIDTH);
+            const upH = Math.round(upW * (ch / cw));
+            canvas.width  = upW;
+            canvas.height = upH;
+            ctx.imageSmoothingEnabled = true;
+            ctx.imageSmoothingQuality = 'high';
+            ctx.filter = 'contrast(200%) grayscale(1)';
+            ctx.drawImage(video, cx, cy, cw, ch, 0, 0, upW, upH);
+            ctx.filter = 'none';
+            imageData = ctx.getImageData(0, 0, upW, upH);
+            code = jsQR(imageData.data, upW, upH, jsqrOpts);
+          }
 
           if (code?.data) {
             submitToken(code.data);
@@ -165,11 +200,14 @@ export default function ScanPage() {
   const startCamera = useCallback(async () => {
     setCameraError('');
     try {
+      // Request up to 4K — the browser caps at the sensor maximum. A higher-res
+      // source gives more pixels per QR module, which is critical for dense codes.
+      // We downscale to DECODE_MAX_WIDTH inside the loop so jsQR stays fast.
       const stream = await navigator.mediaDevices.getUserMedia({
         video: {
           facingMode: 'environment',
-          width:  { ideal: 1280 },
-          height: { ideal: 720 },
+          width:  { min: 640, ideal: 3840, max: 4096 },
+          height: { min: 480, ideal: 2160, max: 4096 },
         },
       });
       streamRef.current = stream;
