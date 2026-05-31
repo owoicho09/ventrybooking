@@ -10,27 +10,22 @@ export async function GET() {
 
   const db = getServerSupabase();
 
-  const { data: tickets } = await db
-    .from('tickets')
-    .select('quantity, total_paid, status')
-    .eq('organizer_id', user.sub)
-    .in('status', ['valid', 'used']);
+  const [ticketsRes, eventsRes, payoutsRes] = await Promise.all([
+    db.from('tickets').select('quantity').eq('organizer_id', user.sub).in('status', ['valid', 'used']),
+    db.from('events').select('id, status').eq('organizer_id', user.sub),
+    // Fetch pending + processing payouts — "in escrow" is the net they will receive
+    db.from('payouts').select('net, status').eq('organizer_id', user.sub).in('status', ['pending', 'processing']),
+  ]);
 
-  const { data: events } = await db
-    .from('events')
-    .select('id, status')
-    .eq('organizer_id', user.sub);
+  const tickets = ticketsRes.data || [];
+  const events  = eventsRes.data  || [];
+  const payouts = payoutsRes.data || [];
 
-  const { data: payouts } = await db
-    .from('payouts')
-    .select('net, status')
-    .eq('organizer_id', user.sub)
-    .eq('status', 'pending');
-
-  const ticketsSold = tickets?.reduce((s, t) => s + t.quantity, 0) || 0;
-  const revenueInEscrow = tickets?.reduce((s, t) => s + t.total_paid, 0) || 0;
-  const activeEvents = events?.filter((e) => e.status === 'approved').length || 0;
-  const payoutDue = payouts?.reduce((s, p) => s + p.net, 0) || 0;
+  const ticketsSold     = tickets.reduce((s, t) => s + t.quantity, 0);
+  // Show only the organizer's net (after 2.5% platform fee), never the gross or service fees
+  const revenueInEscrow = payouts.reduce((s, p) => s + p.net, 0);
+  const activeEvents    = events.filter(e => e.status === 'approved').length;
+  const payoutDue       = payouts.filter(p => p.status === 'pending').reduce((s, p) => s + p.net, 0);
 
   return NextResponse.json({
     success: true,

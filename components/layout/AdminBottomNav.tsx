@@ -4,23 +4,23 @@ import Link from 'next/link';
 import { usePathname } from 'next/navigation';
 import {
   LayoutDashboard,
-  CalendarDays,
-  PlusCircle,
-  ScanLine,
-  KeyRound,
-  Settings,
+  UserCheck,
+  CalendarCheck,
+  MessageSquareWarning,
+  Wallet,
+  ShieldAlert,
 } from 'lucide-react';
 
 const navItems = [
-  { href: '/organizer/dashboard',     label: 'Overview',  icon: LayoutDashboard },
-  { href: '/organizer/events',        label: 'My Events', icon: CalendarDays },
-  { href: '/organizer/events/create', label: 'Create',    icon: PlusCircle },
-  { href: '/organizer/scan',          label: 'Scanner',   icon: ScanLine },
-  { href: '/organizer/staff',         label: 'Staff IDs', icon: KeyRound },
-  { href: '/organizer/settings',      label: 'Settings',  icon: Settings },
+  { href: '/admin',            label: 'Dashboard', icon: LayoutDashboard },
+  { href: '/admin/organizers', label: 'KYC',        icon: UserCheck },
+  { href: '/admin/events',     label: 'Events',     icon: CalendarCheck },
+  { href: '/admin/complaints', label: 'Complaints', icon: MessageSquareWarning },
+  { href: '/admin/payouts',    label: 'Payouts',    icon: Wallet },
+  { href: '/admin/fraud',      label: 'Fraud',      icon: ShieldAlert },
 ];
 
-export function OrganizerBottomNav() {
+export function AdminBottomNav() {
   const pathname = usePathname();
 
   return (
@@ -34,9 +34,7 @@ export function OrganizerBottomNav() {
       }}
     >
       {navItems.map(({ href, label, icon: Icon }) => {
-        const active =
-          pathname === href ||
-          (href !== '/organizer/dashboard' && pathname.startsWith(href));
+        const active = href === '/admin' ? pathname === '/admin' : pathname.startsWith(href);
         return (
           <Link
             key={href}

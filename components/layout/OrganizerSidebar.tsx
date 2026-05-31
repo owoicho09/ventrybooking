@@ -10,16 +10,18 @@ import {
   Wallet,
   Settings,
   LogOut,
+  KeyRound,
 } from 'lucide-react';
 import { ThemeToggle } from './ThemeToggle';
 
 const navItems = [
-  { href: '/organizer/dashboard', label: 'Overview', icon: LayoutDashboard },
-  { href: '/organizer/events', label: 'My Events', icon: CalendarDays },
-  { href: '/organizer/events/create', label: 'Create Event', icon: PlusCircle },
-  { href: '/organizer/scan', label: 'Scanner', icon: ScanLine },
-  { href: '/organizer/payouts', label: 'Payouts', icon: Wallet },
-  { href: '/organizer/settings', label: 'Settings', icon: Settings },
+  { href: '/organizer/dashboard',      label: 'Overview',    icon: LayoutDashboard },
+  { href: '/organizer/events',         label: 'My Events',   icon: CalendarDays },
+  { href: '/organizer/events/create',  label: 'Create Event',icon: PlusCircle },
+  { href: '/organizer/scan',           label: 'Scanner',     icon: ScanLine },
+  { href: '/organizer/staff',          label: 'Staff IDs',   icon: KeyRound },
+  { href: '/organizer/payouts',        label: 'Payouts',     icon: Wallet },
+  { href: '/organizer/settings',       label: 'Settings',    icon: Settings },
 ];
 
 export function OrganizerSidebar() {

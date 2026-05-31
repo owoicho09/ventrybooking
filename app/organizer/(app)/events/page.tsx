@@ -47,11 +47,12 @@ export default function OrganizerEventsPage() {
         {!loading && events.length > 0 && (
           <Table>
             <Thead>
-              <tr><Th>Event</Th><Th>Date</Th><Th>Category</Th><Th>Revenue</Th><Th>Tickets</Th><Th>Status</Th><Th>Actions</Th></tr>
+              <tr><Th>Event</Th><Th>Date</Th><Th>Category</Th><Th>Net Revenue</Th><Th>Tickets</Th><Th>Status</Th><Th>Actions</Th></tr>
             </Thead>
             <Tbody>
               {events.map((event) => {
-                const revenue = event.tiers?.reduce((s, t) => s + t.price * t.sold, 0) || 0;
+                const gross      = event.tiers?.reduce((s, t) => s + t.price * t.sold, 0) || 0;
+                const netRevenue = Math.round(gross * 0.975); // after 2.5% platform fee
                 return (
                   <Tr key={event.id}>
                     <Td>
@@ -60,7 +61,7 @@ export default function OrganizerEventsPage() {
                     </Td>
                     <Td><span style={{ color: 'var(--color-text-muted)' }}>{formatShortDate(event.date)}</span></Td>
                     <Td><span style={{ color: 'var(--color-text-muted)' }}>{event.category}</span></Td>
-                    <Td><span className="font-medium" style={{ color: 'var(--color-text)' }}>{formatNGN(revenue)}</span></Td>
+                    <Td><span className="font-medium" style={{ color: 'var(--color-text)' }}>{formatNGN(netRevenue)}</span></Td>
                     <Td><span style={{ color: 'var(--color-text)' }}>{event.total_sold?.toLocaleString() ?? 0}</span></Td>
                     <Td>{statusBadge(event.status)}</Td>
                     <Td>

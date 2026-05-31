@@ -226,11 +226,41 @@ CREATE INDEX IF NOT EXISTS idx_complaints_status    ON complaints (status);
 --    ticket_id is TEXT (not FK) so invalid scan attempts
 --    can still be recorded.
 -- ────────────────────────────────────────────────────────────
+-- ────────────────────────────────────────────────────────────
+-- 9. STAFF IDs
+--    Short-lived door-staff codes created by organizers.
+--    One code per entrance person per event.
+-- ────────────────────────────────────────────────────────────
+CREATE TABLE IF NOT EXISTS staff_ids (
+  id            UUID        PRIMARY KEY DEFAULT gen_random_uuid(),
+  code          TEXT        NOT NULL UNIQUE,  -- STF-XXXX-XXXX
+  organizer_id  UUID        NOT NULL REFERENCES users (id),
+  event_id      UUID        NOT NULL REFERENCES events (id),
+  label         TEXT,                         -- e.g. "Main Door", "VIP Entrance"
+  active        BOOLEAN     NOT NULL DEFAULT TRUE,
+  expires_at    TIMESTAMPTZ NOT NULL,         -- event date + 24 h
+  created_at    TIMESTAMPTZ NOT NULL DEFAULT NOW()
+);
+
+CREATE INDEX IF NOT EXISTS idx_staff_ids_organizer ON staff_ids (organizer_id);
+CREATE INDEX IF NOT EXISTS idx_staff_ids_event     ON staff_ids (event_id);
+CREATE INDEX IF NOT EXISTS idx_staff_ids_code      ON staff_ids (code);
+
+-- ────────────────────────────────────────────────────────────
+-- 10. SCAN LOGS
+--     audit trail for QR ticket scanning.
+--     Exactly one of scanned_by (organizer session) or
+--     staff_id (door-staff code) is non-null per row.
+-- ────────────────────────────────────────────────────────────
 CREATE TABLE IF NOT EXISTS scan_logs (
   id             UUID        PRIMARY KEY DEFAULT gen_random_uuid(),
   event_id       UUID        NOT NULL REFERENCES events (id),
   ticket_id      TEXT        NOT NULL,
-  scanned_by     UUID        NOT NULL REFERENCES users (id),
+
+  -- Organizer-session scan: scanned_by is set, staff_id is null
+  scanned_by     UUID        REFERENCES users (id),
+  -- Staff-ID scan: staff_id is set, scanned_by is null
+  staff_id       UUID        REFERENCES staff_ids (id),
 
   attendee_name  TEXT        NOT NULL,
   ticket_type    TEXT        NOT NULL,
@@ -240,7 +270,8 @@ CREATE TABLE IF NOT EXISTS scan_logs (
   scanned_at     TIMESTAMPTZ NOT NULL DEFAULT NOW()
 );
 
-CREATE INDEX IF NOT EXISTS idx_scan_logs_event_id ON scan_logs (event_id);
+CREATE INDEX IF NOT EXISTS idx_scan_logs_event_id  ON scan_logs (event_id);
+CREATE INDEX IF NOT EXISTS idx_scan_logs_staff_id  ON scan_logs (staff_id);
 
 
 -- ────────────────────────────────────────────────────────────

@@ -4,54 +4,76 @@ import { getServerSupabase } from '@/lib/supabase/server';
 import { verifyQrToken } from '@/lib/server/jwt';
 
 export async function POST(req: NextRequest) {
+  const db = getServerSupabase();
+
+  // ── Resolve caller identity ──────────────────────────────────────
+  // Two valid auth paths:
+  //   1. Organizer session cookie  → user.role === 'organizer'
+  //   2. Staff code in request body → validated against staff_ids table
+
   const user = await getAuthUser();
-  if (!user || user.role !== 'organizer') {
+  const body = await req.json() as {
+    qrToken?:   string;
+    eventId?:   string;
+    staffCode?: string;
+  };
+
+  const { qrToken, eventId, staffCode } = body;
+
+  if (!qrToken) {
+    return NextResponse.json({ error: 'QR token required' }, { status: 400 });
+  }
+
+  // Which organizer (user ID or staff ID UUID) is performing this scan?
+  let scannedByUserId: string | null = null;
+  let scannedByStaffId: string | null = null;
+  // Event ID restriction imposed by the staff code (null = organizer path, unrestricted per-event)
+  let staffEventId: string | null = null;
+
+  if (user && user.role === 'organizer') {
+    scannedByUserId = user.sub;
+  } else if (staffCode) {
+    // Staff code path — validate without a user session
+    const code = staffCode.trim().toUpperCase();
+    const { data: staff } = await db
+      .from('staff_ids')
+      .select('id, active, expires_at, event_id, organizer_id')
+      .eq('code', code)
+      .maybeSingle();
+
+    if (!staff || !staff.active || new Date() > new Date(staff.expires_at)) {
+      return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
+    }
+
+    scannedByStaffId = staff.id;
+    staffEventId     = staff.event_id;
+  } else {
+    // No session and no staff code
     return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
   }
 
   try {
-    // eventId is optional:
-    //   provided  → manual-input path; ticket must belong to the selected event
-    //   omitted   → URL-scan path;     ticket must belong to the logged-in organizer
-    const { qrToken, eventId } = await req.json() as { qrToken?: string; eventId?: string };
-
-    if (!qrToken) {
-      return NextResponse.json({ error: 'QR token required' }, { status: 400 });
-    }
-
-    // --- Resolve ticket ID (legacy JWT compat) ---
+    // ── Resolve ticket ID (legacy JWT compat) ────────────────────────
     let ticketId: string;
 
     if (qrToken.includes('.')) {
-      // Legacy: signed JWT — verify signature then extract the ticket ID
       let payload: { ticketId: string; eventId: string };
       try {
         payload = verifyQrToken(qrToken);
       } catch {
-        // No valid eventId available — skip audit log to avoid FK violation
-        if (eventId) {
-          await logScan(user.sub, eventId, 'INVALID', 'Unknown', 'Unknown', 'invalid');
-        }
-        return NextResponse.json({
-          success: true,
-          data: { result: 'invalid', reason: 'Invalid QR code signature' },
-        });
+        if (eventId) await logScan({ scannedByUserId, scannedByStaffId, eventId, ticketId: 'INVALID', attendeeName: 'Unknown', ticketType: 'Unknown', result: 'invalid' });
+        return NextResponse.json({ success: true, data: { result: 'invalid', reason: 'Invalid QR code signature' } });
       }
       if (eventId && payload.eventId !== eventId) {
-        await logScan(user.sub, eventId, payload.ticketId, 'Unknown', 'Unknown', 'invalid');
-        return NextResponse.json({
-          success: true,
-          data: { result: 'invalid', reason: 'Ticket is for a different event' },
-        });
+        await logScan({ scannedByUserId, scannedByStaffId, eventId, ticketId: payload.ticketId, attendeeName: 'Unknown', ticketType: 'Unknown', result: 'invalid' });
+        return NextResponse.json({ success: true, data: { result: 'invalid', reason: 'Ticket is for a different event' } });
       }
       ticketId = payload.ticketId;
     } else {
-      // New format: plain ticket ID
       ticketId = qrToken.trim();
     }
 
-    const db = getServerSupabase();
-
+    // ── Fetch ticket ─────────────────────────────────────────────────
     const { data: ticket } = await db
       .from('tickets')
       .select(`
@@ -62,51 +84,42 @@ export async function POST(req: NextRequest) {
       .eq('id', ticketId)
       .single();
 
-    // Check 1: ticket exists
     if (!ticket) {
-      // Only log when we have a valid event UUID — 'UNKNOWN' would violate the FK constraint
-      if (eventId) {
-        await logScan(user.sub, eventId, ticketId, 'Unknown', 'Unknown', 'invalid');
-      }
-      return NextResponse.json({
-        success: true,
-        data: { result: 'invalid', reason: 'Ticket not found' },
-      });
+      if (eventId) await logScan({ scannedByUserId, scannedByStaffId, eventId, ticketId, attendeeName: 'Unknown', ticketType: 'Unknown', result: 'invalid' });
+      return NextResponse.json({ success: true, data: { result: 'invalid', reason: 'Ticket not found' } });
     }
 
     const tierRow  = Array.isArray(ticket.tier)  ? ticket.tier[0]  : ticket.tier  as { name: string } | null;
     const eventRow = Array.isArray(ticket.event) ? ticket.event[0] : ticket.event as { date: string; event_name: string } | null;
-    const tierName  = tierRow?.name  ?? 'Unknown';
+    const tierName  = tierRow?.name       ?? 'Unknown';
     const eventName = eventRow?.event_name ?? '';
-    const logEventId = eventId ?? ticket.event_id;
+    const logEventId = staffEventId ?? eventId ?? ticket.event_id;
 
-    // Check 2: correct event / organizer ownership
-    if (eventId) {
-      // Manual path: ticket must belong to the selected event
+    // ── Check 2: correct event / ownership ──────────────────────────
+    if (staffEventId) {
+      // Staff path: staff code must be for the same event as the ticket
+      if (ticket.event_id !== staffEventId) {
+        await logScan({ scannedByUserId, scannedByStaffId, eventId: staffEventId, ticketId: ticket.id, attendeeName: ticket.buyer_name, ticketType: tierName, result: 'invalid' });
+        return NextResponse.json({ success: true, data: { result: 'invalid', reason: 'Ticket is for a different event' } });
+      }
+    } else if (eventId) {
+      // Manual organizer path: ticket must belong to the selected event
       if (ticket.event_id !== eventId) {
-        await logScan(user.sub, eventId, ticket.id, ticket.buyer_name, tierName, 'invalid');
-        return NextResponse.json({
-          success: true,
-          data: { result: 'invalid', reason: 'Ticket is for a different event' },
-        });
+        await logScan({ scannedByUserId, scannedByStaffId, eventId, ticketId: ticket.id, attendeeName: ticket.buyer_name, ticketType: tierName, result: 'invalid' });
+        return NextResponse.json({ success: true, data: { result: 'invalid', reason: 'Ticket is for a different event' } });
       }
     } else {
-      // URL-scan path: ticket must belong to the logged-in organizer
-      if (ticket.organizer_id !== user.sub) {
-        await logScan(user.sub, ticket.event_id, ticket.id, ticket.buyer_name, tierName, 'invalid');
-        return NextResponse.json({
-          success: true,
-          data: { result: 'invalid', reason: 'Ticket is for a different event' },
-        });
+      // URL-scan organizer path: ticket must belong to the organizer
+      if (scannedByUserId && ticket.organizer_id !== scannedByUserId) {
+        await logScan({ scannedByUserId, scannedByStaffId, eventId: ticket.event_id, ticketId: ticket.id, attendeeName: ticket.buyer_name, ticketType: tierName, result: 'invalid' });
+        return NextResponse.json({ success: true, data: { result: 'invalid', reason: 'Ticket is for a different event' } });
       }
     }
 
-    // Check 3: already used
+    // ── Check 3: already used ────────────────────────────────────────
     if (ticket.status === 'used') {
-      // Write the audit entry before the extra lookup so it's never lost
-      await logScan(user.sub, logEventId, ticket.id, ticket.buyer_name, tierName, 'already_used');
+      await logScan({ scannedByUserId, scannedByStaffId, eventId: logEventId, ticketId: ticket.id, attendeeName: ticket.buyer_name, ticketType: tierName, result: 'already_used' });
 
-      // Retrieve first-scan timestamp for display (best-effort; failure doesn't block the response)
       const { data: firstScan } = await db
         .from('scan_logs')
         .select('scanned_at')
@@ -118,59 +131,34 @@ export async function POST(req: NextRequest) {
 
       return NextResponse.json({
         success: true,
-        data: {
-          result:         'already_used',
-          attendeeName:   ticket.buyer_name,
-          ticketType:     tierName,
-          eventName,
-          firstScannedAt: firstScan?.scanned_at ?? null,
-        },
+        data: { result: 'already_used', attendeeName: ticket.buyer_name, ticketType: tierName, eventName, firstScannedAt: firstScan?.scanned_at ?? null },
       });
     }
 
-    // Check 4: must be in a scannable state
+    // ── Check 4: status must be valid ────────────────────────────────
     if (ticket.status !== 'valid') {
-      await logScan(user.sub, logEventId, ticket.id, ticket.buyer_name, tierName, 'invalid');
-      return NextResponse.json({
-        success: true,
-        data: { result: 'invalid', reason: `Ticket status is ${ticket.status}` },
-      });
+      await logScan({ scannedByUserId, scannedByStaffId, eventId: logEventId, ticketId: ticket.id, attendeeName: ticket.buyer_name, ticketType: tierName, result: 'invalid' });
+      return NextResponse.json({ success: true, data: { result: 'invalid', reason: `Ticket status is ${ticket.status}` } });
     }
 
-    // Check 5: event not expired more than 24 h ago
-    // Guard: if the event row is missing (e.g. deleted after ticket was issued),
-    // treat it as expired rather than silently letting new Date('') produce NaN
-    // which makes the > comparison always false and bypasses this check entirely.
+    // ── Check 5: event not expired ───────────────────────────────────
     if (!eventRow?.date) {
-      await logScan(user.sub, logEventId, ticket.id, ticket.buyer_name, tierName, 'invalid');
-      return NextResponse.json({
-        success: true,
-        data: { result: 'invalid', reason: 'Event information unavailable' },
-      });
+      await logScan({ scannedByUserId, scannedByStaffId, eventId: logEventId, ticketId: ticket.id, attendeeName: ticket.buyer_name, ticketType: tierName, result: 'invalid' });
+      return NextResponse.json({ success: true, data: { result: 'invalid', reason: 'Event information unavailable' } });
     }
-    const eventDate = new Date(eventRow.date);
-    const cutoff    = new Date(eventDate.getTime() + 24 * 60 * 60 * 1000);
+    const cutoff = new Date(new Date(eventRow.date).getTime() + 24 * 60 * 60 * 1000);
     if (new Date() > cutoff) {
-      await logScan(user.sub, logEventId, ticket.id, ticket.buyer_name, tierName, 'invalid');
-      return NextResponse.json({
-        success: true,
-        data: { result: 'invalid', reason: 'Event has expired' },
-      });
+      await logScan({ scannedByUserId, scannedByStaffId, eventId: logEventId, ticketId: ticket.id, attendeeName: ticket.buyer_name, ticketType: tierName, result: 'invalid' });
+      return NextResponse.json({ success: true, data: { result: 'invalid', reason: 'Event has expired' } });
     }
 
-    // All checks passed — mark as used
+    // ── All checks passed ────────────────────────────────────────────
     await db.from('tickets').update({ status: 'used' }).eq('id', ticket.id);
-    await logScan(user.sub, logEventId, ticket.id, ticket.buyer_name, tierName, 'success');
+    await logScan({ scannedByUserId, scannedByStaffId, eventId: logEventId, ticketId: ticket.id, attendeeName: ticket.buyer_name, ticketType: tierName, result: 'success' });
 
     return NextResponse.json({
       success: true,
-      data: {
-        result:       'success',
-        attendeeName: ticket.buyer_name,
-        ticketType:   tierName,
-        eventName,
-        ticketId:     ticket.id,
-      },
+      data: { result: 'success', attendeeName: ticket.buyer_name, ticketType: tierName, eventName, ticketId: ticket.id },
     });
   } catch (err) {
     console.error('POST /api/organizer/scan error', err);
@@ -178,24 +166,26 @@ export async function POST(req: NextRequest) {
   }
 }
 
-async function logScan(
-  scannedBy: string,
-  eventId: string,
-  ticketId: string,
-  attendeeName: string,
-  ticketType: string,
-  result: 'success' | 'already_used' | 'invalid'
-) {
+async function logScan(p: {
+  scannedByUserId:  string | null;
+  scannedByStaffId: string | null;
+  eventId:     string;
+  ticketId:    string;
+  attendeeName: string;
+  ticketType:  string;
+  result:      'success' | 'already_used' | 'invalid';
+}) {
   const db = getServerSupabase();
   try {
     await db.from('scan_logs').insert({
-      event_id:      eventId,
-      ticket_id:     ticketId,
-      attendee_name: attendeeName,
-      ticket_type:   ticketType,
+      event_id:      p.eventId,
+      ticket_id:     p.ticketId,
+      attendee_name: p.attendeeName,
+      ticket_type:   p.ticketType,
       scanned_at:    new Date().toISOString(),
-      scanned_by:    scannedBy,
-      result,
+      scanned_by:    p.scannedByUserId,
+      staff_id:      p.scannedByStaffId,
+      result:        p.result,
     });
   } catch (e) { console.error(e); }
 }

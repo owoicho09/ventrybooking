@@ -28,7 +28,7 @@ export function AdminSidebar() {
 
   return (
     <aside
-      className="fixed top-0 left-0 h-full w-60 flex flex-col border-r z-40"
+      className="hidden lg:flex lg:flex-col fixed top-0 left-0 h-full w-60 border-r z-40"
       style={{
         backgroundColor: 'var(--color-surface)',
         borderColor: 'var(--color-border)',

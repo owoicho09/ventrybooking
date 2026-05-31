@@ -1,10 +1,10 @@
 'use client';
 
-import { useEffect, useState } from 'react';
+import { useEffect, useState, useRef } from 'react';
 import { useParams } from 'next/navigation';
-import { CheckCircle, XCircle, AlertCircle, Loader2, ScanLine } from 'lucide-react';
+import { CheckCircle, XCircle, AlertCircle, Loader2, ScanLine, KeyRound } from 'lucide-react';
 
-type PageState = 'loading' | 'unauthorized' | 'success' | 'already_used' | 'invalid' | 'ready';
+type PageState = 'loading' | 'staff_auth' | 'success' | 'already_used' | 'invalid' | 'ready';
 
 interface ScanData {
   result:          'success' | 'already_used' | 'invalid';
@@ -15,8 +15,34 @@ interface ScanData {
   firstScannedAt?: string | null;
 }
 
+interface StaffSession {
+  code:      string;
+  expiresAt: string;
+  eventId:   string;
+  eventName: string;
+  label:     string | null;
+}
+
+const STAFF_SESSION_KEY = 'ventry_staff_session';
+
+function getStoredStaffSession(): StaffSession | null {
+  try {
+    const raw = localStorage.getItem(STAFF_SESSION_KEY);
+    if (!raw) return null;
+    const s: StaffSession = JSON.parse(raw);
+    if (new Date() > new Date(s.expiresAt)) {
+      localStorage.removeItem(STAFF_SESSION_KEY);
+      return null;
+    }
+    return s;
+  } catch { return null; }
+}
+
+function storeStaffSession(s: StaffSession) {
+  localStorage.setItem(STAFF_SESSION_KEY, JSON.stringify(s));
+}
+
 // Shows "Resetting in Ns..." and counts down to 0, then stops.
-// Uses a setTimeout chain so no timer fires after the counter reaches zero.
 function ResetIn({ total = 3 }: { total?: number }) {
   const [n, setN] = useState(total);
   useEffect(() => {
@@ -37,52 +63,104 @@ export default function ScanValidatePage() {
 
   const [state,      setState]      = useState<PageState>('loading');
   const [scanData,   setScanData]   = useState<ScanData | null>(null);
+  const [staffSession, setStaffSession] = useState<StaffSession | null>(null);
+
+  // Staff auth form state
+  const [codeInput,   setCodeInput]   = useState('');
+  const [codeError,   setCodeError]   = useState('');
+  const [codeLoading, setCodeLoading] = useState(false);
+
+  const resetTimerRef = useRef<ReturnType<typeof setTimeout> | undefined>(undefined);
+
+  // ── Validate ticket (called both on mount and after staff auth) ──
+  const validate = async (staffCode?: string) => {
+    setState('loading');
+    setScanData(null);
+    if (resetTimerRef.current) clearTimeout(resetTimerRef.current);
+
+    const session = staffCode ? null : getStoredStaffSession();
+
+    try {
+      const res = await fetch('/api/organizer/scan', {
+        method:  'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          qrToken:   ticketId,
+          staffCode: staffCode ?? session?.code ?? undefined,
+        }),
+      });
+
+      if (res.status === 401) {
+        // No organizer session and no valid staff code → show auth screen
+        setState('staff_auth');
+        return;
+      }
+
+      const json = await res.json();
+
+      if (!res.ok || !json.success) {
+        setScanData({ result: 'invalid', reason: json.error ?? 'Validation service error' });
+        setState('invalid');
+        resetTimerRef.current = setTimeout(() => setState('ready'), 3000);
+        return;
+      }
+
+      const data: ScanData = json.data;
+      setScanData(data);
+      setState(data.result);
+      resetTimerRef.current = setTimeout(() => setState('ready'), 3000);
+    } catch {
+      setScanData({ result: 'invalid', reason: 'Network error — check your connection' });
+      setState('invalid');
+      resetTimerRef.current = setTimeout(() => setState('ready'), 3000);
+    }
+  };
 
   useEffect(() => {
     if (!ticketId) return;
-
-    let resetTimer: ReturnType<typeof setTimeout>;
-
-    const validate = async () => {
-      setState('loading');
-      setScanData(null);
-
-      try {
-        const res = await fetch('/api/organizer/scan', {
-          method:  'POST',
-          headers: { 'Content-Type': 'application/json' },
-          // No eventId — server uses organizer-ownership check
-          body: JSON.stringify({ qrToken: ticketId }),
-        });
-
-        if (res.status === 401) {
-          setState('unauthorized');
-          return;
-        }
-
-        const json = await res.json();
-
-        if (!res.ok || !json.success) {
-          setScanData({ result: 'invalid', reason: json.error ?? 'Validation service error' });
-          setState('invalid');
-          resetTimer = setTimeout(() => setState('ready'), 3000);
-          return;
-        }
-
-        const data: ScanData = json.data;
-        setScanData(data);
-        setState(data.result);
-        resetTimer = setTimeout(() => setState('ready'), 3000);
-      } catch {
-        setScanData({ result: 'invalid', reason: 'Network error — check your connection' });
-        setState('invalid');
-        resetTimer = setTimeout(() => setState('ready'), 3000);
-      }
-    };
-
     validate();
-    return () => clearTimeout(resetTimer);
+    return () => { if (resetTimerRef.current) clearTimeout(resetTimerRef.current); };
+  // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [ticketId]);
+
+  // ── Staff code submit ────────────────────────────────────────────
+  const handleStaffAuth = async (e: React.FormEvent) => {
+    e.preventDefault();
+    const code = codeInput.trim().toUpperCase();
+    if (!code) return;
+
+    setCodeError('');
+    setCodeLoading(true);
+
+    try {
+      const res  = await fetch(`/api/staff/verify?code=${encodeURIComponent(code)}`);
+      const data = await res.json();
+
+      if (!data.valid) {
+        setCodeError(data.error ?? 'Invalid staff code');
+        setCodeLoading(false);
+        return;
+      }
+
+      // Store session so subsequent scans on this device auth silently
+      const session: StaffSession = {
+        code:      data.code,
+        expiresAt: data.expiresAt,
+        eventId:   data.eventId,
+        eventName: data.eventName,
+        label:     data.label ?? null,
+      };
+      storeStaffSession(session);
+      setStaffSession(session);
+      setCodeLoading(false);
+
+      // Now validate the ticket with this code
+      await validate(data.code);
+    } catch {
+      setCodeError('Network error — please try again');
+      setCodeLoading(false);
+    }
+  };
 
   /* ── Loading ──────────────────────────────────────────────────── */
   if (state === 'loading') {
@@ -95,35 +173,82 @@ export default function ScanValidatePage() {
     );
   }
 
-  /* ── Unauthorized ─────────────────────────────────────────────── */
-  if (state === 'unauthorized') {
-    const loginHref = `/organizer/login?return=${encodeURIComponent(`/scan/${ticketId}`)}`;
+  /* ── Staff Auth ───────────────────────────────────────────────── */
+  if (state === 'staff_auth') {
     return (
-      <Screen bg="#78350f">
-        <AlertCircle size={88} strokeWidth={1.3} color="#fde68a" />
-        <BigText color="#fff" mt>Staff Login Required</BigText>
-        <Sub color="#fde68a">
-          You need to be signed in as an event organizer to validate tickets.
-        </Sub>
-        <a
-          href={loginHref}
-          className="mt-8 px-10 py-3 rounded-2xl font-bold text-lg"
-          style={{ backgroundColor: '#fde68a', color: '#78350f' }}
+      <Screen bg="var(--color-bg)">
+        <div
+          className="w-16 h-16 rounded-2xl flex items-center justify-center mb-6"
+          style={{ backgroundColor: 'var(--color-purple-dim)' }}
         >
-          Log in as Organizer →
-        </a>
-        <Mono color="#fbbf24" style={{ marginTop: '2rem' }}>{ticketId}</Mono>
+          <KeyRound size={28} style={{ color: 'var(--color-purple-light)' }} />
+        </div>
+        <BigText style={{ color: 'var(--color-text)' }} mt={false}>Staff Access</BigText>
+        <p className="text-base mt-3 mb-8 max-w-xs" style={{ color: 'var(--color-text-muted)' }}>
+          Enter your staff ID code to validate tickets at this event.
+        </p>
+
+        <form onSubmit={handleStaffAuth} className="w-full max-w-xs flex flex-col gap-3">
+          <input
+            value={codeInput}
+            onChange={e => setCodeInput(e.target.value.toUpperCase())}
+            placeholder="STF-XXXX-XXXX"
+            autoFocus
+            className="w-full px-4 py-3 rounded-xl text-center font-mono text-lg font-bold tracking-widest border-2 focus:outline-none"
+            style={{
+              backgroundColor: 'var(--color-surface)',
+              borderColor: codeError ? 'var(--color-red)' : 'var(--color-border)',
+              color: 'var(--color-text)',
+            }}
+          />
+          {codeError && (
+            <p className="text-sm text-center" style={{ color: 'var(--color-red)' }}>{codeError}</p>
+          )}
+          <button
+            type="submit"
+            disabled={codeLoading || !codeInput}
+            className="w-full py-3 rounded-xl font-bold text-base disabled:opacity-50"
+            style={{ backgroundColor: 'var(--color-purple)', color: '#fff' }}
+          >
+            {codeLoading ? 'Verifying…' : 'Continue'}
+          </button>
+        </form>
+
+        <div className="mt-8 pt-6 border-t w-full max-w-xs text-center"
+          style={{ borderColor: 'var(--color-border)' }}>
+          <p className="text-xs mb-2" style={{ color: 'var(--color-text-dim)' }}>Are you the organizer?</p>
+          <a
+            href={`/organizer/login?return=${encodeURIComponent(`/scan/${ticketId}`)}`}
+            className="text-sm font-medium hover:underline"
+            style={{ color: 'var(--color-purple-light)' }}
+          >
+            Sign in as Organizer →
+          </a>
+        </div>
+
+        {staffSession && (
+          <p className="text-xs mt-4 font-mono" style={{ color: 'var(--color-text-dim)' }}>
+            Active: {staffSession.code} · {staffSession.eventName}
+          </p>
+        )}
+        <Mono style={{ marginTop: '1rem' }}>{ticketId}</Mono>
       </Screen>
     );
   }
 
   /* ── Ready ────────────────────────────────────────────────────── */
   if (state === 'ready') {
+    const session = getStoredStaffSession();
     return (
       <Screen bg="var(--color-bg)">
         <ScanLine size={72} strokeWidth={1.2} style={{ color: 'var(--color-purple)', marginBottom: '1.5rem' }} />
         <BigText style={{ color: 'var(--color-text)' }}>Ready</BigText>
         <Sub style={{ color: 'var(--color-text-muted)' }}>Point camera at next ticket</Sub>
+        {session && (
+          <p className="text-xs mt-4 font-mono" style={{ color: 'var(--color-text-dim)' }}>
+            {session.label ?? session.code} · {session.eventName}
+          </p>
+        )}
       </Screen>
     );
   }
@@ -151,10 +276,7 @@ export default function ScanValidatePage() {
   /* ── Already used ─────────────────────────────────────────────── */
   if (state === 'already_used') {
     const when = scanData?.firstScannedAt
-      ? new Date(scanData.firstScannedAt).toLocaleTimeString([], {
-          hour:   '2-digit',
-          minute: '2-digit',
-        })
+      ? new Date(scanData.firstScannedAt).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })
       : null;
     return (
       <Screen bg="#991b1b">
@@ -182,52 +304,28 @@ export default function ScanValidatePage() {
 
 /* ── Layout primitives ──────────────────────────────────────────── */
 
-function Screen({
-  bg,
-  children,
-}: {
-  bg: string;
-  children: React.ReactNode;
-}) {
+function Screen({ bg, children }: { bg: string; children: React.ReactNode }) {
   return (
-    <div
-      className="fixed inset-0 flex flex-col items-center justify-center px-8 text-center"
-      style={{ backgroundColor: bg }}
-    >
+    <div className="fixed inset-0 flex flex-col items-center justify-center px-8 text-center"
+      style={{ backgroundColor: bg }}>
       {children}
     </div>
   );
 }
 
-function BigText({
-  children,
-  color,
-  mt,
-  style,
-}: {
-  children: React.ReactNode;
-  color?: string;
-  mt?: boolean;
-  style?: React.CSSProperties;
+function BigText({ children, color, mt, style }: {
+  children: React.ReactNode; color?: string; mt?: boolean; style?: React.CSSProperties;
 }) {
   return (
-    <p
-      className={`text-4xl sm:text-5xl font-black tracking-tight leading-none${mt ? ' mt-6' : ''}`}
-      style={{ fontFamily: 'var(--font-syne), sans-serif', color, ...style }}
-    >
+    <p className={`text-4xl sm:text-5xl font-black tracking-tight leading-none${mt ? ' mt-6' : ''}`}
+      style={{ fontFamily: 'var(--font-syne), sans-serif', color, ...style }}>
       {children}
     </p>
   );
 }
 
-function Sub({
-  children,
-  color,
-  style,
-}: {
-  children: React.ReactNode;
-  color?: string;
-  style?: React.CSSProperties;
+function Sub({ children, color, style }: {
+  children: React.ReactNode; color?: string; style?: React.CSSProperties;
 }) {
   return (
     <p className="text-base mt-3 max-w-xs leading-relaxed" style={{ color, ...style }}>
@@ -236,20 +334,11 @@ function Sub({
   );
 }
 
-function Mono({
-  children,
-  color,
-  style,
-}: {
-  children: React.ReactNode;
-  color?: string;
-  style?: React.CSSProperties;
+function Mono({ children, color, style }: {
+  children: React.ReactNode; color?: string; style?: React.CSSProperties;
 }) {
   return (
-    <p
-      className="text-xs mt-4 opacity-60 font-mono"
-      style={{ color: color ?? 'inherit', ...style }}
-    >
+    <p className="text-xs mt-4 opacity-60 font-mono" style={{ color: color ?? 'inherit', ...style }}>
       {children}
     </p>
   );

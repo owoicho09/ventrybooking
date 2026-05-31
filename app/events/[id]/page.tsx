@@ -43,9 +43,10 @@ export default function EventDetailPage() {
     setQuantities(prev => ({ ...prev, [tierId]: Math.max(0, Math.min(Math.min(10, remaining), (prev[tierId] ?? 0) + delta)) }));
   };
 
-  const subtotal = event ? event.tiers.reduce((sum, tier) => sum + tier.price * (quantities[tier.id] ?? 0), 0) : 0;
-  const serviceFee = subtotal > 0 ? 100 : 0;
-  const total = subtotal + serviceFee;
+  const subtotal      = event ? event.tiers.reduce((sum, tier) => sum + tier.price * (quantities[tier.id] ?? 0), 0) : 0;
+  const serviceFee    = subtotal > 0 ? 100 : 0;
+  const processingFee = subtotal > 0 ? Math.round(subtotal * 0.015) : 0;
+  const total         = subtotal + serviceFee + processingFee;
   const hasSelection = subtotal > 0;
 
   const selectedTiers = event ? event.tiers.filter(t => (quantities[t.id] ?? 0) > 0) : [];
@@ -149,7 +150,7 @@ export default function EventDetailPage() {
             <div className="rounded-xl border p-5" style={{ backgroundColor: 'var(--color-surface)', borderColor: 'var(--color-border)' }}>
               <h3 className="font-semibold mb-3" style={{ color: 'var(--color-text)' }}>Refund Policy</h3>
               <ul className="flex flex-col gap-2">
-                {['Full refund if the event is cancelled by the organizer.', 'Full refund if the event is flagged as fraudulent by Ventry.', 'No refunds for no-shows or buyer change of mind after ticket purchase.', 'Refunds are processed within 3-5 business days to your original payment method.'].map((item) => (
+                {['Base ticket price refunded if the event is cancelled by the organizer.', 'Base ticket price refunded if the event is flagged as fraudulent by Ventry.', 'No refunds for no-shows or buyer change of mind after ticket purchase.', 'The ₦100 Ventry service fee and 1.5% Paystack processing fee are never refunded, including if the event is cancelled.', 'Refunds are processed within 3-5 business days to your original payment method.'].map((item) => (
                   <li key={item} className="flex items-start gap-2 text-sm" style={{ color: 'var(--color-text-muted)' }}><CheckCircle size={14} className="flex-shrink-0 mt-0.5" style={{ color: 'var(--color-green)' }} />{item}</li>
                 ))}
               </ul>
@@ -192,10 +193,14 @@ export default function EventDetailPage() {
                 {hasSelection && (
                   <div className="rounded-lg border p-4 flex flex-col gap-2 text-sm" style={{ borderColor: 'var(--color-border)', backgroundColor: 'var(--color-surface-2)' }}>
                     <div className="flex justify-between"><span style={{ color: 'var(--color-text-muted)' }}>Subtotal</span><span style={{ color: 'var(--color-text)' }}>{formatNGN(subtotal)}</span></div>
-                    <div className="flex justify-between"><span style={{ color: 'var(--color-text-muted)' }}>Service fee</span><span style={{ color: 'var(--color-text)' }}>{formatNGN(serviceFee)}</span></div>
+                    <div className="flex justify-between"><span style={{ color: 'var(--color-text-muted)' }}>Ventry service fee</span><span style={{ color: 'var(--color-text)' }}>{formatNGN(serviceFee)}</span></div>
+                    <div className="flex justify-between"><span style={{ color: 'var(--color-text-muted)' }}>Paystack processing (1.5%)</span><span style={{ color: 'var(--color-text)' }}>{formatNGN(processingFee)}</span></div>
                     <div className="flex justify-between font-semibold pt-2 border-t" style={{ borderColor: 'var(--color-border)' }}>
                       <span style={{ color: 'var(--color-text)' }}>Total</span><span style={{ color: 'var(--color-text)' }}>{formatNGN(total)}</span>
                     </div>
+                    <p className="text-[10px] leading-snug mt-1" style={{ color: 'var(--color-text-dim)' }}>
+                      The ₦100 service fee and 1.5% processing fee are non-refundable under any circumstances — only the base ticket price is refundable.
+                    </p>
                   </div>
                 )}
 

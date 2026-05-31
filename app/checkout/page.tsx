@@ -32,9 +32,10 @@ export default function CheckoutPage() {
     }
   }, []);
 
-  const subtotal   = cart ? cart.tierPrice * cart.quantity : 0;
-  const serviceFee = 100;
-  const total      = subtotal + serviceFee;
+  const subtotal      = cart ? cart.tierPrice * cart.quantity : 0;
+  const serviceFee    = 100;
+  const processingFee = Math.round(subtotal * 0.015);
+  const total         = subtotal + serviceFee + processingFee;
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -95,18 +96,39 @@ export default function CheckoutPage() {
             style={{ backgroundColor: 'var(--color-surface)', borderColor: 'var(--color-border)' }}>
             <h2 className="font-semibold text-sm uppercase tracking-wider mb-4"
               style={{ color: 'var(--color-text-dim)' }}>Order Summary</h2>
-            <div className="flex justify-between items-start mb-4">
-              <div>
-                <p className="font-semibold" style={{ color: 'var(--color-text)' }}>{cart.eventName}</p>
-                <p className="text-sm mt-0.5" style={{ color: 'var(--color-text-muted)' }}>
-                  {new Date(cart.eventDate).toLocaleDateString('en-NG', { day: 'numeric', month: 'long', year: 'numeric' })}
-                </p>
-                <p className="text-sm" style={{ color: 'var(--color-text-muted)' }}>
-                  {cart.tierName} &times; {cart.quantity}
-                </p>
-              </div>
-              <p className="font-bold text-lg" style={{ color: 'var(--color-text)' }}>{formatNGN(total)}</p>
+            <div className="mb-4">
+              <p className="font-semibold" style={{ color: 'var(--color-text)' }}>{cart.eventName}</p>
+              <p className="text-sm mt-0.5" style={{ color: 'var(--color-text-muted)' }}>
+                {new Date(cart.eventDate).toLocaleDateString('en-NG', { day: 'numeric', month: 'long', year: 'numeric' })}
+              </p>
+              <p className="text-sm" style={{ color: 'var(--color-text-muted)' }}>
+                {cart.tierName} &times; {cart.quantity}
+              </p>
             </div>
+
+            <div className="flex flex-col gap-1.5 text-sm mb-4 pt-3 border-t" style={{ borderColor: 'var(--color-border)' }}>
+              <div className="flex justify-between">
+                <span style={{ color: 'var(--color-text-muted)' }}>Subtotal</span>
+                <span style={{ color: 'var(--color-text)' }}>{formatNGN(subtotal)}</span>
+              </div>
+              <div className="flex justify-between">
+                <span style={{ color: 'var(--color-text-muted)' }}>Ventry service fee</span>
+                <span style={{ color: 'var(--color-text)' }}>{formatNGN(serviceFee)}</span>
+              </div>
+              <div className="flex justify-between">
+                <span style={{ color: 'var(--color-text-muted)' }}>Paystack processing (1.5%)</span>
+                <span style={{ color: 'var(--color-text)' }}>{formatNGN(processingFee)}</span>
+              </div>
+              <div className="flex justify-between font-bold pt-2 border-t" style={{ borderColor: 'var(--color-border)' }}>
+                <span style={{ color: 'var(--color-text)' }}>Total</span>
+                <span style={{ color: 'var(--color-text)' }}>{formatNGN(total)}</span>
+              </div>
+            </div>
+
+            <p className="text-[10px] leading-snug mb-4" style={{ color: 'var(--color-text-dim)' }}>
+              The ₦100 service fee and 1.5% Paystack processing fee are non-refundable under any circumstances. Only the base ticket price is refunded if an event is cancelled.
+            </p>
+
             <div className="flex items-center gap-2 rounded-lg px-3 py-2.5 text-sm"
               style={{ backgroundColor: 'var(--color-purple-dim)', color: 'var(--color-purple-light)' }}>
               <Shield size={15} />

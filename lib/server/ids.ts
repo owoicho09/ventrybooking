@@ -22,3 +22,8 @@ export function generatePayoutRef(): string {
   const year = new Date().getFullYear();
   return `VTR-PAY-${year}-${randomAlphaNum(6)}`;
 }
+
+/** Short door-staff access code: STF-XXXX-XXXX */
+export function generateStaffCode(): string {
+  return `STF-${randomAlphaNum(4)}-${randomAlphaNum(4)}`;
+}
