@@ -45,7 +45,10 @@ export async function GET(
       return NextResponse.json({ error: 'Ticket not found' }, { status: 404 });
     }
 
-    const qrDataUrl = await generateQRDataUrl(data.id);
+    const APP_URL   = process.env.NEXT_PUBLIC_APP_URL;
+    const qrDataUrl = APP_URL
+      ? await generateQRDataUrl(`${APP_URL}/scan/${data.id}`)
+      : null;
 
     const rawEvent  = one(data.event  as EventRow[] | EventRow | null);
     const rawTier   = one(data.tier   as TierRow[]  | TierRow  | null);

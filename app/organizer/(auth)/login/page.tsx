@@ -27,7 +27,11 @@ export default function OrganizerLoginPage() {
         setLoading(false);
         return;
       }
-      window.location.href = '/organizer/dashboard';
+      const returnTo = new URLSearchParams(window.location.search).get('return');
+      // Accept only same-origin paths: must start with / but not // or /\
+      // The /[^/\\] prefix blocks protocol-relative and backslash-normalised redirects.
+      const safe = returnTo && /^\/[^/\\]/.test(returnTo);
+      window.location.href = safe ? returnTo : '/organizer/dashboard';
     } catch {
       setError('Network error. Please try again.');
       setLoading(false);

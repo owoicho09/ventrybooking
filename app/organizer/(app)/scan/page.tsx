@@ -1,57 +1,35 @@
 'use client';
 
-import { useState, useEffect, useRef, useCallback } from 'react';
-import jsQR from 'jsqr';
-import { ScanLine, CheckCircle, XCircle, Camera, CameraOff, Loader2 } from 'lucide-react';
+import { useState, useEffect } from 'react';
+import { ScanLine, Smartphone, CheckCircle, XCircle, AlertCircle } from 'lucide-react';
 import { Select } from '@/components/ui/Select';
 import { Input } from '@/components/ui/Input';
 import { Button } from '@/components/ui/Button';
-import { ScanResult } from '@/components/tickets/ScanResult';
 
-interface ScanLog { id: string; ticket_id: string; attendee_name: string; ticket_type: string; scanned_at: string; result: string; }
+interface ScanLog {
+  id: string;
+  ticket_id: string;
+  attendee_name: string;
+  ticket_type: string;
+  scanned_at: string;
+  result: string;
+}
 interface EventOption { value: string; label: string; }
-type ScanResultType = 'success' | 'already_used' | 'invalid';
-
-// Decode at ~6-7fps. More headroom per frame is more important than frequency for
-// dense QR codes, since each frame attempt may run jsQR twice (two-pass strategy).
-const DECODE_INTERVAL_MS = 150;
-
-// Never send more than this many pixels wide to jsQR — keeps decode time <100ms on
-// mobile even when the camera stream is 4K. Downscaling a 4K source to 1920px still
-// gives sharper edges than a native 1080p camera because of antialiased downsampling.
-const DECODE_MAX_WIDTH = 1920;
+type ManualResult = {
+  type: 'success' | 'already_used' | 'invalid';
+  name?: string;
+  ticketType?: string;
+  reason?: string;
+};
 
 export default function ScanPage() {
-  const [manualId, setManualId]         = useState('');
-  const [result, setResult]             = useState<ScanResultType | null>(null);
-  const [attendeeName, setAttendeeName] = useState('');
-  const [ticketType, setTicketType]     = useState('');
-  const [scanning, setScanning]         = useState(false);
-  const [scanLogs, setScanLogs]         = useState<ScanLog[]>([]);
-  const [stats, setStats]               = useState({ scanned: 0, rejected: 0, remaining: 0 });
+  const [manualId, setManualId]       = useState('');
+  const [manualResult, setManualResult] = useState<ManualResult | null>(null);
+  const [submitting, setSubmitting]   = useState(false);
+  const [scanLogs, setScanLogs]       = useState<ScanLog[]>([]);
+  const [stats, setStats]             = useState({ scanned: 0, rejected: 0, remaining: 0 });
   const [eventOptions, setEventOptions] = useState<EventOption[]>([]);
   const [selectedEvent, setSelectedEvent] = useState('');
-  const [cameraActive, setCameraActive] = useState(false);
-  const [cameraError, setCameraError]   = useState('');
-  const [hasCamera, setHasCamera]       = useState(false);
-  const [decoderReady, setDecoderReady] = useState(false);
-
-  const videoRef         = useRef<HTMLVideoElement>(null);
-  const canvasRef        = useRef<HTMLCanvasElement>(null);
-  const streamRef        = useRef<MediaStream | null>(null);
-  const rafRef           = useRef<number>(0);
-  const lastDecodeRef    = useRef<number>(0);
-  // Refs that the rAF loop reads directly so it never has a stale closure.
-  const selectedEventRef = useRef('');
-  const apiLockedRef     = useRef(false); // true while fetch is in-flight
-  const pausedRef        = useRef(false); // true while result overlay is showing
-
-  useEffect(() => { selectedEventRef.current = selectedEvent; }, [selectedEvent]);
-
-  useEffect(() => {
-    setHasCamera(!!(navigator.mediaDevices?.getUserMedia));
-    setDecoderReady(true); // jsQR is loaded synchronously — always available
-  }, []);
 
   useEffect(() => {
     fetch('/api/organizer/events')
@@ -83,204 +61,64 @@ export default function ScanPage() {
         }
       })
       .catch(console.error);
-  }, [selectedEvent, result]);
+  }, [selectedEvent, manualResult]);
 
-  useEffect(() => { return () => stopCamera(); }, []);
-
-  const stopCamera = () => {
-    cancelAnimationFrame(rafRef.current);
-    streamRef.current?.getTracks().forEach(t => t.stop());
-    streamRef.current = null;
-    if (videoRef.current) videoRef.current.srcObject = null;
-    setCameraActive(false);
-  };
-
-  // Sends the decoded token to the API. Uses refs so it never needs to be
-  // recreated and the rAF loop always has a fresh reference.
-  const submitToken = useCallback(async (token: string) => {
-    const eventId = selectedEventRef.current;
-    if (apiLockedRef.current || !token.trim() || !eventId) return;
-
-    apiLockedRef.current = true;
-    pausedRef.current    = true; // pause loop immediately so the same code isn't re-scanned
-    setScanning(true);
-
+  const handleManualValidate = async () => {
+    const id = manualId.trim();
+    if (!id || !selectedEvent || submitting) return;
+    setSubmitting(true);
+    setManualResult(null);
     try {
       const res  = await fetch('/api/organizer/scan', {
         method:  'POST',
         headers: { 'Content-Type': 'application/json' },
-        body:    JSON.stringify({ qrToken: token.trim(), eventId }),
+        body:    JSON.stringify({ qrToken: id, eventId: selectedEvent }),
       });
       const data = await res.json();
-      if (data.success) {
-        setResult(data.data.result);
-        setAttendeeName(data.data.attendeeName || '');
-        setTicketType(data.data.ticketType || '');
+
+      if (!res.ok) {
+        const reason = res.status === 401
+          ? 'Session expired — please log in again'
+          : (data?.error ?? 'Server error — please try again');
+        setManualResult({ type: 'invalid', reason });
+      } else if (data.success) {
+        const r = data.data;
+        setManualResult({
+          type:       r.result,
+          name:       r.attendeeName,
+          ticketType: r.ticketType,
+          reason:     r.reason,
+        });
+        setManualId('');
       } else {
-        // API returned failure — release the lock so the operator can try again
-        apiLockedRef.current = false;
-        pausedRef.current    = false;
+        setManualResult({ type: 'invalid', reason: data.error ?? 'Validation failed' });
       }
+      // Auto-clear after 5 s so it doesn't linger
+      setTimeout(() => setManualResult(null), 5000);
     } catch (err) {
-      console.error('Scan API error:', err);
-      apiLockedRef.current = false;
-      pausedRef.current    = false;
+      console.error(err);
+      setManualResult({ type: 'invalid', reason: 'Network error — check your connection' });
+      setTimeout(() => setManualResult(null), 5000);
     } finally {
-      setScanning(false);
+      setSubmitting(false);
     }
-  }, []);
-
-  const startScanLoop = useCallback(() => {
-    const video  = videoRef.current;
-    const canvas = canvasRef.current;
-    if (!video || !canvas) return;
-
-    const ctx = canvas.getContext('2d', { willReadFrequently: true });
-    if (!ctx) return;
-
-    const jsqrOpts = { inversionAttempts: 'attemptBoth' as const };
-
-    const tick = (now: number) => {
-      // Bail if camera was stopped externally
-      if (!streamRef.current) return;
-
-      if (!pausedRef.current && now - lastDecodeRef.current >= DECODE_INTERVAL_MS) {
-        lastDecodeRef.current = now;
-
-        if (video.readyState >= video.HAVE_ENOUGH_DATA && video.videoWidth > 0) {
-          const vw = video.videoWidth;
-          const vh = video.videoHeight;
-
-          // --- Pass 1: full frame, downscaled to DECODE_MAX_WIDTH if needed,
-          //     with contrast boost so jsQR's threshold step is more reliable. ---
-          const scale = Math.min(1, DECODE_MAX_WIDTH / vw);
-          const dw = Math.floor(vw * scale);
-          const dh = Math.floor(vh * scale);
-          canvas.width  = dw;
-          canvas.height = dh;
-          ctx.filter = 'contrast(160%) grayscale(1)';
-          ctx.drawImage(video, 0, 0, dw, dh);
-          ctx.filter = 'none';
-          let imageData = ctx.getImageData(0, 0, dw, dh);
-          let code = jsQR(imageData.data, dw, dh, jsqrOpts);
-
-          // --- Pass 2: center-60% crop, 2× upscaled, heavier contrast.
-          //     The QR code is almost always held near the center, and upscaling
-          //     gives jsQR more pixels per module for dense / high-version codes. ---
-          if (!code) {
-            const cx = Math.floor(vw * 0.2);
-            const cy = Math.floor(vh * 0.2);
-            const cw = Math.floor(vw * 0.6);
-            const ch = Math.floor(vh * 0.6);
-            const upW = Math.min(cw * 2, DECODE_MAX_WIDTH);
-            const upH = Math.round(upW * (ch / cw));
-            canvas.width  = upW;
-            canvas.height = upH;
-            ctx.imageSmoothingEnabled = true;
-            ctx.imageSmoothingQuality = 'high';
-            ctx.filter = 'contrast(200%) grayscale(1)';
-            ctx.drawImage(video, cx, cy, cw, ch, 0, 0, upW, upH);
-            ctx.filter = 'none';
-            imageData = ctx.getImageData(0, 0, upW, upH);
-            code = jsQR(imageData.data, upW, upH, jsqrOpts);
-          }
-
-          if (code?.data) {
-            submitToken(code.data);
-          }
-        }
-      }
-
-      rafRef.current = requestAnimationFrame(tick);
-    };
-
-    rafRef.current = requestAnimationFrame(tick);
-  }, [submitToken]);
-
-  const startCamera = useCallback(async () => {
-    setCameraError('');
-    try {
-      // Request up to 4K — the browser caps at the sensor maximum. A higher-res
-      // source gives more pixels per QR module, which is critical for dense codes.
-      // We downscale to DECODE_MAX_WIDTH inside the loop so jsQR stays fast.
-      const stream = await navigator.mediaDevices.getUserMedia({
-        video: {
-          facingMode: 'environment',
-          width:  { min: 640, ideal: 3840, max: 4096 },
-          height: { min: 480, ideal: 2160, max: 4096 },
-        },
-      });
-      streamRef.current = stream;
-
-      const video = videoRef.current;
-      if (!video) return;
-
-      video.srcObject = stream;
-
-      // Wait for the browser to know the video dimensions before playing.
-      // This is required on iOS Safari — calling play() before loadedmetadata
-      // can silently fail or produce a blank stream.
-      await new Promise<void>((resolve, reject) => {
-        video.onloadedmetadata = () => resolve();
-        video.onerror = () => reject(new Error('Video element error'));
-        // Safety timeout in case the event never fires
-        setTimeout(resolve, 3000);
-      });
-
-      await video.play();
-      setCameraActive(true);
-      pausedRef.current = false;
-      startScanLoop();
-    } catch (err: unknown) {
-      const msg = err instanceof Error ? err.message : String(err);
-      setCameraError(
-        msg.includes('Permission') || msg.includes('NotAllowed') || msg.includes('Denied')
-          ? 'Camera permission denied. Please allow camera access in your browser settings.'
-          : 'Could not open camera. Use manual input below.'
-      );
-      setCameraActive(false);
-    }
-  }, [startScanLoop]);
-
-  const handleValidateManual = () => submitToken(manualId);
-
-  const handleDismiss = () => {
-    setResult(null);
-    setManualId('');
-    apiLockedRef.current = false;
-    // Brief cooldown so the same QR code isn't immediately re-scanned
-    setTimeout(() => { pausedRef.current = false; }, 1500);
   };
 
   return (
     <div className="flex flex-col gap-0 -m-4 lg:-m-8" style={{ height: 'calc(100svh - 4rem)' }}>
 
-      {/* Header */}
-      <div className="flex flex-wrap items-center gap-3 px-4 sm:px-6 py-3 border-b flex-shrink-0"
-        style={{ backgroundColor: 'var(--color-surface)', borderColor: 'var(--color-border)' }}>
+      {/* ── Header ── */}
+      <div
+        className="flex flex-wrap items-center gap-3 px-4 sm:px-6 py-3 border-b flex-shrink-0"
+        style={{ backgroundColor: 'var(--color-surface)', borderColor: 'var(--color-border)' }}
+      >
         <ScanLine size={20} style={{ color: 'var(--color-purple)' }} />
-        <h1 className="font-bold text-lg" style={{ color: 'var(--color-text)', fontFamily: 'var(--font-syne), sans-serif' }}>
+        <h1
+          className="font-bold text-lg"
+          style={{ color: 'var(--color-text)', fontFamily: 'var(--font-syne), sans-serif' }}
+        >
           Scan Tickets
         </h1>
-        {cameraActive && !result && (
-          <span className="flex items-center gap-1.5 text-xs font-medium"
-            style={{ color: 'var(--color-green)' }}>
-            <span className="relative flex h-2 w-2">
-              <span className="animate-ping absolute inline-flex h-full w-full rounded-full opacity-75"
-                style={{ backgroundColor: 'var(--color-green)' }} />
-              <span className="relative inline-flex rounded-full h-2 w-2"
-                style={{ backgroundColor: 'var(--color-green)' }} />
-            </span>
-            Scanning
-          </span>
-        )}
-        {scanning && (
-          <span className="flex items-center gap-1.5 text-xs font-medium"
-            style={{ color: 'var(--color-purple-light)' }}>
-            <Loader2 size={12} className="animate-spin" />
-            Validating…
-          </span>
-        )}
         <div className="ml-auto w-full sm:w-64">
           <Select
             options={eventOptions.length > 0 ? eventOptions : [{ value: '', label: 'No approved events' }]}
@@ -291,135 +129,165 @@ export default function ScanPage() {
         </div>
       </div>
 
-      {/* Body */}
+      {/* ── Body ── */}
       <div className="flex-1 flex flex-col lg:flex-row overflow-hidden min-h-0">
 
-        {/* Left — camera + input */}
-        <div className="flex-1 flex flex-col items-center justify-center gap-4 p-6"
-          style={{ backgroundColor: 'var(--color-bg)' }}>
-
-          {/* Camera viewport */}
-          <div className="relative w-full max-w-xs aspect-square rounded-2xl overflow-hidden flex-shrink-0"
-            style={{ backgroundColor: '#000', maxHeight: '280px' }}>
-
-            {/* Hidden canvas used for jsQR frame extraction */}
-            <canvas ref={canvasRef} className="hidden" aria-hidden="true" />
-
-            <video
-              ref={videoRef}
-              muted
-              playsInline
-              autoPlay
-              className="absolute inset-0 w-full h-full object-cover"
-              style={{ display: cameraActive ? 'block' : 'none' }}
-            />
-
-            {/* Scan line animation */}
-            {cameraActive && !result && (
-              <div className="absolute left-0 right-0 h-0.5 animate-scan"
-                style={{ backgroundColor: 'var(--color-purple)', boxShadow: '0 0 8px var(--color-purple)' }} />
-            )}
-
-            {/* Corner brackets */}
-            {(['top-2 left-2 border-t-2 border-l-2', 'top-2 right-2 border-t-2 border-r-2',
-               'bottom-2 left-2 border-b-2 border-l-2', 'bottom-2 right-2 border-b-2 border-r-2'] as const)
-              .map((cls, i) => (
-                <div key={i} className={`absolute w-6 h-6 rounded-sm ${cls}`}
-                  style={{ borderColor: 'var(--color-purple)' }} />
-              ))}
-
-            {/* Scan result overlay */}
-            {result && (
-              <ScanResult result={result} attendeeName={attendeeName} ticketType={ticketType} onDismiss={handleDismiss} />
-            )}
-
-            {/* Placeholder when camera is off */}
-            {!cameraActive && (
-              <div className="absolute inset-0 flex flex-col items-center justify-center gap-3">
-                <CameraOff size={32} style={{ color: 'rgba(255,255,255,0.3)' }} />
-                <p className="text-xs text-center px-4" style={{ color: 'rgba(255,255,255,0.4)' }}>
-                  {cameraError || 'Camera not started'}
-                </p>
+        {/* ── Left: instructions + manual fallback ── */}
+        <div
+          className="flex-1 flex flex-col items-center justify-center gap-6 p-6"
+          style={{ backgroundColor: 'var(--color-bg)' }}
+        >
+          {/* Camera instructions card */}
+          <div
+            className="w-full max-w-sm rounded-2xl p-6 border"
+            style={{ backgroundColor: 'var(--color-surface)', borderColor: 'var(--color-border)' }}
+          >
+            <div className="flex items-center gap-3 mb-5">
+              <div
+                className="w-10 h-10 rounded-xl flex items-center justify-center flex-shrink-0"
+                style={{ backgroundColor: 'var(--color-purple-dim)' }}
+              >
+                <Smartphone size={20} style={{ color: 'var(--color-purple-light)' }} />
               </div>
-            )}
+              <h2
+                className="font-bold text-base"
+                style={{ color: 'var(--color-text)', fontFamily: 'var(--font-syne), sans-serif' }}
+              >
+                Use Your Phone Camera
+              </h2>
+            </div>
+
+            <ol className="flex flex-col gap-3">
+              {[
+                'Open your phone\'s native camera app',
+                'Point it at the attendee\'s QR code',
+                'Tap the banner notification that appears',
+                'The result opens full screen automatically',
+              ].map((step, i) => (
+                <li key={i} className="flex items-start gap-3 text-sm" style={{ color: 'var(--color-text-muted)' }}>
+                  <span
+                    className="flex-shrink-0 w-5 h-5 rounded-full flex items-center justify-center text-[10px] font-bold mt-0.5"
+                    style={{ backgroundColor: 'var(--color-purple-dim)', color: 'var(--color-purple-light)' }}
+                  >
+                    {i + 1}
+                  </span>
+                  {step}
+                </li>
+              ))}
+            </ol>
+
+            <p
+              className="text-xs mt-5 pt-4 border-t"
+              style={{ borderColor: 'var(--color-border)', color: 'var(--color-text-dim)' }}
+            >
+              Make sure your browser is signed in as an organizer before scanning begins.
+            </p>
           </div>
 
-          {/* Camera error (shown below viewport when camera is open but error occurred) */}
-          {cameraError && cameraActive && (
-            <p className="text-xs text-center max-w-xs" style={{ color: 'var(--color-amber)' }}>
-              {cameraError}
-            </p>
-          )}
-
-          {/* Camera toggle */}
-          {hasCamera && (
-            <Button
-              variant={cameraActive ? 'outline' : 'primary'}
-              onClick={cameraActive ? stopCamera : startCamera}
+          {/* Manual result card */}
+          {manualResult && (
+            <div
+              className="w-full max-w-sm rounded-xl p-4 flex items-start gap-3 border"
+              style={{
+                backgroundColor: manualResult.type === 'success' ? 'rgba(34,197,94,0.08)' : 'rgba(239,68,68,0.08)',
+                borderColor:     manualResult.type === 'success' ? 'var(--color-green)' : 'var(--color-red)',
+              }}
             >
-              <Camera size={15} />
-              {cameraActive ? 'Stop Camera' : 'Start Camera'}
-            </Button>
+              {manualResult.type === 'success'
+                ? <CheckCircle size={18} style={{ color: 'var(--color-green)', flexShrink: 0, marginTop: 1 }} />
+                : manualResult.type === 'already_used'
+                ? <XCircle    size={18} style={{ color: 'var(--color-red)',   flexShrink: 0, marginTop: 1 }} />
+                : <AlertCircle size={18} style={{ color: 'var(--color-red)', flexShrink: 0, marginTop: 1 }} />
+              }
+              <div className="min-w-0">
+                <p
+                  className="text-sm font-semibold"
+                  style={{ color: manualResult.type === 'success' ? 'var(--color-green)' : 'var(--color-red)' }}
+                >
+                  {manualResult.type === 'success'
+                    ? 'Access Granted'
+                    : manualResult.type === 'already_used'
+                    ? 'Already Used'
+                    : 'Invalid Ticket'}
+                </p>
+                {manualResult.name && (
+                  <p className="text-sm mt-0.5 truncate" style={{ color: 'var(--color-text)' }}>
+                    {manualResult.name}
+                    {manualResult.ticketType ? ` · ${manualResult.ticketType}` : ''}
+                  </p>
+                )}
+                {manualResult.reason && (
+                  <p className="text-xs mt-0.5" style={{ color: 'var(--color-text-muted)' }}>
+                    {manualResult.reason}
+                  </p>
+                )}
+              </div>
+            </div>
           )}
 
-          {!hasCamera && (
-            <p className="text-xs text-center max-w-xs" style={{ color: 'var(--color-text-muted)' }}>
-              Camera not available. Use the manual input below.
+          {/* Manual fallback input */}
+          <div className="w-full max-w-sm">
+            <p
+              className="text-[10px] uppercase tracking-widest font-semibold mb-2"
+              style={{ color: 'var(--color-text-dim)' }}
+            >
+              Manual fallback
             </p>
-          )}
-
-          {/* Manual input */}
-          <div className="flex gap-2 w-full max-w-xs">
-            <Input
-              label=""
-              value={manualId}
-              onChange={e => setManualId(e.target.value.trim())}
-              placeholder="Paste QR token or Ticket ID"
-              className="font-mono text-xs"
-            />
-            <div className="flex-shrink-0">
-              <Button
-                onClick={handleValidateManual}
-                disabled={!manualId || !selectedEvent || scanning}
-              >
-                {scanning ? '…' : 'Validate'}
-              </Button>
+            <div className="flex gap-2">
+              <Input
+                label=""
+                value={manualId}
+                onChange={e => setManualId(e.target.value.trim())}
+                onKeyDown={e => e.key === 'Enter' && handleManualValidate()}
+                placeholder="Ticket ID — e.g. TKT-XXXX-XXXX"
+                className="font-mono text-xs"
+              />
+              <div className="flex-shrink-0">
+                <Button
+                  onClick={handleManualValidate}
+                  disabled={!manualId || !selectedEvent || submitting}
+                >
+                  {submitting ? '…' : 'Validate'}
+                </Button>
+              </div>
             </div>
           </div>
-          {!decoderReady && (
-            <p className="text-xs" style={{ color: 'var(--color-text-dim)' }}>
-              Loading QR decoder…
-            </p>
-          )}
         </div>
 
-        {/* Right — stats + logs */}
-        <div className="w-full lg:w-80 flex flex-col border-t lg:border-t-0 lg:border-l flex-shrink-0 overflow-hidden"
-          style={{ borderColor: 'var(--color-border)', backgroundColor: 'var(--color-surface)' }}>
-
+        {/* ── Right: stats + live log ── */}
+        <div
+          className="w-full lg:w-80 flex flex-col border-t lg:border-t-0 lg:border-l flex-shrink-0 overflow-hidden"
+          style={{ borderColor: 'var(--color-border)', backgroundColor: 'var(--color-surface)' }}
+        >
           {/* Stats row */}
-          <div className="grid grid-cols-3 border-b flex-shrink-0"
-            style={{ borderColor: 'var(--color-border)' }}>
+          <div className="grid grid-cols-3 border-b flex-shrink-0" style={{ borderColor: 'var(--color-border)' }}>
             {[
               { label: 'Scanned In', value: stats.scanned,   color: 'var(--color-green)' },
               { label: 'Rejected',   value: stats.rejected,  color: 'var(--color-red)' },
               { label: 'Remaining',  value: stats.remaining, color: 'var(--color-text-muted)' },
             ].map(({ label, value, color }) => (
-              <div key={label} className="p-4 text-center border-r last:border-0"
-                style={{ borderColor: 'var(--color-border)' }}>
+              <div
+                key={label}
+                className="p-4 text-center border-r last:border-0"
+                style={{ borderColor: 'var(--color-border)' }}
+              >
                 <p className="text-xl font-bold" style={{ color }}>{value}</p>
-                <p className="text-[10px] uppercase tracking-wider mt-0.5"
-                  style={{ color: 'var(--color-text-dim)' }}>
+                <p
+                  className="text-[10px] uppercase tracking-wider mt-0.5"
+                  style={{ color: 'var(--color-text-dim)' }}
+                >
                   {label}
                 </p>
               </div>
             ))}
           </div>
 
-          {/* Scan log */}
+          {/* Live scan log */}
           <div className="flex-1 overflow-y-auto p-4 flex flex-col gap-2">
-            <p className="text-xs uppercase tracking-wider mb-2"
-              style={{ color: 'var(--color-text-dim)' }}>
+            <p
+              className="text-xs uppercase tracking-wider mb-2"
+              style={{ color: 'var(--color-text-dim)' }}
+            >
               Recent Scans
             </p>
             {scanLogs.length === 0 && (
@@ -428,11 +296,15 @@ export default function ScanPage() {
               </p>
             )}
             {scanLogs.map(log => (
-              <div key={log.id} className="flex items-center gap-3 rounded-lg p-3"
-                style={{ backgroundColor: 'var(--color-surface-2)' }}>
+              <div
+                key={log.id}
+                className="flex items-center gap-3 rounded-lg p-3"
+                style={{ backgroundColor: 'var(--color-surface-2)' }}
+              >
                 {log.result === 'success'
                   ? <CheckCircle size={15} style={{ color: 'var(--color-green)', flexShrink: 0 }} />
-                  : <XCircle    size={15} style={{ color: 'var(--color-red)',   flexShrink: 0 }} />}
+                  : <XCircle    size={15} style={{ color: 'var(--color-red)',   flexShrink: 0 }} />
+                }
                 <div className="flex-1 min-w-0">
                   <p className="text-xs font-medium truncate" style={{ color: 'var(--color-text)' }}>
                     {log.attendee_name}
@@ -441,8 +313,10 @@ export default function ScanPage() {
                     {log.ticket_type} &middot; {log.ticket_id}
                   </p>
                 </div>
-                <span className="text-[10px] flex-shrink-0 font-semibold"
-                  style={{ color: log.result === 'success' ? 'var(--color-green)' : 'var(--color-red)' }}>
+                <span
+                  className="text-[10px] flex-shrink-0 font-semibold"
+                  style={{ color: log.result === 'success' ? 'var(--color-green)' : 'var(--color-red)' }}
+                >
                   {log.result === 'success' ? 'OK' : log.result === 'already_used' ? 'USED' : 'INVALID'}
                 </span>
               </div>

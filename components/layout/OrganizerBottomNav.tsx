@@ -14,7 +14,7 @@ import {
 const navItems = [
   { href: '/organizer/dashboard', label: 'Overview', icon: LayoutDashboard },
   { href: '/organizer/events', label: 'My Events', icon: CalendarDays },
-  { href: '/organizer/events/create', label: 'Create', icon: PlusCircle },
+  { href: '/organizer/events/create', label: 'Create Event', icon: PlusCircle },
   { href: '/organizer/scan', label: 'Scanner', icon: ScanLine },
   { href: '/organizer/payouts', label: 'Payouts', icon: Wallet },
   { href: '/organizer/settings', label: 'Settings', icon: Settings },
