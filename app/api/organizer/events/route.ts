@@ -27,7 +27,16 @@ export async function GET(req: NextRequest) {
   const { data, error } = await qb;
   if (error) return NextResponse.json({ error: 'Failed to fetch events' }, { status: 500 });
 
-  return NextResponse.json({ success: true, data: data || [] });
+  // Compute totalSold from ticket_tiers.sold (the live counter kept by
+  // increment_tier_sold) rather than relying on events.total_sold directly.
+  // This also fixes the snake_case → camelCase mismatch the dashboard expects.
+  type RawTier = { id: string; name: string; price: number; available: number; sold: number };
+  const mapped = (data || []).map(ev => ({
+    ...ev,
+    totalSold: ((ev.tiers as RawTier[]) ?? []).reduce((sum, t) => sum + (t.sold ?? 0), 0),
+  }));
+
+  return NextResponse.json({ success: true, data: mapped });
 }
 
 export async function POST(req: NextRequest) {

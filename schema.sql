@@ -272,15 +272,24 @@ ON CONFLICT (key) DO NOTHING;
 -- ────────────────────────────────────────────────────────────
 -- 11. RPC FUNCTION
 --     Called by webhook after every successful ticket purchase.
---     Atomically increments sold count to avoid race conditions.
+--     Atomically increments both ticket_tiers.sold and the
+--     denormalised events.total_sold counter in one statement
+--     using a CTE so both updates are part of the same
+--     transaction and no race condition is possible.
 -- ────────────────────────────────────────────────────────────
 CREATE OR REPLACE FUNCTION increment_tier_sold(tier_id UUID, amount INTEGER)
 RETURNS VOID
 LANGUAGE sql
 AS $$
-  UPDATE ticket_tiers
-  SET    sold = sold + amount
-  WHERE  id   = tier_id;
+  WITH updated_tier AS (
+    UPDATE ticket_tiers
+    SET    sold = sold + amount
+    WHERE  id   = tier_id
+    RETURNING event_id
+  )
+  UPDATE events
+  SET    total_sold = total_sold + amount
+  WHERE  id = (SELECT event_id FROM updated_tier);
 $$;
 
 
