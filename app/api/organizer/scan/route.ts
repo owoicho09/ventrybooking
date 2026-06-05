@@ -48,8 +48,26 @@ export async function POST(req: NextRequest) {
     scannedByStaffId = staff.id;
     staffEventId     = staff.event_id;
   } else {
-    // No session and no staff code
-    return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
+    // Third path: HttpOnly cookie set by /api/staff/session.
+    // SFSafariViewController shares Safari's cookie jar, so cookies set when
+    // staff visited their setup link in Safari are present on every subsequent
+    // Camera-opened scan URL — no localStorage or client state needed.
+    const cookieCode = req.cookies.get('ventry_staff')?.value?.trim().toUpperCase();
+    if (cookieCode) {
+      const { data: staff } = await db
+        .from('staff_ids')
+        .select('id, active, expires_at, event_id')
+        .eq('code', cookieCode)
+        .maybeSingle();
+
+      if (!staff || !staff.active || new Date() > new Date(staff.expires_at)) {
+        return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
+      }
+      scannedByStaffId = staff.id;
+      staffEventId     = staff.event_id;
+    } else {
+      return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
+    }
   }
 
   try {

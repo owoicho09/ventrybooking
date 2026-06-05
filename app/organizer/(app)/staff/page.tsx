@@ -1,7 +1,7 @@
 'use client';
 
 import { useState, useEffect } from 'react';
-import { Plus, ToggleLeft, ToggleRight, KeyRound } from 'lucide-react';
+import { Plus, ToggleLeft, ToggleRight, KeyRound, Link2, Check } from 'lucide-react';
 import { Badge } from '@/components/ui/Badge';
 import { Button } from '@/components/ui/Button';
 import { Input } from '@/components/ui/Input';
@@ -27,6 +27,7 @@ export default function StaffPage() {
   const [newEventId,    setNewEventId]    = useState('');
   const [newLabel,      setNewLabel]      = useState('');
   const [createError,   setCreateError]   = useState('');
+  const [copiedCode,    setCopiedCode]    = useState<string | null>(null);
 
   const load = async () => {
     const [staffRes, eventsRes] = await Promise.all([
@@ -78,6 +79,13 @@ export default function StaffPage() {
 
   const isExpired = (expiresAt: string) => new Date() > new Date(expiresAt);
 
+  const copyScanLink = async (code: string) => {
+    const url = `${window.location.origin}/staff-scan/${code}`;
+    await navigator.clipboard.writeText(url);
+    setCopiedCode(code);
+    setTimeout(() => setCopiedCode(null), 2000);
+  };
+
   return (
     <div className="flex flex-col gap-8">
       <div className="flex items-center justify-between">
@@ -117,7 +125,7 @@ export default function StaffPage() {
         </form>
         {createError && <p className="text-sm mt-2" style={{ color: 'var(--color-red)' }}>{createError}</p>}
         <p className="text-xs mt-4" style={{ color: 'var(--color-text-dim)' }}>
-          Staff IDs expire automatically 24 hours after the event date. Staff enter the code once — their device remembers it for the duration of the event.
+          Staff IDs expire automatically 24 hours after the event date. Copy the scan link and send it to your door staff — they open it once in Safari before the event and keep the tab open all night.
         </p>
       </div>
 
@@ -162,16 +170,29 @@ export default function StaffPage() {
                   </div>
 
                   {!expired && (
-                    <button
-                      onClick={() => toggleActive(s.code, !s.active)}
-                      className="flex items-center gap-1.5 text-sm font-medium"
-                      style={{ color: s.active ? 'var(--color-red)' : 'var(--color-green)' }}
-                    >
-                      {s.active
-                        ? <><ToggleRight size={16} /> Deactivate</>
-                        : <><ToggleLeft size={16} /> Reactivate</>
-                      }
-                    </button>
+                    <div className="flex items-center gap-3">
+                      <button
+                        onClick={() => copyScanLink(s.code)}
+                        className="flex items-center gap-1.5 text-sm font-medium"
+                        style={{ color: 'var(--color-purple-light)' }}
+                        title="Copy scan link to share with staff"
+                      >
+                        {copiedCode === s.code
+                          ? <><Check size={15} /> Copied</>
+                          : <><Link2 size={15} /> Copy link</>
+                        }
+                      </button>
+                      <button
+                        onClick={() => toggleActive(s.code, !s.active)}
+                        className="flex items-center gap-1.5 text-sm font-medium"
+                        style={{ color: s.active ? 'var(--color-red)' : 'var(--color-green)' }}
+                      >
+                        {s.active
+                          ? <><ToggleRight size={16} /> Deactivate</>
+                          : <><ToggleLeft size={16} /> Reactivate</>
+                        }
+                      </button>
+                    </div>
                   )}
                 </div>
               );
@@ -183,9 +204,10 @@ export default function StaffPage() {
       <div className="rounded-xl border p-4 text-sm" style={{ backgroundColor: 'var(--color-surface)', borderColor: 'var(--color-border)' }}>
         <p className="font-semibold mb-1" style={{ color: 'var(--color-text)' }}>How it works</p>
         <ul className="flex flex-col gap-1" style={{ color: 'var(--color-text-muted)' }}>
-          <li>• Give each door person their staff code. They don't need a Ventry account.</li>
-          <li>• Staff open a scan URL on their phone. They enter the code once — the device remembers it.</li>
-          <li>• Each subsequent QR scan shows the result (green/red) immediately with no friction.</li>
+          <li>• Create a staff ID, then click <strong>Copy link</strong> and send it to your door person.</li>
+          <li>• Staff open the link in Safari once before the event and keep the tab open all night.</li>
+          <li>• The page uses the phone camera directly — no iOS pop-ups, no code prompts, no delays.</li>
+          <li>• Each scan shows a full-screen result (green/red) then resets automatically in 3 seconds.</li>
           <li>• Staff can only see scan results — no event details or sales figures.</li>
           <li>• Every scan is logged with the staff code so you can see who scanned which ticket.</li>
         </ul>

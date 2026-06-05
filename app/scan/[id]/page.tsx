@@ -2,7 +2,7 @@
 
 import { useEffect, useState, useRef } from 'react';
 import { useParams } from 'next/navigation';
-import { CheckCircle, XCircle, AlertCircle, Loader2, ScanLine, KeyRound } from 'lucide-react';
+import { CheckCircle, XCircle, AlertCircle, Loader2, KeyRound } from 'lucide-react';
 
 type PageState = 'loading' | 'staff_auth' | 'success' | 'already_used' | 'invalid' | 'ready';
 
@@ -15,34 +15,6 @@ interface ScanData {
   firstScannedAt?: string | null;
 }
 
-interface StaffSession {
-  code:      string;
-  expiresAt: string;
-  eventId:   string;
-  eventName: string;
-  label:     string | null;
-}
-
-const STAFF_SESSION_KEY = 'ventry_staff_session';
-
-function getStoredStaffSession(): StaffSession | null {
-  try {
-    const raw = localStorage.getItem(STAFF_SESSION_KEY);
-    if (!raw) return null;
-    const s: StaffSession = JSON.parse(raw);
-    if (new Date() > new Date(s.expiresAt)) {
-      localStorage.removeItem(STAFF_SESSION_KEY);
-      return null;
-    }
-    return s;
-  } catch { return null; }
-}
-
-function storeStaffSession(s: StaffSession) {
-  localStorage.setItem(STAFF_SESSION_KEY, JSON.stringify(s));
-}
-
-// Shows "Resetting in Ns..." and counts down to 0, then stops.
 function ResetIn({ total = 3 }: { total?: number }) {
   const [n, setN] = useState(total);
   useEffect(() => {
@@ -63,35 +35,29 @@ export default function ScanValidatePage() {
 
   const [state,      setState]      = useState<PageState>('loading');
   const [scanData,   setScanData]   = useState<ScanData | null>(null);
-  const [staffSession, setStaffSession] = useState<StaffSession | null>(null);
-
-  // Staff auth form state
-  const [codeInput,   setCodeInput]   = useState('');
-  const [codeError,   setCodeError]   = useState('');
-  const [codeLoading, setCodeLoading] = useState(false);
+  const [codeInput,  setCodeInput]  = useState('');
+  const [codeError,  setCodeError]  = useState('');
+  const [codeLoading,setCodeLoading]= useState(false);
 
   const resetTimerRef = useRef<ReturnType<typeof setTimeout> | undefined>(undefined);
 
-  // ── Validate ticket (called both on mount and after staff auth) ──
-  const validate = async (staffCode?: string) => {
+  // ── Validate ticket ──────────────────────────────────────────────
+  // No staffCode argument — auth is carried by the ventry_staff HttpOnly cookie
+  // set when staff visited their setup link in Safari. SFSafariViewController
+  // shares Safari's cookie jar, so the cookie travels with every request.
+  const validate = async () => {
     setState('loading');
     setScanData(null);
     if (resetTimerRef.current) clearTimeout(resetTimerRef.current);
-
-    const session = staffCode ? null : getStoredStaffSession();
 
     try {
       const res = await fetch('/api/organizer/scan', {
         method:  'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          qrToken:   ticketId,
-          staffCode: staffCode ?? session?.code ?? undefined,
-        }),
+        body:    JSON.stringify({ qrToken: ticketId }),
       });
 
       if (res.status === 401) {
-        // No organizer session and no valid staff code → show auth screen
         setState('staff_auth');
         return;
       }
@@ -123,39 +89,32 @@ export default function ScanValidatePage() {
   // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [ticketId]);
 
-  // ── Staff code submit ────────────────────────────────────────────
+  // ── Staff code submit ─────────────────────────────────────────────
+  // Calls /api/staff/session which validates the code AND sets the HttpOnly
+  // cookie. All subsequent Camera-opened scans will carry the cookie automatically.
   const handleStaffAuth = async (e: React.FormEvent) => {
     e.preventDefault();
     const code = codeInput.trim().toUpperCase();
     if (!code) return;
-
     setCodeError('');
     setCodeLoading(true);
 
     try {
-      const res  = await fetch(`/api/staff/verify?code=${encodeURIComponent(code)}`);
+      const res  = await fetch('/api/staff/session', {
+        method:  'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body:    JSON.stringify({ code }),
+      });
       const data = await res.json();
 
-      if (!data.valid) {
+      if (!res.ok) {
         setCodeError(data.error ?? 'Invalid staff code');
         setCodeLoading(false);
         return;
       }
 
-      // Store session so subsequent scans on this device auth silently
-      const session: StaffSession = {
-        code:      data.code,
-        expiresAt: data.expiresAt,
-        eventId:   data.eventId,
-        eventName: data.eventName,
-        label:     data.label ?? null,
-      };
-      storeStaffSession(session);
-      setStaffSession(session);
       setCodeLoading(false);
-
-      // Now validate the ticket with this code
-      await validate(data.code);
+      await validate();
     } catch {
       setCodeError('Network error — please try again');
       setCodeLoading(false);
@@ -185,7 +144,7 @@ export default function ScanValidatePage() {
         </div>
         <BigText style={{ color: 'var(--color-text)' }} mt={false}>Staff Access</BigText>
         <p className="text-base mt-3 mb-8 max-w-xs" style={{ color: 'var(--color-text-muted)' }}>
-          Enter your staff ID code to validate tickets at this event.
+          Enter your staff code to validate tickets. For faster access, open your staff setup link in Safari first.
         </p>
 
         <form onSubmit={handleStaffAuth} className="w-full max-w-xs flex flex-col gap-3">
@@ -197,8 +156,8 @@ export default function ScanValidatePage() {
             className="w-full px-4 py-3 rounded-xl text-center font-mono text-lg font-bold tracking-widest border-2 focus:outline-none"
             style={{
               backgroundColor: 'var(--color-surface)',
-              borderColor: codeError ? 'var(--color-red)' : 'var(--color-border)',
-              color: 'var(--color-text)',
+              borderColor:     codeError ? 'var(--color-red)' : 'var(--color-border)',
+              color:           'var(--color-text)',
             }}
           />
           {codeError && (
@@ -226,11 +185,6 @@ export default function ScanValidatePage() {
           </a>
         </div>
 
-        {staffSession && (
-          <p className="text-xs mt-4 font-mono" style={{ color: 'var(--color-text-dim)' }}>
-            Active: {staffSession.code} · {staffSession.eventName}
-          </p>
-        )}
         <Mono style={{ marginTop: '1rem' }}>{ticketId}</Mono>
       </Screen>
     );
@@ -238,17 +192,10 @@ export default function ScanValidatePage() {
 
   /* ── Ready ────────────────────────────────────────────────────── */
   if (state === 'ready') {
-    const session = getStoredStaffSession();
     return (
       <Screen bg="var(--color-bg)">
-        <ScanLine size={72} strokeWidth={1.2} style={{ color: 'var(--color-purple)', marginBottom: '1.5rem' }} />
         <BigText style={{ color: 'var(--color-text)' }}>Ready</BigText>
         <Sub style={{ color: 'var(--color-text-muted)' }}>Point camera at next ticket</Sub>
-        {session && (
-          <p className="text-xs mt-4 font-mono" style={{ color: 'var(--color-text-dim)' }}>
-            {session.label ?? session.code} · {session.eventName}
-          </p>
-        )}
       </Screen>
     );
   }
