@@ -4,6 +4,7 @@ import { getServerSupabase } from '@/lib/supabase/server';
 import { initiateTransfer, createTransferRecipient } from '@/lib/server/paystack';
 import { generatePayoutRef } from '@/lib/server/ids';
 import { getBankCode } from '@/lib/banks';
+import { notify } from '@/lib/server/notify';
 
 export async function POST(
   req: NextRequest,
@@ -16,8 +17,16 @@ export async function POST(
 
   try {
     const { id } = await params;
-    const { percentage } = await req.json().catch(() => ({ percentage: 100 }));
-    const releasePercent = Math.min(100, Math.max(0, Number(percentage) || 100));
+    const body = await req.json().catch(() => ({}));
+    // If no percentage is passed in the request body, fall back to the platform-wide
+    // payout_percentage setting configured by the admin in Settings.
+    let releasePercent = Number(body.percentage ?? NaN);
+    if (!Number.isFinite(releasePercent) || releasePercent <= 0) {
+      const db2 = getServerSupabase();
+      const { data: cfg } = await db2.from('platform_config').select('value').eq('key', 'payout_percentage').maybeSingle();
+      releasePercent = Number(cfg?.value ?? 100);
+    }
+    releasePercent = Math.min(100, Math.max(0, releasePercent || 100));
 
     const db = getServerSupabase();
 
@@ -61,33 +70,54 @@ export async function POST(
     const releaseAmount = Math.round(payout.net * (releasePercent / 100));
     const transferRef   = generatePayoutRef();
 
-    try {
-      const recipient = await createTransferRecipient({
-        type:           'nuban',
-        name:           org.account_name || org.name, // use verified account name
-        account_number: org.account_number,
-        bank_code:      bankCode,
-        currency:       'NGN',
-      });
+    // Initiate the Paystack transfer. Any failure surfaces as an error to the
+    // admin so they can retry — never silently mark completed on failure.
+    const recipient = await createTransferRecipient({
+      type:           'nuban',
+      name:           org.account_name || org.name,
+      account_number: org.account_number,
+      bank_code:      bankCode,
+      currency:       'NGN',
+    });
 
-      await initiateTransfer({
-        source:    'balance',
-        amount:    releaseAmount * 100, // kobo
-        recipient: recipient.recipient_code,
-        reason:    `Ventry payout for ${payout.event_name}`,
-        reference: transferRef,
-      });
-    } catch (err) {
-      console.error('Paystack transfer error:', err);
-      // In test mode, transfers fail — mark completed anyway so the UI isn't stuck
-      // In production, remove this catch and let the error surface
+    await initiateTransfer({
+      source:    'balance',
+      amount:    releaseAmount * 100, // kobo
+      recipient: recipient.recipient_code,
+      reason:    `Ventry payout for ${payout.event_name}`,
+      reference: transferRef,
+    });
+
+    // Atomic guard: only update if status is still 'processing'. If a
+    // concurrent release request won the race, 0 rows are updated and we
+    // return a conflict rather than completing a double-transfer.
+    const { data: updated } = await db
+      .from('payouts')
+      .update({
+        status:      'completed',
+        reference:   transferRef,
+        released_at: new Date().toISOString(),
+      })
+      .eq('id', id)
+      .eq('status', 'processing')
+      .select('id');
+
+    if (!updated || updated.length === 0) {
+      return NextResponse.json({ error: 'Payout was already released by a concurrent request' }, { status: 409 });
     }
 
-    await db.from('payouts').update({
-      status:      'completed',
-      reference:   transferRef,
-      released_at: new Date().toISOString(),
-    }).eq('id', id);
+    const fmt = (n: number) =>
+      new Intl.NumberFormat('en-NG', { style: 'currency', currency: 'NGN', minimumFractionDigits: 0 }).format(n);
+
+    notify(
+      { type: 'organizer', id: payout.organizer_id },
+      {
+        notifType: 'payout',
+        title:     `Payout released — ${payout.event_name}`,
+        body:      `${fmt(releaseAmount)} has been transferred to your ${org.bank_name} account.`,
+        link:      '/organizer/payouts',
+      },
+    ).catch(err => console.error('release payout: notify error', err));
 
     return NextResponse.json({ success: true });
   } catch (err) {

@@ -29,7 +29,7 @@ export default function AdminDashboardPage() {
 
   useEffect(() => {
     fetch('/api/admin/stats').then(r => r.json()).then(d => { if (d.success) setStats(d.data); }).catch(console.error);
-    fetch('/api/admin/organizers?status=pending').then(r => r.json()).then(d => { if (d.success) setPendingOrgs(d.data.slice(0, 5)); }).catch(console.error);
+    fetch('/api/admin/organizers?kyc_status=pending').then(r => r.json()).then(d => { if (d.success) setPendingOrgs(d.data.slice(0, 5)); }).catch(console.error);
     fetch('/api/admin/events?status=under_review').then(r => r.json()).then(d => { if (d.success) setPendingEvents(d.data.slice(0, 5)); }).catch(console.error);
   }, []);
 

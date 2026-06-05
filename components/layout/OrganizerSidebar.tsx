@@ -13,6 +13,7 @@ import {
   KeyRound,
 } from 'lucide-react';
 import { ThemeToggle } from './ThemeToggle';
+import { NotificationBell } from '@/components/ui/NotificationBell';
 
 const navItems = [
   { href: '/organizer/dashboard',      label: 'Overview',    icon: LayoutDashboard },
@@ -69,7 +70,10 @@ export function OrganizerSidebar() {
           <LogOut size={16} />
           Logout
         </button>
-        <ThemeToggle />
+        <div className="flex items-center gap-2">
+          <NotificationBell />
+          <ThemeToggle />
+        </div>
       </div>
     </aside>
   );

@@ -12,6 +12,7 @@ import {
   Settings,
 } from 'lucide-react';
 import { ThemeToggle } from './ThemeToggle';
+import { NotificationBell } from '@/components/ui/NotificationBell';
 
 const navItems = [
   { href: '/admin', label: 'Dashboard', icon: LayoutDashboard },
@@ -81,9 +82,10 @@ export function AdminSidebar() {
 
       {/* Bottom */}
       <div
-        className="p-3 border-t flex items-center justify-end"
+        className="p-3 border-t flex items-center justify-between"
         style={{ borderColor: 'var(--color-border)' }}
       >
+        <NotificationBell />
         <ThemeToggle />
       </div>
     </aside>

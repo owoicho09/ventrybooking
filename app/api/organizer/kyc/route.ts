@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from 'next/server';
 import { getAuthUser } from '@/lib/server/auth';
 import { getServerSupabase } from '@/lib/supabase/server';
 import { v4 as uuidv4 } from 'uuid';
+import { notify } from '@/lib/server/notify';
 
 const ALLOWED_TYPES = ['image/jpeg', 'image/png', 'image/webp', 'application/pdf'];
 const MAX_SIZE = 5 * 1024 * 1024; // 5MB
@@ -111,11 +112,17 @@ export async function POST(req: NextRequest) {
         return NextResponse.json({ error: 'Please complete all previous steps first' }, { status: 400 });
       }
 
+      const { data: orgRow } = await db.from('users').select('name').eq('id', user.sub).maybeSingle();
       await db.from('users').update({
         kyc_status: 'pending',
         kyc_submitted_at: new Date().toISOString(),
         kyc_step: 5,
       }).eq('id', user.sub);
+
+      notify(
+        { type: 'admin' },
+        { notifType: 'kyc', title: 'New KYC Submission', body: `${orgRow?.name ?? 'An organizer'} submitted their KYC documents for review.`, link: '/admin/organizers' },
+      ).catch(console.error);
 
       return NextResponse.json({ success: true, data: { step: 5, message: 'KYC submitted for review. You will hear back within 2-4 business days.' } });
     }

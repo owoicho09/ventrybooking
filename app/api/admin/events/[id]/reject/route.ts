@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from 'next/server';
 import { getAuthUser } from '@/lib/server/auth';
 import { getServerSupabase } from '@/lib/supabase/server';
 import { sendEventRejectedEmail } from '@/lib/server/email';
+import { notify } from '@/lib/server/notify';
 
 export async function POST(
   req: NextRequest,
@@ -21,7 +22,7 @@ export async function POST(
 
     const { data: event } = await db
       .from('events')
-      .select('event_name, organizer:users!events_organizer_id_fkey(name, email)')
+      .select('event_name, organizer:users!events_organizer_id_fkey(id, name, email)')
       .eq('id', id)
       .single();
 
@@ -30,9 +31,15 @@ export async function POST(
     await db.from('events').update({ status: 'rejected', rejection_reason: reason }).eq('id', id);
 
     const organizerRaw = Array.isArray(event.organizer) ? event.organizer[0] : event.organizer;
-    const organizer = organizerRaw as { name: string; email: string } | null;
+    const organizer = organizerRaw as { id: string; name: string; email: string } | null;
     if (organizer?.email) {
       await sendEventRejectedEmail(organizer.email, organizer.name, event.event_name, reason).catch(console.error);
+    }
+    if (organizer?.id) {
+      notify(
+        { type: 'organizer', id: organizer.id },
+        { notifType: 'event', title: 'Event Not Approved', body: `"${event.event_name}" was not approved: ${reason}`, link: '/organizer/events' },
+      ).catch(console.error);
     }
 
     return NextResponse.json({ success: true });

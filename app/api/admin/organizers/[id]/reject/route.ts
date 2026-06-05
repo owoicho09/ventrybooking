@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from 'next/server';
 import { getAuthUser } from '@/lib/server/auth';
 import { getServerSupabase } from '@/lib/supabase/server';
 import { sendKYCRejectedEmail } from '@/lib/server/email';
+import { notify } from '@/lib/server/notify';
 
 export async function POST(
   req: NextRequest,
@@ -23,6 +24,10 @@ export async function POST(
 
     await db.from('users').update({ kyc_status: 'rejected', kyc_rejection_reason: reason }).eq('id', id);
     await sendKYCRejectedEmail(org.email, org.name, reason).catch(console.error);
+    notify(
+      { type: 'organizer', id },
+      { notifType: 'kyc', title: 'KYC Review Update', body: `Your verification was not approved: ${reason}`, link: '/organizer/settings' },
+    ).catch(console.error);
 
     return NextResponse.json({ success: true });
   } catch (err) {

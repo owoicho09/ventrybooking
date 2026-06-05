@@ -1,8 +1,14 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { getServerSupabase } from '@/lib/supabase/server';
 import { v4 as uuidv4 } from 'uuid';
+import { checkRateLimit, getIp } from '@/lib/server/rateLimit';
+import { notify } from '@/lib/server/notify';
 
 export async function POST(req: NextRequest) {
+  // 5 refund attempts per 10 minutes per IP
+  if (!checkRateLimit(`refund:${getIp(req.headers)}`, 5, 10 * 60)) {
+    return NextResponse.json({ error: 'Too many requests. Please try again later.' }, { status: 429 });
+  }
   try {
     const { ticketId, refundCode, email, type } = await req.json();
     if (!ticketId || !refundCode || !email) {
@@ -56,6 +62,16 @@ export async function POST(req: NextRequest) {
       status: 'open',
       priority: type === 'Fraud' ? 'high' : 'medium',
     });
+
+    notify(
+      { type: 'admin' },
+      {
+        notifType: 'complaint',
+        title:     `New refund complaint — ${type || 'Event Cancelled'}`,
+        body:      `${email} filed a complaint for ticket ${ticketId} (${eventName}).`,
+        link:      '/admin/complaints',
+      },
+    ).catch(console.error);
 
     return NextResponse.json({
       success: true,

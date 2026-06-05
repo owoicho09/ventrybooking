@@ -4,6 +4,9 @@ const resend = new Resend(process.env.RESEND_API_KEY!);
 const FROM    = process.env.RESEND_FROM_EMAIL!;
 const APP_URL = process.env.NEXT_PUBLIC_APP_URL!;
 
+const esc = (s: string) =>
+  s.replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/"/g, '&quot;');
+
 // Shared email wrapper — light-mode safe dark card on white body
 function emailShell(content: string) {
   return `<!DOCTYPE html>
@@ -97,8 +100,8 @@ export async function sendTicketEmail(params: {
     <table width="100%" cellpadding="0" cellspacing="0"
       style="background:#12121a;border:1px solid #2d2d3d;border-radius:8px;margin-bottom:24px;">
       <tr><td style="padding:20px;">
-        <p style="font-size:17px;font-weight:700;margin:0 0 4px;color:#f1f0ff;">${params.eventName}</p>
-        <p class="label" style="margin:0 0 12px;">${params.eventDate} &bull; ${params.eventVenue}</p>
+        <p style="font-size:17px;font-weight:700;margin:0 0 4px;color:#f1f0ff;">${esc(params.eventName)}</p>
+        <p class="label" style="margin:0 0 12px;">${esc(params.eventDate)} &bull; ${esc(params.eventVenue)}</p>
         <p style="margin:4px 0;color:#f1f0ff;font-size:13px;">
           <strong>Ticket&nbsp;Type:</strong> ${params.tierName} &times; ${count}
         </p>
@@ -130,7 +133,7 @@ export async function sendKYCApprovedEmail(to: string, name: string) {
     subject: 'KYC Approved — You can now create events',
     html: emailShell(`
       <h1 style="color:#a855f7;font-size:22px;margin:0 0 12px;">KYC Approved ✓</h1>
-      <p style="color:#f1f0ff;">Hi ${name}, your identity verification has been approved. You can now create and publish events on Ventry.</p>
+      <p style="color:#f1f0ff;">Hi ${esc(name)}, your identity verification has been approved. You can now create and publish events on Ventry.</p>
       <br/>
       <a href="${APP_URL}/organizer/events/create" class="btn">Create Your First Event</a>
     `),
@@ -144,8 +147,8 @@ export async function sendKYCRejectedEmail(to: string, name: string, reason: str
     subject: 'KYC Review Update',
     html: emailShell(`
       <h1 style="color:#f87171;font-size:22px;margin:0 0 12px;">KYC Review</h1>
-      <p style="color:#f1f0ff;">Hi ${name}, unfortunately we could not verify your identity at this time.</p>
-      <p style="color:#f1f0ff;"><strong>Reason:</strong> ${reason}</p>
+      <p style="color:#f1f0ff;">Hi ${esc(name)}, unfortunately we could not verify your identity at this time.</p>
+      <p style="color:#f1f0ff;"><strong>Reason:</strong> ${esc(reason)}</p>
       <p style="color:#9ca3af;font-size:13px;">Please resubmit with correct documents or contact support.</p>
     `),
   });
@@ -158,7 +161,7 @@ export async function sendEventApprovedEmail(to: string, organizerName: string, 
     subject: `Your event "${eventName}" is now live`,
     html: emailShell(`
       <h1 style="color:#a855f7;font-size:22px;margin:0 0 12px;">Event Approved ✓</h1>
-      <p style="color:#f1f0ff;">Hi ${organizerName}, great news! <strong>"${eventName}"</strong> has been approved and is now live on Ventry.</p>
+      <p style="color:#f1f0ff;">Hi ${esc(organizerName)}, great news! <strong>&ldquo;${esc(eventName)}&rdquo;</strong> has been approved and is now live on Ventry.</p>
       <br/>
       <a href="${APP_URL}/events/${eventId}" class="btn">View Your Event</a>
     `),
@@ -172,8 +175,8 @@ export async function sendEventRejectedEmail(to: string, organizerName: string, 
     subject: `Event Review: ${eventName}`,
     html: emailShell(`
       <h1 style="color:#f87171;font-size:22px;margin:0 0 12px;">Event Review</h1>
-      <p style="color:#f1f0ff;">Hi ${organizerName}, we could not approve <strong>"${eventName}"</strong> at this time.</p>
-      <p style="color:#f1f0ff;"><strong>Reason:</strong> ${reason}</p>
+      <p style="color:#f1f0ff;">Hi ${esc(organizerName)}, we could not approve <strong>&ldquo;${esc(eventName)}&rdquo;</strong> at this time.</p>
+      <p style="color:#f1f0ff;"><strong>Reason:</strong> ${esc(reason)}</p>
       <p style="color:#9ca3af;font-size:13px;">You may edit and resubmit the event from your dashboard.</p>
     `),
   });
@@ -188,7 +191,7 @@ export async function sendRefundConfirmationEmail(to: string, ticketId: string, 
     subject: `Refund processed for ${ticketId}`,
     html: emailShell(`
       <h1 style="color:#34d399;font-size:22px;margin:0 0 12px;">Refund Processed ✓</h1>
-      <p style="color:#f1f0ff;">Your refund of <strong>${fmt(amount)}</strong> for <strong>${eventName}</strong> (${ticketId}) has been initiated.</p>
+      <p style="color:#f1f0ff;">Your refund of <strong>${fmt(amount)}</strong> for <strong>${esc(eventName)}</strong> (${ticketId}) has been initiated.</p>
       <p style="color:#9ca3af;font-size:13px;">It will appear in your account within 3–5 business days.</p>
     `),
   });

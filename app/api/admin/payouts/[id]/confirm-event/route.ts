@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { getAuthUser } from '@/lib/server/auth';
 import { getServerSupabase } from '@/lib/supabase/server';
+import { notify } from '@/lib/server/notify';
 
 export async function POST(
   _req: NextRequest,
@@ -15,10 +16,33 @@ export async function POST(
     const { id } = await params;
     const db = getServerSupabase();
 
-    await db.from('payouts').update({ status: 'processing' }).eq('id', id).eq('status', 'pending');
-    await db.from('events')
-      .update({ status: 'completed' })
-      .eq('id', (await db.from('payouts').select('event_id').eq('id', id).single()).data?.event_id);
+    // Fetch payout once to get event_id and organizer_id before updating
+    const { data: payout } = await db
+      .from('payouts')
+      .select('id, event_id, organizer_id, event_name, status')
+      .eq('id', id)
+      .maybeSingle();
+
+    if (!payout) return NextResponse.json({ error: 'Payout not found' }, { status: 404 });
+    if (payout.status !== 'pending') {
+      return NextResponse.json({ error: 'Payout is not in pending state' }, { status: 400 });
+    }
+
+    // Update both tables in parallel using the already-fetched event_id
+    await Promise.all([
+      db.from('payouts').update({ status: 'processing' }).eq('id', id).eq('status', 'pending'),
+      db.from('events').update({ status: 'completed' }).eq('id', payout.event_id),
+    ]);
+
+    notify(
+      { type: 'organizer', id: payout.organizer_id },
+      {
+        notifType: 'payout',
+        title:     `Event confirmed — payout processing`,
+        body:      `"${payout.event_name}" has been confirmed. Your payout will be released shortly.`,
+        link:      '/organizer/payouts',
+      },
+    ).catch(err => console.error('confirm-event: notify error', err));
 
     return NextResponse.json({ success: true });
   } catch (err) {

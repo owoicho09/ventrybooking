@@ -10,6 +10,7 @@ import {
   Wallet,
   ShieldAlert,
 } from 'lucide-react';
+import { NotificationBell } from '@/components/ui/NotificationBell';
 
 const navItems = [
   { href: '/admin',            label: 'Dashboard', icon: LayoutDashboard },
@@ -47,6 +48,10 @@ export function AdminBottomNav() {
           </Link>
         );
       })}
+      <div className="flex-1 flex flex-col items-center justify-center">
+        <NotificationBell />
+        <span className="text-[9px] font-medium leading-none mt-0.5" style={{ color: 'var(--color-text-muted)' }}>Alerts</span>
+      </div>
     </nav>
   );
 }

@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from 'next/server';
 import { getAuthUser } from '@/lib/server/auth';
 import { getServerSupabase } from '@/lib/supabase/server';
 import { sendKYCApprovedEmail } from '@/lib/server/email';
+import { notify } from '@/lib/server/notify';
 
 export async function POST(
   _req: NextRequest,
@@ -21,6 +22,10 @@ export async function POST(
 
     await db.from('users').update({ kyc_status: 'approved', verified: true }).eq('id', id);
     await sendKYCApprovedEmail(org.email, org.name).catch(console.error);
+    notify(
+      { type: 'organizer', id },
+      { notifType: 'kyc', title: 'KYC Approved', body: 'Your identity verification has been approved. You can now create events.', link: '/organizer/events/create' },
+    ).catch(console.error);
 
     return NextResponse.json({ success: true });
   } catch (err) {

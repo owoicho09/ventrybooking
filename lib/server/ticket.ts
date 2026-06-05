@@ -2,6 +2,7 @@ import { getServerSupabase } from '@/lib/supabase/server';
 import { generateTicketId, generateRefundCode } from '@/lib/server/ids';
 import { sendTicketEmail } from '@/lib/server/email';
 import { calculateFees } from '@/lib/server/fees';
+import { notify } from '@/lib/server/notify';
 
 export interface PaymentData {
   reference: string;
@@ -18,20 +19,39 @@ export interface PaymentData {
  * Idempotently creates individual ticket records from a verified Paystack payment.
  * One row is inserted per ticket — quantity=2 creates two rows with separate IDs,
  * QR codes, and refund codes. Returns the first ticket ID or null on failure.
+ *
+ * Idempotency is enforced atomically via the `purchases` table: the first call
+ * claims the paystack_reference with a PRIMARY KEY INSERT. Any concurrent or
+ * duplicate call receives a unique_violation (23505) and short-circuits.
+ * This eliminates the webhook + callback race condition.
  */
 export async function createTicketFromPayment(p: PaymentData): Promise<string | null> {
   const db = getServerSupabase();
 
-  // Idempotency — if any ticket rows already exist for this reference the webhook
-  // has already been processed. Return the first ticket ID without re-inserting.
-  const { data: existing } = await db
-    .from('tickets')
-    .select('id')
-    .eq('paystack_reference', p.reference)
-    .order('purchased_at', { ascending: true });
-  if (existing && existing.length > 0) return existing[0].id;
+  // ── Atomic idempotency claim ─────────────────────────────────────
+  // INSERT into purchases is atomic. Only one concurrent caller can succeed;
+  // the other receives error code 23505 (unique_violation) and bails out.
+  const { error: claimErr } = await db
+    .from('purchases')
+    .insert({ paystack_reference: p.reference, created_at: new Date().toISOString() });
 
-  // Fetch event and tier in parallel
+  if (claimErr) {
+    if (claimErr.code === '23505') {
+      // Another request already processed this payment — return the first ticket
+      const { data: first } = await db
+        .from('tickets')
+        .select('id')
+        .eq('paystack_reference', p.reference)
+        .order('purchased_at', { ascending: true })
+        .limit(1)
+        .maybeSingle();
+      return first?.id ?? null;
+    }
+    console.error('createTicketFromPayment: purchases insert error', claimErr);
+    return null;
+  }
+
+  // ── Fetch event and tier in parallel ────────────────────────────
   const [{ data: eventRow, error: eventErr }, { data: tierRow, error: tierErr }] = await Promise.all([
     db.from('events')
       .select('event_name, date, time, venue, organizer_id')
@@ -64,7 +84,6 @@ export async function createTicketFromPayment(p: PaymentData): Promise<string | 
   const email       = (p.buyerEmail || p.customerEmail || '').toLowerCase().trim();
   const purchasedAt = new Date().toISOString();
 
-  // Build one row per ticket
   const ticketIds: string[]   = [];
   const refundCodes: string[] = [];
   for (let i = 0; i < qty; i++) {
@@ -90,13 +109,24 @@ export async function createTicketFromPayment(p: PaymentData): Promise<string | 
 
   await db.from('tickets').insert(rows);
 
-  // These run once per transaction, not once per individual ticket
   await Promise.all([
     db.rpc('increment_tier_sold', { tier_id: p.tierId, amount: qty }),
     upsertPayout(db, p.eventId, eventRow, subtotal, fee, net),
   ]);
 
-  // Fire-and-forget — email failure must never block the webhook response
+  // Notify the organizer of the new purchase (fire-and-forget — non-blocking)
+  notify(
+    { type: 'organizer', id: eventRow.organizer_id },
+    {
+      notifType: 'purchase',
+      title:     `${qty} ticket${qty > 1 ? 's' : ''} sold — ${eventRow.event_name}`,
+      body:      `${p.buyerName || email} purchased ${qty} × ${tierRow.name}`,
+      link:      '/organizer/dashboard',
+    },
+  ).catch(err => console.error('createTicketFromPayment: notify error', err));
+
+  // Fire-and-forget — email failure must never block the webhook response.
+  // The ticket page at /ticket/{id} always shows the QR so buyers can recover.
   sendTicketEmail({
     to:          email,
     buyerName:   p.buyerName || '',

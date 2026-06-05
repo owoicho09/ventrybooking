@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from 'next/server';
 import { getAuthUser } from '@/lib/server/auth';
 import { getServerSupabase } from '@/lib/supabase/server';
 import { v4 as uuidv4 } from 'uuid';
+import { notify } from '@/lib/server/notify';
 
 export async function GET(req: NextRequest) {
   const user = await getAuthUser();
@@ -125,6 +126,11 @@ export async function POST(req: NextRequest) {
       }));
       await db.from('ticket_tiers').insert(tierInserts);
     }
+
+    notify(
+      { type: 'admin' },
+      { notifType: 'event', title: 'New Event Submitted', body: `"${name}" has been submitted for review.`, link: '/admin/events' },
+    ).catch(console.error);
 
     return NextResponse.json({ success: true, data: { eventId } }, { status: 201 });
   } catch (err) {

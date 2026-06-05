@@ -170,8 +170,35 @@ export async function POST(req: NextRequest) {
       return NextResponse.json({ success: true, data: { result: 'invalid', reason: 'Event has expired' } });
     }
 
-    // ── All checks passed ────────────────────────────────────────────
-    await db.from('tickets').update({ status: 'used' }).eq('id', ticket.id);
+    // ── Atomic status update ─────────────────────────────────────────
+    // The WHERE status='valid' clause makes this atomic: if two concurrent
+    // scan requests both pass the checks above, only one UPDATE will match
+    // (Postgres serialises the writes). The second gets 0 rows back and is
+    // treated as already_used rather than a false success.
+    const { data: updated } = await db
+      .from('tickets')
+      .update({ status: 'used' })
+      .eq('id', ticket.id)
+      .eq('status', 'valid')
+      .select('id');
+
+    if (!updated || updated.length === 0) {
+      // A concurrent scan won the race — treat as already used
+      await logScan({ scannedByUserId, scannedByStaffId, eventId: logEventId, ticketId: ticket.id, attendeeName: ticket.buyer_name, ticketType: tierName, result: 'already_used' });
+      const { data: firstScan } = await db
+        .from('scan_logs')
+        .select('scanned_at')
+        .eq('ticket_id', ticket.id)
+        .eq('result', 'success')
+        .order('scanned_at', { ascending: true })
+        .limit(1)
+        .maybeSingle();
+      return NextResponse.json({
+        success: true,
+        data: { result: 'already_used', attendeeName: ticket.buyer_name, ticketType: tierName, eventName, firstScannedAt: firstScan?.scanned_at ?? null },
+      });
+    }
+
     await logScan({ scannedByUserId, scannedByStaffId, eventId: logEventId, ticketId: ticket.id, attendeeName: ticket.buyer_name, ticketType: tierName, result: 'success' });
 
     return NextResponse.json({

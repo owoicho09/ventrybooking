@@ -10,6 +10,7 @@ import {
   KeyRound,
   Settings,
 } from 'lucide-react';
+import { NotificationBell } from '@/components/ui/NotificationBell';
 
 const navItems = [
   { href: '/organizer/dashboard',     label: 'Overview',  icon: LayoutDashboard },
@@ -49,6 +50,10 @@ export function OrganizerBottomNav() {
           </Link>
         );
       })}
+      <div className="flex-1 flex flex-col items-center justify-center">
+        <NotificationBell />
+        <span className="text-[9px] font-medium leading-none mt-0.5" style={{ color: 'var(--color-text-muted)' }}>Alerts</span>
+      </div>
     </nav>
   );
 }

@@ -3,8 +3,14 @@ import { getServerSupabase } from '@/lib/supabase/server';
 import { verifyPassword } from '@/lib/server/password';
 import { signAuthToken } from '@/lib/server/jwt';
 import { cookieOptions } from '@/lib/server/auth';
+import { checkRateLimit, getIp } from '@/lib/server/rateLimit';
 
 export async function POST(req: NextRequest) {
+  // 10 attempts per 15 minutes per IP
+  if (!checkRateLimit(`org-login:${getIp(req.headers)}`, 10, 15 * 60)) {
+    return NextResponse.json({ error: 'Too many login attempts. Please try again later.' }, { status: 429 });
+  }
+
   try {
     const { email, password } = await req.json();
 
