@@ -30,7 +30,13 @@ export async function POST(req: NextRequest) {
     const otp = randomInt(100000, 999999).toString();
     const expiresAt = new Date(Date.now() + 10 * 60 * 1000).toISOString();
     await db.from('users').update({ email_otp: hashOTP(otp, user.sub), email_otp_expires_at: expiresAt }).eq('id', user.sub);
-    sendOTPEmail(userRow.email, userRow.name, otp).catch(console.error);
+
+    try {
+      await sendOTPEmail(userRow.email, userRow.name, otp);
+    } catch (emailErr) {
+      console.error('OTP resend email failed:', emailErr);
+      return NextResponse.json({ error: 'Failed to send email. Please try again.' }, { status: 500 });
+    }
 
     return NextResponse.json({ success: true });
   }
