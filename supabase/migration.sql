@@ -37,3 +37,8 @@ CREATE INDEX IF NOT EXISTS idx_notifications_admin
 CREATE INDEX IF NOT EXISTS idx_notifications_org
   ON notifications (recipient_id, created_at DESC)
   WHERE recipient_type = 'organizer';
+
+-- 3. Email OTP columns (replaces 5-step KYC document flow)
+--    After email verification, kyc_status → 'approved' and verified → true automatically.
+ALTER TABLE users ADD COLUMN IF NOT EXISTS email_otp TEXT;
+ALTER TABLE users ADD COLUMN IF NOT EXISTS email_otp_expires_at TIMESTAMPTZ;

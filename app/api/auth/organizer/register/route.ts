@@ -3,6 +3,8 @@ import { getServerSupabase } from '@/lib/supabase/server';
 import { hashPassword } from '@/lib/server/password';
 import { signAuthToken } from '@/lib/server/jwt';
 import { cookieOptions } from '@/lib/server/auth';
+import { createHash, randomInt } from 'crypto';
+import { sendOTPEmail } from '@/lib/server/email';
 
 export async function POST(req: NextRequest) {
   try {
@@ -48,6 +50,13 @@ export async function POST(req: NextRequest) {
       .single();
 
     if (error) throw error;
+
+    // Generate email OTP and store hash
+    const otp = randomInt(100000, 999999).toString();
+    const otpHash = createHash('sha256').update(otp + user.id).digest('hex');
+    const otpExpiresAt = new Date(Date.now() + 10 * 60 * 1000).toISOString();
+    await db.from('users').update({ email_otp: otpHash, email_otp_expires_at: otpExpiresAt }).eq('id', user.id);
+    sendOTPEmail(user.email, user.name, otp).catch(console.error);
 
     const token = signAuthToken({ sub: user.id, role: 'organizer', email: user.email });
     const res = NextResponse.json({ success: true, data: { id: user.id, name: user.name, email: user.email } });

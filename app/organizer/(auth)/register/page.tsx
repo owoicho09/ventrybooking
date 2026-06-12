@@ -8,7 +8,7 @@ import { Input } from '@/components/ui/Input';
 import { Button } from '@/components/ui/Button';
 
 const benefits = [
-  { icon: Zap, text: 'Go live in under 24 hours after KYC approval' },
+  { icon: Zap, text: 'Instant access after email verification — no waiting' },
   { icon: Shield, text: 'Escrow protects your reputation — buyers trust you' },
   { icon: Users, text: 'Full dashboard: sales, scans, payouts' },
 ];

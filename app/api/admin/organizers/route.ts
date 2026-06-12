@@ -14,8 +14,8 @@ export async function GET(req: NextRequest) {
   const db = getServerSupabase();
   let qb = db
     .from('users')
-    .select('id, name, email, phone, tier, verified, member_since, events_hosted, kyc_status, kyc_submitted_at, kyc_gov_id_path, kyc_selfie_path')
-    .order('kyc_submitted_at', { ascending: false });
+    .select('id, name, email, phone, tier, verified, member_since, events_hosted, kyc_status, kyc_submitted_at')
+    .order('created_at', { ascending: false });
 
   if (kycStatus) qb = qb.eq('kyc_status', kycStatus);
 

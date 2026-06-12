@@ -1,7 +1,7 @@
 'use client';
 
 import { useState } from 'react';
-import { FileText, Phone, Globe, MapPin } from 'lucide-react';
+import { Mail, Phone, MapPin, CheckCircle } from 'lucide-react';
 import { Button } from '@/components/ui/Button';
 import { Badge } from '@/components/ui/Badge';
 import { Textarea } from '@/components/ui/Input';
@@ -38,53 +38,30 @@ export function KYCReviewPanel({ organizer, onApprove, onReject }: KYCReviewPane
         <Badge variant="amber" className="ml-auto">Pending Review</Badge>
       </div>
 
-      {/* Document preview areas */}
-      <div className="grid grid-cols-2 gap-3">
-        {[
-          { label: 'Government ID', sub: 'NIN / Driver\'s Licence / Passport' },
-          { label: 'Selfie with ID', sub: 'Selfie holding document' },
-        ].map(({ label, sub }) => (
-          <div
-            key={label}
-            className="rounded-lg border-2 border-dashed flex flex-col items-center justify-center gap-2 aspect-video cursor-pointer transition-colors hover:border-[var(--color-purple)]"
-            style={{ borderColor: 'var(--color-border)' }}
-          >
-            <FileText size={24} style={{ color: 'var(--color-text-dim)' }} />
-            <div className="text-center">
-              <p className="text-xs font-medium" style={{ color: 'var(--color-text-muted)' }}>
-                {label}
-              </p>
-              <p className="text-[10px]" style={{ color: 'var(--color-text-dim)' }}>
-                {sub}
-              </p>
-            </div>
-          </div>
-        ))}
-      </div>
-
-      {/* Verification details */}
+      {/* Email verification status */}
       <div
         className="rounded-lg border p-4 flex flex-col gap-3"
         style={{ borderColor: 'var(--color-border)', backgroundColor: 'var(--color-surface-2)' }}
       >
         {[
-          { icon: Phone, label: 'Phone', value: organizer.phone, verified: true },
-          { icon: Globe, label: 'Social Media', value: 'Not provided', verified: false },
-          { icon: MapPin, label: 'Submitted', value: organizer.submittedAt ?? 'N/A', verified: true },
-        ].map(({ icon: Icon, label, value, verified }) => (
+          { icon: Mail, label: 'Email', value: organizer.email },
+          { icon: Phone, label: 'Phone', value: organizer.phone },
+          { icon: MapPin, label: 'Registered', value: organizer.submittedAt ?? organizer.memberSince ?? 'N/A' },
+        ].map(({ icon: Icon, label, value }) => (
           <div key={label} className="flex items-center gap-3">
             <Icon size={15} style={{ color: 'var(--color-text-dim)' }} />
             <div className="flex-1">
               <p className="text-xs" style={{ color: 'var(--color-text-dim)' }}>{label}</p>
               <p className="text-sm" style={{ color: 'var(--color-text)' }}>{value}</p>
             </div>
-            {verified ? (
-              <Badge variant="green">Verified</Badge>
-            ) : (
-              <Badge variant="gray">Unverified</Badge>
-            )}
           </div>
         ))}
+        <div className="flex items-center gap-2 pt-1 mt-1 border-t" style={{ borderColor: 'var(--color-border)' }}>
+          <CheckCircle size={14} style={{ color: 'var(--color-green)' }} />
+          <p className="text-xs" style={{ color: 'var(--color-text-muted)' }}>
+            Email verified via OTP at registration
+          </p>
+        </div>
       </div>
 
       {/* Actions */}

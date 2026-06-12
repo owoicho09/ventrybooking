@@ -126,6 +126,22 @@ export async function sendTicketEmail(params: {
   });
 }
 
+export async function sendOTPEmail(to: string, name: string, otp: string) {
+  await resend.emails.send({
+    from: `Ventry <${FROM}>`,
+    to,
+    subject: `Your Ventry verification code: ${otp}`,
+    html: emailShell(`
+      <h1 style="color:#a855f7;font-size:22px;margin:0 0 12px;">Verify your email</h1>
+      <p style="color:#f1f0ff;margin:0 0 24px;">Hi ${esc(name)}, enter this code to activate your organizer account:</p>
+      <div style="text-align:center;background:#12121a;border:1px solid #2d2d3d;border-radius:12px;padding:28px;margin-bottom:24px;">
+        <span style="font-size:40px;font-weight:700;letter-spacing:0.25em;color:#a855f7;font-family:monospace;">${otp}</span>
+      </div>
+      <p style="color:#9ca3af;font-size:13px;margin:0;">Expires in <strong style="color:#f1f0ff;">10 minutes</strong>. If you didn't create a Ventry account, ignore this email.</p>
+    `),
+  });
+}
+
 export async function sendKYCApprovedEmail(to: string, name: string) {
   await resend.emails.send({
     from: `Ventry <${FROM}>`,

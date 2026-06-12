@@ -2,7 +2,7 @@
 
 import { useState, useEffect } from 'react';
 import Link from 'next/link';
-import { Ticket, Wallet, CalendarDays, ArrowUpRight, Plus } from 'lucide-react';
+import { Ticket, Wallet, CalendarDays, ArrowUpRight, Plus, Mail } from 'lucide-react';
 import { StatsCard } from '@/components/admin/StatsCard';
 import { Badge } from '@/components/ui/Badge';
 import { Button } from '@/components/ui/Button';
@@ -11,7 +11,7 @@ import { formatNGN, formatShortDate } from '@/lib/utils';
 
 interface Stats { ticketsSold: number; revenueInEscrow: number; activeEvents: number; payoutDue: number; }
 interface OrgEvent { id: string; name: string; date: string; totalSold: number; status: string; }
-interface Me { name: string; }
+interface Me { name: string; verified: boolean; }
 
 const statusBadge = (status: string) => {
   switch (status) {
@@ -41,6 +41,18 @@ export default function OrganizerDashboardPage() {
 
   return (
     <div className="flex flex-col gap-8">
+      {me && !me.verified && (
+        <div className="rounded-xl border px-5 py-4 flex items-start gap-4" style={{ backgroundColor: '#7c3aed15', borderColor: '#7c3aed40' }}>
+          <Mail size={20} className="flex-shrink-0 mt-0.5" style={{ color: 'var(--color-purple-light)' }} />
+          <div className="flex-1">
+            <p className="font-semibold text-sm" style={{ color: 'var(--color-text)' }}>Verify your email to start creating events</p>
+            <p className="text-xs mt-0.5" style={{ color: 'var(--color-text-muted)' }}>Check your inbox for the 6-digit code we sent when you registered.</p>
+          </div>
+          <Link href="/organizer/verify">
+            <Button size="sm">Verify Now</Button>
+          </Link>
+        </div>
+      )}
       <div className="flex items-center justify-between">
         <div>
           <h1 className="text-2xl font-bold" style={{ color: 'var(--color-text)', fontFamily: 'var(--font-syne), sans-serif' }}>Overview</h1>

@@ -20,7 +20,7 @@ CREATE TABLE IF NOT EXISTS users (
   -- Organizer tier label shown in dashboard
   tier                  TEXT        NOT NULL DEFAULT 'Standard',
 
-  -- Set to TRUE by admin after KYC approval; gates event creation
+  -- Set to TRUE automatically after email OTP verification; gates event creation
   verified              BOOLEAN     NOT NULL DEFAULT FALSE,
 
   -- Profile
@@ -28,19 +28,15 @@ CREATE TABLE IF NOT EXISTS users (
   events_hosted         INTEGER     NOT NULL DEFAULT 0,
   bio                   TEXT,
 
-  -- KYC flow (5-step; kyc_step tracks progress)
+  -- Verification: email OTP sets kyc_status → approved and verified → true automatically
   kyc_status            TEXT        NOT NULL DEFAULT 'pending'
                           CHECK (kyc_status IN ('pending', 'approved', 'rejected')),
-  kyc_step              INTEGER,
   kyc_submitted_at      TIMESTAMPTZ,
-  kyc_gov_id_path       TEXT,           -- storage path in kyc-documents bucket
-  kyc_selfie_path       TEXT,           -- storage path in kyc-documents bucket
-  kyc_phone_verified    BOOLEAN,
-  kyc_social_twitter    TEXT,
-  kyc_social_instagram  TEXT,
-  kyc_social_facebook   TEXT,
-  kyc_venue_proof_path  TEXT,           -- storage path in kyc-documents bucket
   kyc_rejection_reason  TEXT,
+
+  -- Email OTP (SHA-256 hash of code+userId; cleared after use)
+  email_otp             TEXT,
+  email_otp_expires_at  TIMESTAMPTZ,
 
   -- Bank / payout details
   bank_name             TEXT,

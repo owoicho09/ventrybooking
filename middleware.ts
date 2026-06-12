@@ -7,7 +7,6 @@ const ADMIN_LOGIN = '/admin/login';
 const ORGANIZER_AUTH_PATHS = [
   '/organizer/login',
   '/organizer/register',
-  '/organizer/verify',
   '/organizer/forgot-password',
   '/organizer/reset-password',
 ];

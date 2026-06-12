@@ -27,6 +27,10 @@ export default function OrganizerLoginPage() {
         setLoading(false);
         return;
       }
+      if (!data.data?.verified) {
+        window.location.href = '/organizer/verify';
+        return;
+      }
       const returnTo = new URLSearchParams(window.location.search).get('return');
       // Accept only same-origin paths: must start with / but not // or /\
       // The /[^/\\] prefix blocks protocol-relative and backslash-normalised redirects.
