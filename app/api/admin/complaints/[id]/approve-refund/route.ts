@@ -3,7 +3,6 @@ import { getAuthUser } from '@/lib/server/auth';
 import { getServerSupabase } from '@/lib/supabase/server';
 import { refundTransaction } from '@/lib/server/paystack';
 import { sendRefundConfirmationEmail } from '@/lib/server/email';
-import { SERVICE_FEE } from '@/lib/server/fees';
 
 export async function POST(
   req: NextRequest,
@@ -35,7 +34,7 @@ export async function POST(
 
     const { data: ticket, error: tErr } = await db
       .from('tickets')
-      .select('id, total_paid, paystack_reference, status')
+      .select('id, total_paid, tier_id, paystack_reference, status')
       .eq('id', complaint.ticket_id)
       .maybeSingle();
 
@@ -45,20 +44,36 @@ export async function POST(
     }
     if (!ticket) return NextResponse.json({ error: 'Ticket not found' }, { status: 404 });
 
-    // Refund = total_paid minus the non-refundable service fee
-    const refundAmount = Math.max(0, ticket.total_paid - SERVICE_FEE);
+    if (!ticket.paystack_reference) {
+      return NextResponse.json(
+        { error: 'Ticket has no payment reference on record — cannot issue refund through Paystack' },
+        { status: 400 },
+      );
+    }
 
-    if (ticket.paystack_reference) {
-      try {
-        // Paystack accepts either the transaction reference or numeric ID
-        await refundTransaction({
-          transaction: ticket.paystack_reference,
-          amount:      refundAmount * 100, // kobo
-        });
-      } catch (err) {
-        console.error('Paystack refund error (non-fatal):', err);
-        // Log but don't block — admin still marks it as resolved
-      }
+    // Refund the exact base ticket price from the tier, not total_paid − SERVICE_FEE.
+    // total_paid is split evenly across ticket rows for multi-ticket orders, so
+    // subtracting the flat ₦100 from each row under-refunds by ₦50 per extra ticket.
+    // The tier price is the canonical per-ticket base price regardless of order size.
+    const { data: tier } = await db
+      .from('ticket_tiers')
+      .select('price')
+      .eq('id', ticket.tier_id)
+      .maybeSingle();
+
+    const refundAmount = tier?.price ?? Math.max(0, ticket.total_paid - 100);
+
+    try {
+      await refundTransaction({
+        transaction: ticket.paystack_reference,
+        amount:      refundAmount * 100, // kobo
+      });
+    } catch (err) {
+      console.error('approve-refund: Paystack refund error', err);
+      return NextResponse.json(
+        { error: 'Paystack refund request failed — please retry or process manually via the Paystack dashboard' },
+        { status: 502 },
+      );
     }
 
     await Promise.all([

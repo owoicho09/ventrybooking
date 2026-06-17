@@ -51,12 +51,16 @@ export async function POST(req: NextRequest) {
       return NextResponse.json({ error: 'Enter a valid 6-digit code' }, { status: 400 });
     }
 
-    const { data: userRow } = await db
+    const { data: userRow, error: dbErr } = await db
       .from('users')
       .select('email_otp, email_otp_expires_at, verified')
       .eq('id', user.sub)
       .single();
 
+    if (dbErr) {
+      console.error('verify-email db error:', dbErr.message);
+      return NextResponse.json({ error: 'Database error: ' + dbErr.message }, { status: 500 });
+    }
     if (!userRow) return NextResponse.json({ error: 'User not found' }, { status: 404 });
     if (userRow.verified) return NextResponse.json({ success: true, data: { verified: true } });
 

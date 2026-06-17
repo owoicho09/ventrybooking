@@ -32,10 +32,9 @@ export default function CheckoutPage() {
     }
   }, []);
 
-  const subtotal      = cart ? cart.tierPrice * cart.quantity : 0;
-  const serviceFee    = 100;
-  const processingFee = Math.round(subtotal * 0.015);
-  const total         = subtotal + serviceFee + processingFee;
+  const subtotal   = cart ? cart.tierPrice * cart.quantity : 0;
+  const serviceFee = 100;
+  const total      = subtotal + serviceFee;
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -115,10 +114,6 @@ export default function CheckoutPage() {
                 <span style={{ color: 'var(--color-text-muted)' }}>Ventry service fee</span>
                 <span style={{ color: 'var(--color-text)' }}>{formatNGN(serviceFee)}</span>
               </div>
-              <div className="flex justify-between">
-                <span style={{ color: 'var(--color-text-muted)' }}>Paystack processing (1.5%)</span>
-                <span style={{ color: 'var(--color-text)' }}>{formatNGN(processingFee)}</span>
-              </div>
               <div className="flex justify-between font-bold pt-2 border-t" style={{ borderColor: 'var(--color-border)' }}>
                 <span style={{ color: 'var(--color-text)' }}>Total</span>
                 <span style={{ color: 'var(--color-text)' }}>{formatNGN(total)}</span>
@@ -126,7 +121,7 @@ export default function CheckoutPage() {
             </div>
 
             <p className="text-[10px] leading-snug mb-4" style={{ color: 'var(--color-text-dim)' }}>
-              The ₦100 service fee and 1.5% Paystack processing fee are non-refundable under any circumstances. Only the base ticket price is refunded if an event is cancelled.
+              The ₦100 service fee is non-refundable under any circumstances. Only the base ticket price is refunded if an event is cancelled. Paystack deducts their 1.5% processing fee from the payment on their end — this is not added to your total.
             </p>
 
             <div className="flex items-center gap-2 rounded-lg px-3 py-2.5 text-sm"

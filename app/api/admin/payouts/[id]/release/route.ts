@@ -18,8 +18,6 @@ export async function POST(
   try {
     const { id } = await params;
     const body = await req.json().catch(() => ({}));
-    // If no percentage is passed in the request body, fall back to the platform-wide
-    // payout_percentage setting configured by the admin in Settings.
     let releasePercent = Number(body.percentage ?? NaN);
     if (!Number.isFinite(releasePercent) || releasePercent <= 0) {
       const db2 = getServerSupabase();
@@ -41,6 +39,18 @@ export async function POST(
       return NextResponse.json({ error: 'Database error' }, { status: 500 });
     }
     if (!payout) return NextResponse.json({ error: 'Payout not found' }, { status: 404 });
+
+    if (payout.status === 'completed') {
+      return NextResponse.json({ error: 'Payout already completed' }, { status: 400 });
+    }
+    // otp_pending means the transfer was initiated but Paystack is waiting for OTP
+    // confirmation. The transfer.success webhook will flip it to completed.
+    if (payout.status === 'otp_pending') {
+      return NextResponse.json(
+        { error: 'Transfer is awaiting OTP confirmation — check your Paystack dashboard to approve it' },
+        { status: 400 },
+      );
+    }
     if (payout.status !== 'processing') {
       return NextResponse.json({ error: 'Event must be confirmed before release' }, { status: 400 });
     }
@@ -63,15 +73,13 @@ export async function POST(
     if (!bankCode) {
       return NextResponse.json(
         { error: `Unknown bank "${org.bank_name}". Ask the organizer to update their bank details.` },
-        { status: 400 }
+        { status: 400 },
       );
     }
 
     const releaseAmount = Math.round(payout.net * (releasePercent / 100));
     const transferRef   = generatePayoutRef();
 
-    // Initiate the Paystack transfer. Any failure surfaces as an error to the
-    // admin so they can retry — never silently mark completed on failure.
     const recipient = await createTransferRecipient({
       type:           'nuban',
       name:           org.account_name || org.name,
@@ -80,7 +88,7 @@ export async function POST(
       currency:       'NGN',
     });
 
-    await initiateTransfer({
+    const transfer = await initiateTransfer({
       source:    'balance',
       amount:    releaseAmount * 100, // kobo
       recipient: recipient.recipient_code,
@@ -88,13 +96,20 @@ export async function POST(
       reference: transferRef,
     });
 
-    // Atomic guard: only update if status is still 'processing'. If a
-    // concurrent release request won the race, 0 rows are updated and we
-    // return a conflict rather than completing a double-transfer.
+    // In live mode without OTP disabled, Paystack returns status='otp' — the transfer
+    // is queued but not yet sent. We store the reference now so the transfer.success
+    // webhook can find and complete this payout row. We do NOT mark it completed until
+    // Paystack confirms via webhook. In test mode (or with OTP disabled) status='success'
+    // and the webhook will still arrive, which is idempotent.
+    const transferStatus  = (transfer as { status?: string }).status;
+    const newPayoutStatus = transferStatus === 'success' ? 'completed' : 'otp_pending';
+
+    // Atomic guard: only update if status is still 'processing'. A concurrent release
+    // request winning the race will find 0 rows and receive a conflict response.
     const { data: updated } = await db
       .from('payouts')
       .update({
-        status:      'completed',
+        status:      newPayoutStatus,
         reference:   transferRef,
         released_at: new Date().toISOString(),
       })
@@ -109,17 +124,38 @@ export async function POST(
     const fmt = (n: number) =>
       new Intl.NumberFormat('en-NG', { style: 'currency', currency: 'NGN', minimumFractionDigits: 0 }).format(n);
 
-    notify(
-      { type: 'organizer', id: payout.organizer_id },
-      {
-        notifType: 'payout',
-        title:     `Payout released — ${payout.event_name}`,
-        body:      `${fmt(releaseAmount)} has been transferred to your ${org.bank_name} account.`,
-        link:      '/organizer/payouts',
-      },
-    ).catch(err => console.error('release payout: notify error', err));
+    if (newPayoutStatus === 'completed') {
+      notify(
+        { type: 'organizer', id: payout.organizer_id },
+        {
+          notifType: 'payout',
+          title:     `Payout released — ${payout.event_name}`,
+          body:      `${fmt(releaseAmount)} has been transferred to your ${org.bank_name} account.`,
+          link:      '/organizer/payouts',
+        },
+      ).catch(err => console.error('release payout: notify error', err));
+    } else {
+      // OTP confirmation pending — notify organizer to expect a delay
+      notify(
+        { type: 'organizer', id: payout.organizer_id },
+        {
+          notifType: 'payout',
+          title:     `Payout initiated — ${payout.event_name}`,
+          body:      `${fmt(releaseAmount)} transfer is pending final confirmation. You will be notified once it clears.`,
+          link:      '/organizer/payouts',
+        },
+      ).catch(err => console.error('release payout: notify error', err));
+    }
 
-    return NextResponse.json({ success: true });
+    return NextResponse.json({
+      success: true,
+      data: {
+        status: newPayoutStatus,
+        ...(newPayoutStatus === 'otp_pending' && {
+          message: 'Transfer initiated but requires OTP confirmation on your Paystack dashboard before funds are sent.',
+        }),
+      },
+    });
   } catch (err) {
     console.error('release payout error:', err);
     return NextResponse.json({ error: 'Failed to release payout' }, { status: 500 });

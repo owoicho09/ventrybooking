@@ -23,6 +23,43 @@ export const NIGERIAN_BANKS = [
 
 export type BankName = typeof NIGERIAN_BANKS[number]['name'];
 
+// Common aliases and alternate spellings organizers might enter
+const ALIASES: Record<string, string> = {
+  'access':                     'Access Bank',
+  'gtb':                        'GTBank',
+  'guaranty trust':             'GTBank',
+  'guaranty trust bank':        'GTBank',
+  'gt bank':                    'GTBank',
+  'zenith':                     'Zenith Bank',
+  'first bank of nigeria':      'First Bank',
+  'fbn':                        'First Bank',
+  'firstbank':                  'First Bank',
+  'united bank for africa':     'UBA',
+  'first city monument bank':   'FCMB',
+  'stanbic':                    'Stanbic IBTC',
+  'stanbic ibtc bank':          'Stanbic IBTC',
+  'standard chartered bank':    'Standard Chartered',
+  'sterling':                   'Sterling Bank',
+  'heritage':                   'Heritage Bank',
+  'keystone':                   'Keystone Bank',
+  'polaris':                    'Polaris Bank',
+  'providus':                   'Providus Bank',
+  'unity':                      'Unity Bank',
+  'union':                      'Union Bank',
+  'wema':                       'Wema Bank',
+  'alat':                       'Wema Bank',
+  'alat by wema':               'Wema Bank',
+  'kuda':                       'Kuda Bank',
+  'fidelity':                   'Fidelity Bank',
+};
+
 export function getBankCode(bankName: string): string | undefined {
-  return NIGERIAN_BANKS.find(b => b.name === bankName)?.code;
+  const normalized = bankName.trim().toLowerCase();
+  // Exact case-insensitive match first
+  const exact = NIGERIAN_BANKS.find(b => b.name.toLowerCase() === normalized);
+  if (exact) return exact.code;
+  // Alias lookup
+  const canonical = ALIASES[normalized];
+  if (canonical) return NIGERIAN_BANKS.find(b => b.name === canonical)?.code;
+  return undefined;
 }
