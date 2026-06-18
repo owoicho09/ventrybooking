@@ -1,8 +1,8 @@
 'use client';
 
-import { useEffect, useState, useRef } from 'react';
+import { useEffect, useState } from 'react';
 import { useParams } from 'next/navigation';
-import { CheckCircle, XCircle, AlertCircle, Loader2, KeyRound } from 'lucide-react';
+import { CheckCircle, XCircle, AlertCircle, Loader2, KeyRound, ScanLine } from 'lucide-react';
 
 type PageState = 'loading' | 'staff_auth' | 'success' | 'already_used' | 'invalid' | 'ready';
 
@@ -15,20 +15,6 @@ interface ScanData {
   firstScannedAt?: string | null;
 }
 
-function ResetIn({ total = 3 }: { total?: number }) {
-  const [n, setN] = useState(total);
-  useEffect(() => {
-    if (n <= 0) return;
-    const id = setTimeout(() => setN(c => c - 1), 1000);
-    return () => clearTimeout(id);
-  }, [n]);
-  return (
-    <p className="text-sm mt-6 opacity-50 text-white tracking-wide">
-      Resetting in {n}s
-    </p>
-  );
-}
-
 export default function ScanValidatePage() {
   const params   = useParams();
   const ticketId = (params?.id as string) ?? '';
@@ -39,8 +25,6 @@ export default function ScanValidatePage() {
   const [codeError,  setCodeError]  = useState('');
   const [codeLoading,setCodeLoading]= useState(false);
 
-  const resetTimerRef = useRef<ReturnType<typeof setTimeout> | undefined>(undefined);
-
   // ── Validate ticket ──────────────────────────────────────────────
   // No staffCode argument — auth is carried by the ventry_staff HttpOnly cookie
   // set when staff visited their setup link in Safari. SFSafariViewController
@@ -48,7 +32,6 @@ export default function ScanValidatePage() {
   const validate = async () => {
     setState('loading');
     setScanData(null);
-    if (resetTimerRef.current) clearTimeout(resetTimerRef.current);
 
     try {
       const res = await fetch('/api/organizer/scan', {
@@ -67,25 +50,21 @@ export default function ScanValidatePage() {
       if (!res.ok || !json.success) {
         setScanData({ result: 'invalid', reason: json.error ?? 'Validation service error' });
         setState('invalid');
-        resetTimerRef.current = setTimeout(() => setState('ready'), 3000);
         return;
       }
 
       const data: ScanData = json.data;
       setScanData(data);
       setState(data.result);
-      resetTimerRef.current = setTimeout(() => setState('ready'), 3000);
     } catch {
       setScanData({ result: 'invalid', reason: 'Network error — check your connection' });
       setState('invalid');
-      resetTimerRef.current = setTimeout(() => setState('ready'), 3000);
     }
   };
 
   useEffect(() => {
     if (!ticketId) return;
     validate();
-    return () => { if (resetTimerRef.current) clearTimeout(resetTimerRef.current); };
   // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [ticketId]);
 
@@ -215,7 +194,7 @@ export default function ScanValidatePage() {
         {scanData?.eventName && (
           <p className="text-sm text-green-300 mt-3 font-medium">{scanData.eventName}</p>
         )}
-        <ResetIn />
+        <NewScanButton onClick={() => setState('ready')} />
       </Screen>
     );
   }
@@ -233,7 +212,7 @@ export default function ScanValidatePage() {
         {scanData?.attendeeName && (
           <p className="text-xl font-medium text-red-200 mt-2">{scanData.attendeeName}</p>
         )}
-        <ResetIn />
+        <NewScanButton onClick={() => setState('ready')} />
       </Screen>
     );
   }
@@ -244,7 +223,7 @@ export default function ScanValidatePage() {
       <AlertCircle size={100} strokeWidth={1.1} color="#fff" />
       <BigText color="#fff" mt>INVALID TICKET</BigText>
       {scanData?.reason && <Sub color="#fca5a5">{scanData.reason}</Sub>}
-      <ResetIn />
+      <NewScanButton onClick={() => setState('ready')} />
     </Screen>
   );
 }
@@ -288,5 +267,18 @@ function Mono({ children, color, style }: {
     <p className="text-xs mt-4 opacity-60 font-mono" style={{ color: color ?? 'inherit', ...style }}>
       {children}
     </p>
+  );
+}
+
+function NewScanButton({ onClick }: { onClick: () => void }) {
+  return (
+    <button
+      onClick={onClick}
+      className="mt-8 flex items-center gap-2 px-6 py-3 rounded-2xl font-bold text-base active:scale-95 transition-transform"
+      style={{ backgroundColor: 'rgba(255,255,255,0.2)', color: '#fff' }}
+    >
+      <ScanLine size={18} />
+      New Scan
+    </button>
   );
 }

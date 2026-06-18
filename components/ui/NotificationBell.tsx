@@ -30,7 +30,10 @@ function timeAgo(iso: string): string {
   return `${Math.floor(secs / 86400)}d ago`;
 }
 
-export function NotificationBell() {
+export function NotificationBell({ align = 'right', openUp = false }: {
+  align?:  'left' | 'right';
+  openUp?: boolean;
+}) {
   const [open,          setOpen]          = useState(false);
   const [notifications, setNotifications] = useState<Notification[]>([]);
   const [unread,        setUnread]        = useState(0);
@@ -112,7 +115,7 @@ export function NotificationBell() {
       {/* Dropdown panel */}
       {open && (
         <div
-          className="absolute right-0 top-10 z-50 w-80 rounded-xl border shadow-xl overflow-hidden"
+          className={`absolute z-50 w-80 rounded-xl border shadow-xl overflow-hidden ${openUp ? 'bottom-10' : 'top-10'} ${align === 'left' ? 'left-0' : 'right-0'}`}
           style={{
             backgroundColor: 'var(--color-surface)',
             borderColor:     'var(--color-border)',

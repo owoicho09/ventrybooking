@@ -32,6 +32,7 @@ export async function POST(
     }
     if (!complaint)                        return NextResponse.json({ error: 'Complaint not found' }, { status: 404 });
     if (complaint.status === 'resolved')   return NextResponse.json({ error: 'Complaint already resolved' }, { status: 400 });
+    if (complaint.status === 'rejected')   return NextResponse.json({ error: 'Complaint was rejected — cannot issue refund' }, { status: 400 });
 
     const { data: ticket, error: tErr } = await db
       .from('tickets')

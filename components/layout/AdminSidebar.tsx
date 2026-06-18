@@ -85,7 +85,7 @@ export function AdminSidebar() {
         className="p-3 border-t flex items-center justify-between"
         style={{ borderColor: 'var(--color-border)' }}
       >
-        <NotificationBell />
+        <NotificationBell openUp align="left" />
         <ThemeToggle />
       </div>
     </aside>
