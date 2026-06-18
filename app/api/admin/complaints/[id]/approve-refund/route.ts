@@ -3,6 +3,7 @@ import { getAuthUser } from '@/lib/server/auth';
 import { getServerSupabase } from '@/lib/supabase/server';
 import { refundTransaction } from '@/lib/server/paystack';
 import { sendRefundConfirmationEmail } from '@/lib/server/email';
+import { notify } from '@/lib/server/notify';
 
 export async function POST(
   req: NextRequest,
@@ -86,6 +87,19 @@ export async function POST(
       complaint.ticket_id,
       refundAmount,
       complaint.event_name,
+    ).catch(console.error);
+
+    const fmt = (n: number) =>
+      new Intl.NumberFormat('en-NG', { style: 'currency', currency: 'NGN', minimumFractionDigits: 0 }).format(n);
+
+    notify(
+      { type: 'admin' },
+      {
+        notifType: 'complaint',
+        title:     `Refund processed — ${complaint.event_name}`,
+        body:      `${fmt(refundAmount)} refunded to ${complaint.buyer_email} for ticket ${ticket.id}.`,
+        link:      '/admin/complaints',
+      },
     ).catch(console.error);
 
     return NextResponse.json({ success: true });

@@ -93,7 +93,17 @@ async function handleTransferSuccess(data: { reference: string; amount: number }
       body:      `${fmt(data.amount / 100)} has been sent to your bank account.`,
       link:      '/organizer/payouts',
     },
-  ).catch(err => console.error('transfer.success: notify error', err));
+  ).catch(err => console.error('transfer.success: notify organizer error', err));
+
+  notify(
+    { type: 'admin' },
+    {
+      notifType: 'payout',
+      title:     `Payout completed — ${payout.event_name}`,
+      body:      `Paystack confirmed transfer of ${fmt(data.amount / 100)} to organizer's bank account.`,
+      link:      '/admin/payouts',
+    },
+  ).catch(err => console.error('transfer.success: notify admin error', err));
 }
 
 async function handleTransferFailure(data: { reference: string }, eventType: string) {

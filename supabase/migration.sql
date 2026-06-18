@@ -42,3 +42,9 @@ CREATE INDEX IF NOT EXISTS idx_notifications_org
 --    After email verification, kyc_status → 'approved' and verified → true automatically.
 ALTER TABLE users ADD COLUMN IF NOT EXISTS email_otp TEXT;
 ALTER TABLE users ADD COLUMN IF NOT EXISTS email_otp_expires_at TIMESTAMPTZ;
+
+-- 4. Add 'cancelled' as a valid event status for bulk-refund-on-cancellation feature.
+--    The existing constraint is named events_status_check (auto-named from schema.sql).
+ALTER TABLE events DROP CONSTRAINT IF EXISTS events_status_check;
+ALTER TABLE events ADD CONSTRAINT events_status_check
+  CHECK (status IN ('under_review', 'approved', 'rejected', 'completed', 'cancelled'));

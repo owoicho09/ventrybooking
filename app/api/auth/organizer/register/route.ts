@@ -5,6 +5,7 @@ import { signAuthToken } from '@/lib/server/jwt';
 import { cookieOptions } from '@/lib/server/auth';
 import { createHash, randomInt } from 'crypto';
 import { sendOTPEmail } from '@/lib/server/email';
+import { notify } from '@/lib/server/notify';
 
 export async function POST(req: NextRequest) {
   try {
@@ -62,6 +63,16 @@ export async function POST(req: NextRequest) {
       console.error('OTP email failed on register:', emailErr);
       // Account is created; organizer can request a new code from the verify page
     }
+
+    notify(
+      { type: 'admin' },
+      {
+        notifType: 'kyc',
+        title:     'New Organizer Registered',
+        body:      `${name} (${email}) has registered and is pending email verification.`,
+        link:      '/admin/organizers',
+      },
+    ).catch(console.error);
 
     const token = signAuthToken({ sub: user.id, role: 'organizer', email: user.email });
     const res = NextResponse.json({ success: true, data: { id: user.id, name: user.name, email: user.email } });
