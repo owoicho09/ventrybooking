@@ -48,3 +48,50 @@ ALTER TABLE users ADD COLUMN IF NOT EXISTS email_otp_expires_at TIMESTAMPTZ;
 ALTER TABLE events DROP CONSTRAINT IF EXISTS events_status_check;
 ALTER TABLE events ADD CONSTRAINT events_status_check
   CHECK (status IN ('under_review', 'approved', 'rejected', 'completed', 'cancelled'));
+
+-- 5. Add 'otp_pending' as a valid payout status.
+--    The release route sets this when Paystack requires OTP before sending funds.
+--    Without this, the UPDATE in the release route silently fails in live mode,
+--    leaving the payout stuck in 'processing' with the transfer already initiated.
+ALTER TABLE payouts DROP CONSTRAINT IF EXISTS payouts_status_check;
+ALTER TABLE payouts ADD CONSTRAINT payouts_status_check
+  CHECK (status IN ('pending', 'processing', 'completed', 'otp_pending'));
+
+-- 6. Unique payout per event — required for the atomic upsert_payout function below.
+--    Safe to add: the application already enforces one payout per event logically.
+--    If this fails due to pre-existing duplicate rows, run first:
+--      DELETE FROM payouts WHERE id NOT IN (SELECT MIN(id) FROM payouts GROUP BY event_id);
+ALTER TABLE payouts DROP CONSTRAINT IF EXISTS payouts_event_id_unique;
+ALTER TABLE payouts ADD CONSTRAINT payouts_event_id_unique UNIQUE (event_id);
+
+-- 7. Atomic payout accumulator — eliminates the TOCTOU race in the JS-level
+--    read-then-write pattern where two concurrent ticket purchases for the same
+--    event could both see no existing payout row and both INSERT a duplicate.
+--    ON CONFLICT atomically adds to the existing totals instead.
+CREATE OR REPLACE FUNCTION upsert_payout(
+  p_event_id       UUID,
+  p_organizer_id   UUID,
+  p_organizer_name TEXT,
+  p_event_name     TEXT,
+  p_date           DATE,
+  p_gross          NUMERIC,
+  p_fee            NUMERIC,
+  p_net            NUMERIC
+) RETURNS VOID LANGUAGE plpgsql AS $$
+BEGIN
+  INSERT INTO payouts (event_id, organizer_id, organizer_name, event_name, date, gross, fee, net, status)
+  VALUES (p_event_id, p_organizer_id, p_organizer_name, p_event_name, p_date, p_gross, p_fee, p_net, 'pending')
+  ON CONFLICT (event_id) DO UPDATE SET
+    gross = payouts.gross + EXCLUDED.gross,
+    fee   = payouts.fee   + EXCLUDED.fee,
+    net   = payouts.net   + EXCLUDED.net;
+END;
+$$;
+
+-- 8. Clear placeholder references from unreleased payouts.
+--    The old upsertPayout JS function set a VTR-PAY-{eventId}-{timestamp} placeholder
+--    in the `reference` column for every new payout row. The release route now uses
+--    `reference IS NULL` as a distributed lock to prevent concurrent double-releases.
+--    Clearing these placeholders from pending/processing rows enables that lock.
+--    'otp_pending' and 'completed' rows keep their real Paystack transfer references.
+UPDATE payouts SET reference = NULL WHERE status IN ('pending', 'processing');

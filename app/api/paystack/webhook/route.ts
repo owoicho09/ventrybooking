@@ -120,10 +120,12 @@ async function handleTransferFailure(data: { reference: string }, eventType: str
     return;
   }
 
-  // Reset to processing so admin can investigate and retry
+  // Reset to processing and clear the reference so admin can retry the release.
+  // Clearing reference is required because the release route uses `reference IS NULL`
+  // as a distributed lock — without this, the payout would be permanently stuck.
   await db
     .from('payouts')
-    .update({ status: 'processing' })
+    .update({ status: 'processing', reference: null })
     .eq('id', payout.id);
 
   const isReversed = eventType === 'transfer.reversed';

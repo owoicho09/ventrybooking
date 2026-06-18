@@ -43,8 +43,7 @@ export async function POST(
     if (payout.status === 'completed') {
       return NextResponse.json({ error: 'Payout already completed' }, { status: 400 });
     }
-    // otp_pending means the transfer was initiated but Paystack is waiting for OTP
-    // confirmation. The transfer.success webhook will flip it to completed.
+    // otp_pending means transfer was already initiated — webhook will flip to completed.
     if (payout.status === 'otp_pending') {
       return NextResponse.json(
         { error: 'Transfer is awaiting OTP confirmation — check your Paystack dashboard to approve it' },
@@ -80,45 +79,75 @@ export async function POST(
     const releaseAmount = Math.round(payout.net * (releasePercent / 100));
     const transferRef   = generatePayoutRef();
 
-    const recipient = await createTransferRecipient({
-      type:           'nuban',
-      name:           org.account_name || org.name,
-      account_number: org.account_number,
-      bank_code:      bankCode,
-      currency:       'NGN',
-    });
+    // ATOMIC GATE — write the transfer reference to the DB BEFORE calling Paystack.
+    // `reference IS NULL` ensures only one concurrent request proceeds: if two requests
+    // arrive simultaneously, the first writes the reference and the second finds it
+    // already set — returning 409 without ever reaching the Paystack API.
+    // This prevents double-transfer caused by admin double-clicks or page refreshes
+    // between click and response.
+    const { data: locked, error: lockErr } = await db
+      .from('payouts')
+      .update({ reference: transferRef, released_at: new Date().toISOString() })
+      .eq('id', id)
+      .eq('status', 'processing')
+      .is('reference', null)
+      .select('id');
 
-    const transfer = await initiateTransfer({
-      source:    'balance',
-      amount:    releaseAmount * 100, // kobo
-      recipient: recipient.recipient_code,
-      reason:    `Ventry payout for ${payout.event_name}`,
-      reference: transferRef,
-    });
+    if (lockErr) {
+      console.error('release payout: lock error', lockErr);
+      return NextResponse.json({ error: 'Database error' }, { status: 500 });
+    }
+    if (!locked || locked.length === 0) {
+      return NextResponse.json(
+        { error: 'A release is already in progress for this payout — refresh to check the current status.' },
+        { status: 409 },
+      );
+    }
 
-    // In live mode without OTP disabled, Paystack returns status='otp' — the transfer
-    // is queued but not yet sent. We store the reference now so the transfer.success
-    // webhook can find and complete this payout row. We do NOT mark it completed until
-    // Paystack confirms via webhook. In test mode (or with OTP disabled) status='success'
-    // and the webhook will still arrive, which is idempotent.
+    // Only one request reaches this point per payout. Call Paystack now.
+    let transfer;
+    try {
+      const recipient = await createTransferRecipient({
+        type:           'nuban',
+        name:           org.account_name || org.name,
+        account_number: org.account_number,
+        bank_code:      bankCode,
+        currency:       'NGN',
+      });
+
+      transfer = await initiateTransfer({
+        source:    'balance',
+        amount:    releaseAmount * 100,  // kobo
+        recipient: recipient.recipient_code,
+        reason:    `Ventry payout for ${payout.event_name}`,
+        reference: transferRef,
+      });
+    } catch (err) {
+      console.error('release payout: Paystack error', err);
+      // Revert the lock so admin can retry after fixing the underlying issue.
+      // Use `.eq('reference', transferRef)` so we only touch our own lock,
+      // not a legitimate concurrent one that somehow won after us.
+      await db.from('payouts')
+        .update({ reference: null, released_at: null })
+        .eq('id', id)
+        .eq('reference', transferRef);
+      return NextResponse.json({ error: 'Failed to initiate Paystack transfer' }, { status: 502 });
+    }
+
+    // Reference is already stored from the lock step. Now update the status.
     const transferStatus  = (transfer as { status?: string }).status;
     const newPayoutStatus = transferStatus === 'success' ? 'completed' : 'otp_pending';
 
-    // Atomic guard: only update if status is still 'processing'. A concurrent release
-    // request winning the race will find 0 rows and receive a conflict response.
-    const { data: updated } = await db
+    const { error: statusErr } = await db
       .from('payouts')
-      .update({
-        status:      newPayoutStatus,
-        reference:   transferRef,
-        released_at: new Date().toISOString(),
-      })
+      .update({ status: newPayoutStatus })
       .eq('id', id)
-      .eq('status', 'processing')
-      .select('id');
+      .eq('reference', transferRef);
 
-    if (!updated || updated.length === 0) {
-      return NextResponse.json({ error: 'Payout was already released by a concurrent request' }, { status: 409 });
+    if (statusErr) {
+      // Transfer is already initiated — log the error but don't fail the response.
+      // The transfer.success or transfer.failed webhook will correct the status.
+      console.error('release payout: status update error — transfer is already initiated', statusErr);
     }
 
     const fmt = (n: number) =>
@@ -135,7 +164,6 @@ export async function POST(
         },
       ).catch(err => console.error('release payout: notify error', err));
     } else {
-      // OTP confirmation pending — notify organizer to expect a delay
       notify(
         { type: 'organizer', id: payout.organizer_id },
         {

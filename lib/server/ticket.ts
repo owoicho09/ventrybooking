@@ -150,36 +150,26 @@ async function upsertPayout(
   fee: number,
   net: number,
 ) {
-  const { data: existing } = await db
-    .from('payouts')
-    .select('id, gross, fee, net')
-    .eq('event_id', eventId)
-    .eq('status', 'pending')
+  // Fetch organiser name for the initial INSERT (the ON CONFLICT path doesn't need it).
+  const { data: org } = await db
+    .from('users')
+    .select('name')
+    .eq('id', eventRow.organizer_id)
     .maybeSingle();
 
-  if (existing) {
-    await db.from('payouts').update({
-      gross: existing.gross + subtotal,
-      fee:   existing.fee   + fee,
-      net:   existing.net   + net,
-    }).eq('id', existing.id);
-  } else {
-    const { data: org } = await db
-      .from('users')
-      .select('name')
-      .eq('id', eventRow.organizer_id)
-      .maybeSingle();
-    await db.from('payouts').insert({
-      event_id:       eventId,
-      organizer_id:   eventRow.organizer_id,
-      organizer_name: org?.name || '',
-      event_name:     eventRow.event_name,
-      date:           eventRow.date,
-      gross:          subtotal,
-      fee,
-      net,
-      status:         'pending',
-      reference:      `VTR-PAY-${eventId.slice(0, 8)}-${Date.now()}`,
-    });
-  }
+  // upsert_payout is an atomic Postgres function (migration section 7).
+  // It does INSERT ... ON CONFLICT (event_id) DO UPDATE gross += ..., eliminating
+  // the read-then-write TOCTOU race present in the old JS SELECT + INSERT/UPDATE pattern.
+  // `reference` is intentionally omitted — the release route sets it as a distributed
+  // lock (IS NULL guard) before calling Paystack, preventing concurrent double-transfers.
+  await db.rpc('upsert_payout', {
+    p_event_id:       eventId,
+    p_organizer_id:   eventRow.organizer_id,
+    p_organizer_name: org?.name ?? '',
+    p_event_name:     eventRow.event_name,
+    p_date:           eventRow.date,
+    p_gross:          subtotal,
+    p_fee:            fee,
+    p_net:            net,
+  });
 }

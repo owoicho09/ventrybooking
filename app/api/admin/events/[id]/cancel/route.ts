@@ -34,7 +34,7 @@ export async function GET(
     .eq('event_id', id)
     .neq('status', 'refunded');
 
-  const ticketCount = tickets?.length ?? 0;
+  const ticketCount     = tickets?.length ?? 0;
   const refundableCount = tickets?.filter(t => t.paystack_reference).length ?? 0;
 
   let totalRefund = 0;
@@ -79,8 +79,19 @@ export async function POST(
     return NextResponse.json({ error: 'Only approved events can be cancelled' }, { status: 400 });
   }
 
-  // Mark event cancelled before processing refunds so no new tickets can be sold
-  await db.from('events').update({ status: 'cancelled' }).eq('id', id);
+  // Mark event cancelled BEFORE processing refunds so no new tickets can be sold.
+  // Check the error — if the DB update fails, abort rather than refunding an event
+  // that is still technically live.
+  const { error: cancelErr } = await db
+    .from('events')
+    .update({ status: 'cancelled' })
+    .eq('id', id)
+    .eq('status', 'approved'); // guard against concurrent cancel requests
+
+  if (cancelErr) {
+    console.error('cancel event: failed to update event status', cancelErr);
+    return NextResponse.json({ error: 'Failed to cancel event — database error' }, { status: 500 });
+  }
 
   const { data: tickets } = await db
     .from('tickets')
@@ -92,13 +103,13 @@ export async function POST(
     notify({ type: 'admin' }, {
       notifType: 'event',
       title: `Event cancelled — ${event.event_name}`,
-      body: 'No tickets were outstanding; no refunds required.',
+      body: 'No outstanding tickets; no refunds required.',
       link: '/admin/events',
     }).catch(console.error);
     return NextResponse.json({ success: true, data: { refunded: 0, failed: 0, failures: [] } });
   }
 
-  // Build tier price map so each ticket refund uses the canonical base price (not total_paid)
+  // Build tier price map so each refund uses the canonical base price (not total_paid).
   const tierIds = [...new Set(tickets.map(t => t.tier_id).filter(Boolean))] as string[];
   const { data: tiers } = await db.from('ticket_tiers').select('id, price').in('id', tierIds);
   const tierMap = Object.fromEntries((tiers ?? []).map(t => [t.id, t.price]));
@@ -107,28 +118,46 @@ export async function POST(
   const failures: { ticketId: string; email: string; reason: string }[] = [];
 
   for (const ticket of tickets) {
-    if (!ticket.paystack_reference) {
-      failures.push({ ticketId: ticket.id, email: ticket.buyer_email, reason: 'No payment reference on file' });
-      continue;
-    }
-
     const refundAmount = tierMap[ticket.tier_id] ?? 0;
-    if (refundAmount <= 0) {
-      failures.push({ ticketId: ticket.id, email: ticket.buyer_email, reason: 'Could not determine tier price' });
-      continue;
-    }
 
-    try {
-      await refundTransaction({ transaction: ticket.paystack_reference, amount: refundAmount * 100 });
+    // Free ticket — mark refunded without a Paystack call.
+    if (refundAmount === 0 || !ticket.paystack_reference) {
+      if (refundAmount > 0 && !ticket.paystack_reference) {
+        // Paid ticket with no payment reference — cannot auto-refund, needs manual action.
+        failures.push({ ticketId: ticket.id, email: ticket.buyer_email, reason: 'No payment reference on file — refund manually via Paystack dashboard' });
+        continue;
+      }
       await db.from('tickets').update({ status: 'refunded' }).eq('id', ticket.id);
       refunded++;
+      continue;
+    }
+
+    // Paid ticket — call Paystack first, then update DB.
+    // These two steps are intentionally separated so that a DB failure after a
+    // successful Paystack call does NOT add the ticket to `failures` (which would
+    // mislead admin into retrying the Paystack refund and double-refunding the buyer).
+    try {
+      await refundTransaction({ transaction: ticket.paystack_reference, amount: refundAmount * 100 });
     } catch (err) {
+      // Paystack rejected the refund — safe to retry this ticket later.
       const reason = err instanceof Error ? err.message : 'Paystack refund failed';
       failures.push({ ticketId: ticket.id, email: ticket.buyer_email, reason });
+      continue;
     }
+
+    // Paystack refund confirmed. Update DB status — if this fails, log it but still
+    // count as refunded so admin doesn't accidentally trigger a second Paystack refund.
+    const { error: updateErr } = await db
+      .from('tickets')
+      .update({ status: 'refunded' })
+      .eq('id', ticket.id);
+
+    if (updateErr) {
+      console.error(`cancel event: Paystack refund succeeded but DB update failed for ticket ${ticket.id}`, updateErr);
+    }
+    refunded++;
   }
 
-  // Notify organiser their event was cancelled
   notify({ type: 'organizer', id: event.organizer_id }, {
     notifType: 'event',
     title: `Event cancelled — ${event.event_name}`,
@@ -136,7 +165,6 @@ export async function POST(
     link: '/organizer/events',
   }).catch(console.error);
 
-  // Notify admin feed so the bell shows this action
   notify({ type: 'admin' }, {
     notifType: 'event',
     title: `Event cancelled — ${event.event_name}`,
