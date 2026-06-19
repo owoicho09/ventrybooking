@@ -45,12 +45,13 @@ export default function EventDetailPage() {
     setQuantities(prev => ({ ...prev, [tierId]: Math.max(0, Math.min(Math.min(10, remaining), (prev[tierId] ?? 0) + delta)) }));
   };
 
-  const subtotal   = event ? event.tiers.reduce((sum, tier) => sum + tier.price * (quantities[tier.id] ?? 0), 0) : 0;
-  const serviceFee = subtotal > 0 ? 100 : 0;
-  const total      = subtotal + serviceFee;
-  const hasSelection = subtotal > 0;
-
-  const selectedTiers = event ? event.tiers.filter(t => (quantities[t.id] ?? 0) > 0) : [];
+  const selectedTiers    = event ? event.tiers.filter(t => (quantities[t.id] ?? 0) > 0) : [];
+  const totalQty         = selectedTiers.reduce((s, t) => s + (quantities[t.id] ?? 0), 0);
+  const hasSelection     = totalQty > 0;
+  const allFree          = hasSelection && selectedTiers.every(t => t.price === 0);
+  const subtotal         = selectedTiers.reduce((s, t) => s + t.price * (quantities[t.id] ?? 0), 0);
+  const serviceFee       = subtotal > 0 ? 100 : 0;
+  const total            = subtotal + serviceFee;
   const multiTierWarning = selectedTiers.length > 1;
 
   const handlePurchase = async () => {
@@ -188,7 +189,9 @@ export default function EventDetailPage() {
                         <div className="flex items-center justify-between mb-2">
                           <div>
                             <p className="font-medium text-sm" style={{ color: 'var(--color-text)' }}>{tier.name}</p>
-                            <p className="text-base font-bold" style={{ color: 'var(--color-text)' }}>{formatNGN(tier.price)}</p>
+                            <p className="text-base font-bold" style={{ color: tier.price === 0 ? 'var(--color-green)' : 'var(--color-text)' }}>
+                              {tier.price === 0 ? 'Free' : formatNGN(tier.price)}
+                            </p>
                           </div>
                           {isSoldOut ? <Badge variant="gray">Sold Out</Badge> : (
                             <div className="flex items-center gap-2">
@@ -206,14 +209,23 @@ export default function EventDetailPage() {
 
                 {hasSelection && (
                   <div className="rounded-lg border p-4 flex flex-col gap-2 text-sm" style={{ borderColor: 'var(--color-border)', backgroundColor: 'var(--color-surface-2)' }}>
-                    <div className="flex justify-between"><span style={{ color: 'var(--color-text-muted)' }}>Subtotal</span><span style={{ color: 'var(--color-text)' }}>{formatNGN(subtotal)}</span></div>
-                    <div className="flex justify-between"><span style={{ color: 'var(--color-text-muted)' }}>Ventry service fee</span><span style={{ color: 'var(--color-text)' }}>{formatNGN(serviceFee)}</span></div>
-                    <div className="flex justify-between font-semibold pt-2 border-t" style={{ borderColor: 'var(--color-border)' }}>
-                      <span style={{ color: 'var(--color-text)' }}>Total</span><span style={{ color: 'var(--color-text)' }}>{formatNGN(total)}</span>
-                    </div>
-                    <p className="text-[10px] leading-snug mt-1" style={{ color: 'var(--color-text-dim)' }}>
-                      The ₦100 service fee is non-refundable — only the base ticket price is refundable. Paystack deducts their 1.5% processing fee on their end; this is not added to your total.
-                    </p>
+                    {allFree ? (
+                      <div className="flex justify-between font-semibold" style={{ color: 'var(--color-text)' }}>
+                        <span>Total</span>
+                        <span style={{ color: 'var(--color-green)' }}>Free</span>
+                      </div>
+                    ) : (
+                      <>
+                        <div className="flex justify-between"><span style={{ color: 'var(--color-text-muted)' }}>Subtotal</span><span style={{ color: 'var(--color-text)' }}>{formatNGN(subtotal)}</span></div>
+                        <div className="flex justify-between"><span style={{ color: 'var(--color-text-muted)' }}>Ventry service fee</span><span style={{ color: 'var(--color-text)' }}>{formatNGN(serviceFee)}</span></div>
+                        <div className="flex justify-between font-semibold pt-2 border-t" style={{ borderColor: 'var(--color-border)' }}>
+                          <span style={{ color: 'var(--color-text)' }}>Total</span><span style={{ color: 'var(--color-text)' }}>{formatNGN(total)}</span>
+                        </div>
+                        <p className="text-[10px] leading-snug mt-1" style={{ color: 'var(--color-text-dim)' }}>
+                          The ₦100 service fee is non-refundable — only the base ticket price is refundable. Paystack deducts their 1.5% processing fee on their end; this is not added to your total.
+                        </p>
+                      </>
+                    )}
                   </div>
                 )}
 
@@ -225,9 +237,11 @@ export default function EventDetailPage() {
                   </div>
                 )}
                 <Button fullWidth size="lg" disabled={!hasSelection || checkingOut} onClick={handlePurchase}>
-                  {checkingOut ? 'Loading…' : 'Purchase Tickets'}
+                  {checkingOut ? 'Loading…' : allFree ? 'Get Free Tickets' : 'Purchase Tickets'}
                 </Button>
-                <p className="text-xs text-center leading-relaxed" style={{ color: 'var(--color-text-dim)' }}>Your payment is held in escrow until the event happens. Full refund if cancelled.</p>
+                {!allFree && (
+                  <p className="text-xs text-center leading-relaxed" style={{ color: 'var(--color-text-dim)' }}>Your payment is held in escrow until the event happens. Full refund if cancelled.</p>
+                )}
               </div>
             </div>
           </div>
