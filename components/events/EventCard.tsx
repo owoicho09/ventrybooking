@@ -27,7 +27,8 @@ const tierColors: Record<string, string> = {
 };
 
 export function EventCard({ event }: EventCardProps) {
-  const minPrice = Math.min(...event.tiers.map((t) => t.price));
+  const minPrice  = event.tiers.length ? Math.min(...event.tiers.map((t) => t.price)) : 0;
+  const freeTier  = minPrice === 0 ? (event.tiers.find(t => t.price === 0) ?? null) : null;
 
   return (
     <div
@@ -148,10 +149,17 @@ export function EventCard({ event }: EventCardProps) {
         {/* Price + CTA */}
         <div className="flex items-center justify-between mt-auto pt-3 border-t" style={{ borderColor: 'var(--color-border)' }}>
           <div>
-            <p className="text-[10px] uppercase tracking-wider" style={{ color: 'var(--color-text-dim)' }}>From</p>
-            <p className="text-base font-bold" style={{ color: 'var(--color-text)' }}>
-              {formatNGN(minPrice)}
-            </p>
+            {freeTier ? (
+              <>
+                <p className="text-[10px] uppercase tracking-wider" style={{ color: 'var(--color-text-dim)' }}>{freeTier.name}</p>
+                <p className="text-base font-bold" style={{ color: 'var(--color-green)' }}>Free</p>
+              </>
+            ) : (
+              <>
+                <p className="text-[10px] uppercase tracking-wider" style={{ color: 'var(--color-text-dim)' }}>From</p>
+                <p className="text-base font-bold" style={{ color: 'var(--color-text)' }}>{formatNGN(minPrice)}</p>
+              </>
+            )}
           </div>
           <Link href={`/events/${event.id}`}>
             <Button size="sm">Get Tickets</Button>
