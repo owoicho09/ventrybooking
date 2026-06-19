@@ -3,6 +3,7 @@ import { getAuthUser } from '@/lib/server/auth';
 import { getServerSupabase } from '@/lib/supabase/server';
 import { refundTransaction } from '@/lib/server/paystack';
 import { notify } from '@/lib/server/notify';
+import { calculateFees } from '@/lib/server/fees';
 
 // GET — preview: count of refundable tickets + total refund amount (no side effects)
 export async function GET(
@@ -115,47 +116,86 @@ export async function POST(
   const tierMap = Object.fromEntries((tiers ?? []).map(t => [t.id, t.price]));
 
   let refunded = 0;
+  let totalRefundedAmount = 0;
   const failures: { ticketId: string; email: string; reason: string }[] = [];
 
-  for (const ticket of tickets) {
+  // Free tickets (no reference) — mark refunded without a Paystack call.
+  const freeTickets  = tickets.filter(t => !t.paystack_reference);
+  const paidTickets  = tickets.filter(t =>  t.paystack_reference);
+
+  for (const ticket of freeTickets) {
     const refundAmount = tierMap[ticket.tier_id] ?? 0;
-
-    // Free ticket — mark refunded without a Paystack call.
-    if (refundAmount === 0 || !ticket.paystack_reference) {
-      if (refundAmount > 0 && !ticket.paystack_reference) {
-        // Paid ticket with no payment reference — cannot auto-refund, needs manual action.
-        failures.push({ ticketId: ticket.id, email: ticket.buyer_email, reason: 'No payment reference on file — refund manually via Paystack dashboard' });
-        continue;
-      }
-      await db.from('tickets').update({ status: 'refunded' }).eq('id', ticket.id);
-      refunded++;
+    if (refundAmount > 0) {
+      failures.push({ ticketId: ticket.id, email: ticket.buyer_email, reason: 'No payment reference on file — refund manually via Paystack dashboard' });
       continue;
     }
-
-    // Paid ticket — call Paystack first, then update DB.
-    // These two steps are intentionally separated so that a DB failure after a
-    // successful Paystack call does NOT add the ticket to `failures` (which would
-    // mislead admin into retrying the Paystack refund and double-refunding the buyer).
-    try {
-      await refundTransaction({ transaction: ticket.paystack_reference, amount: refundAmount * 100 });
-    } catch (err) {
-      // Paystack rejected the refund — safe to retry this ticket later.
-      const reason = err instanceof Error ? err.message : 'Paystack refund failed';
-      failures.push({ ticketId: ticket.id, email: ticket.buyer_email, reason });
-      continue;
-    }
-
-    // Paystack refund confirmed. Update DB status — if this fails, log it but still
-    // count as refunded so admin doesn't accidentally trigger a second Paystack refund.
-    const { error: updateErr } = await db
-      .from('tickets')
-      .update({ status: 'refunded' })
-      .eq('id', ticket.id);
-
-    if (updateErr) {
-      console.error(`cancel event: Paystack refund succeeded but DB update failed for ticket ${ticket.id}`, updateErr);
-    }
+    await db.from('tickets').update({ status: 'refunded' }).eq('id', ticket.id);
     refunded++;
+  }
+
+  // Group paid tickets by paystack_reference so that multi-ticket orders placed in
+  // one transaction receive a SINGLE Paystack refund call. Calling Paystack once per
+  // ticket row on the same reference causes the second call to be rejected while the
+  // first refund is still pending, leaving the buyer short-changed.
+  const byReference = new Map<string, typeof paidTickets>();
+  for (const ticket of paidTickets) {
+    const ref = ticket.paystack_reference!;
+    if (!byReference.has(ref)) byReference.set(ref, []);
+    byReference.get(ref)!.push(ticket);
+  }
+
+  for (const [reference, group] of byReference) {
+    const totalRefundAmount = group.reduce((sum, t) => sum + (tierMap[t.tier_id] ?? 0), 0);
+
+    if (totalRefundAmount === 0) {
+      // All tickets in this order were free-tier — mark refunded without Paystack.
+      for (const ticket of group) {
+        await db.from('tickets').update({ status: 'refunded' }).eq('id', ticket.id);
+        refunded++;
+      }
+      continue;
+    }
+
+    // One Paystack refund call for the entire order (covers all tickets in the group).
+    try {
+      await refundTransaction({ transaction: reference, amount: totalRefundAmount * 100 });
+    } catch (err) {
+      const reason = err instanceof Error ? err.message : 'Paystack refund failed';
+      for (const ticket of group) {
+        failures.push({ ticketId: ticket.id, email: ticket.buyer_email, reason });
+      }
+      continue;
+    }
+
+    // Mark all tickets in the group as refunded. Log DB failures but don't surface
+    // them as refund failures — the Paystack refund already succeeded and retrying
+    // would double-refund the buyer.
+    for (const ticket of group) {
+      const { error: updateErr } = await db
+        .from('tickets')
+        .update({ status: 'refunded' })
+        .eq('id', ticket.id);
+      if (updateErr) {
+        console.error(`cancel event: Paystack refund succeeded but DB update failed for ticket ${ticket.id}`, updateErr);
+      }
+      refunded++;
+    }
+    totalRefundedAmount += totalRefundAmount;
+  }
+
+  // Reduce the payout record by the total amount successfully refunded to buyers.
+  if (totalRefundedAmount > 0) {
+    const { data: payout } = await db
+      .from('payouts')
+      .select('id, gross')
+      .eq('event_id', id)
+      .maybeSingle();
+
+    if (payout) {
+      const newGross = Math.max(0, payout.gross - totalRefundedAmount);
+      const { fee, net } = calculateFees(newGross);
+      await db.from('payouts').update({ gross: newGross, fee, net }).eq('id', payout.id);
+    }
   }
 
   notify({ type: 'organizer', id: event.organizer_id }, {

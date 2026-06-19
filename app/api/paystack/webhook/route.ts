@@ -18,7 +18,8 @@ export async function POST(req: NextRequest) {
   if (event.event === 'charge.success') {
     const { reference, metadata, amount, customer } = event.data;
     const { eventId, tierId, buyerEmail, buyerName } = metadata || {};
-    const quantity = Number(metadata?.quantity) || 1;
+    const quantity        = Number(metadata?.quantity) || 1;
+    const marketingConsent = metadata?.marketingConsent === true;
 
     if (!eventId || !tierId) {
       console.error('Webhook: missing eventId or tierId in metadata', { reference });
@@ -35,6 +36,7 @@ export async function POST(req: NextRequest) {
         buyerEmail,
         buyerName,
         customerEmail: customer?.email,
+        marketingConsent,
       });
     } catch (err) {
       console.error('Webhook: createTicketFromPayment error', err);
@@ -78,7 +80,6 @@ async function handleTransferSuccess(data: { reference: string; amount: number }
     return;
   }
 
-  // Idempotent: only update if not already completed (webhook may fire more than once)
   await db
     .from('payouts')
     .update({ status: 'completed' })
@@ -120,9 +121,6 @@ async function handleTransferFailure(data: { reference: string }, eventType: str
     return;
   }
 
-  // Reset to processing and clear the reference so admin can retry the release.
-  // Clearing reference is required because the release route uses `reference IS NULL`
-  // as a distributed lock — without this, the payout would be permanently stuck.
   await db
     .from('payouts')
     .update({ status: 'processing', reference: null })

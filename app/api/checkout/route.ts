@@ -6,7 +6,7 @@ import { v4 as uuidv4 } from 'uuid';
 
 export async function POST(req: NextRequest) {
   try {
-    const { eventId, tierId, quantity, buyerEmail, buyerName } = await req.json();
+    const { eventId, tierId, quantity, buyerEmail, buyerName, marketingConsent } = await req.json();
 
     if (!eventId || !tierId || !quantity || !buyerEmail) {
       return NextResponse.json({ error: 'Missing required fields' }, { status: 400 });
@@ -43,6 +43,9 @@ export async function POST(req: NextRequest) {
     if (!tier) {
       return NextResponse.json({ error: 'Ticket tier not found' }, { status: 404 });
     }
+    if (tier.price === 0) {
+      return NextResponse.json({ error: 'Use the free checkout endpoint for free tickets' }, { status: 400 });
+    }
 
     const remaining = tier.available - tier.sold;
     if (remaining < quantity) {
@@ -65,7 +68,8 @@ export async function POST(req: NextRequest) {
         tierId,
         quantity,
         buyerEmail,
-        buyerName:     buyerName || '',
+        buyerName:        buyerName || '',
+        marketingConsent: marketingConsent === true,
         subtotal,
         serviceFee: SERVICE_FEE,
         total,
@@ -76,16 +80,17 @@ export async function POST(req: NextRequest) {
     try {
       await db.from('pending_orders').insert({
         reference,
-        event_id: eventId,
-        tier_id: tierId,
+        event_id:         eventId,
+        tier_id:          tierId,
         quantity,
-        buyer_email: buyerEmail,
-        buyer_name: buyerName || '',
+        buyer_email:      buyerEmail,
+        buyer_name:       buyerName || '',
         subtotal,
-        service_fee:    SERVICE_FEE,
+        service_fee:      SERVICE_FEE,
         total,
-        organizer_id: event.organizer_id,
-        created_at: new Date().toISOString(),
+        organizer_id:     event.organizer_id,
+        marketing_consent: marketingConsent === true,
+        created_at:       new Date().toISOString(),
       });
     } catch { /* non-critical */ }
 

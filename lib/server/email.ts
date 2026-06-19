@@ -7,7 +7,6 @@ const APP_URL = process.env.NEXT_PUBLIC_APP_URL!;
 const esc = (s: string) =>
   s.replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/"/g, '&quot;');
 
-// Shared email wrapper — light-mode safe dark card on white body
 function emailShell(content: string) {
   return `<!DOCTYPE html>
 <html lang="en">
@@ -35,7 +34,6 @@ function emailShell(content: string) {
 export async function sendTicketEmail(params: {
   to: string;
   buyerName: string;
-  /** One entry per individual ticket purchased. */
   tickets: Array<{ ticketId: string; refundCode: string }>;
   paystackRef: string;
   eventName: string;
@@ -106,7 +104,7 @@ export async function sendTicketEmail(params: {
           <strong>Ticket&nbsp;Type:</strong> ${params.tierName} &times; ${count}
         </p>
         <p style="margin:4px 0;color:#f1f0ff;font-size:13px;">
-          <strong>Total&nbsp;Paid:</strong> ${fmt(params.totalPaid)}
+          <strong>Total&nbsp;Paid:</strong> ${params.totalPaid === 0 ? 'Free' : fmt(params.totalPaid)}
         </p>
       </td></tr>
     </table>
@@ -226,5 +224,59 @@ export async function sendPasswordResetEmail(to: string, resetToken: string) {
       <a href="${resetUrl}" class="btn">Reset Password</a>
       <p class="footer">If you didn't request this, ignore this email — your password won't change.</p>
     `),
+  });
+}
+
+export async function sendReminderEmail(params: {
+  to: string;
+  buyerName: string;
+  ticketId: string;
+  eventName: string;
+  eventDate: string;
+  eventTime: string;
+  eventVenue: string;
+  eventCity: string;
+  reminderType: '1_week' | '1_day' | '3_hours';
+}) {
+  const labels = {
+    '1_week':   { subject: `Reminder: "${params.eventName}" is in 1 week`, heading: 'Your event is 1 week away', badge: '1 WEEK TO GO' },
+    '1_day':    { subject: `Reminder: "${params.eventName}" is tomorrow`, heading: "Your event is tomorrow", badge: 'TOMORROW' },
+    '3_hours':  { subject: `Reminder: "${params.eventName}" is today`, heading: 'Your event is today', badge: 'TODAY' },
+  };
+
+  const { subject, heading, badge } = labels[params.reminderType];
+
+  const html = emailShell(`
+    <p style="display:inline-block;background:#7c3aed;color:#fff;font-size:11px;font-weight:700;
+       letter-spacing:0.08em;padding:3px 10px;border-radius:20px;margin:0 0 16px;">${badge}</p>
+    <h1 style="color:#a855f7;font-size:22px;margin:0 0 6px;">${heading}</h1>
+    <p class="label" style="margin:0 0 24px;">Hi ${esc(params.buyerName || params.to)}, don't forget — your event is coming up soon.</p>
+
+    <table width="100%" cellpadding="0" cellspacing="0"
+      style="background:#12121a;border:1px solid #2d2d3d;border-radius:8px;margin-bottom:24px;">
+      <tr><td style="padding:20px;">
+        <p style="font-size:17px;font-weight:700;margin:0 0 8px;color:#f1f0ff;">${esc(params.eventName)}</p>
+        <p style="margin:4px 0;color:#9ca3af;font-size:13px;">
+          <strong style="color:#f1f0ff;">Date:</strong> ${esc(params.eventDate)}
+        </p>
+        <p style="margin:4px 0;color:#9ca3af;font-size:13px;">
+          <strong style="color:#f1f0ff;">Time:</strong> ${esc(params.eventTime)}
+        </p>
+        <p style="margin:4px 0;color:#9ca3af;font-size:13px;">
+          <strong style="color:#f1f0ff;">Venue:</strong> ${esc(params.eventVenue)}, ${esc(params.eventCity)}
+        </p>
+      </td></tr>
+    </table>
+
+    <a href="${APP_URL}/ticket/${params.ticketId}" class="btn" style="margin-bottom:16px;">View My Ticket</a>
+    <br/>
+    <p class="footer">You received this reminder because you purchased a ticket on Ventry.</p>
+  `);
+
+  await resend.emails.send({
+    from: `Ventry <${FROM}>`,
+    to: params.to,
+    subject,
+    html,
   });
 }

@@ -13,6 +13,7 @@ export interface PaymentData {
   buyerEmail?: string;
   buyerName?: string;
   customerEmail?: string;
+  marketingConsent?: boolean;
 }
 
 /**
@@ -29,15 +30,12 @@ export async function createTicketFromPayment(p: PaymentData): Promise<string | 
   const db = getServerSupabase();
 
   // ── Atomic idempotency claim ─────────────────────────────────────
-  // INSERT into purchases is atomic. Only one concurrent caller can succeed;
-  // the other receives error code 23505 (unique_violation) and bails out.
   const { error: claimErr } = await db
     .from('purchases')
     .insert({ paystack_reference: p.reference, created_at: new Date().toISOString() });
 
   if (claimErr) {
     if (claimErr.code === '23505') {
-      // Another request already processed this payment — return the first ticket
       const { data: first } = await db
         .from('tickets')
         .select('id')
@@ -74,15 +72,14 @@ export async function createTicketFromPayment(p: PaymentData): Promise<string | 
 
   const qty = Math.max(1, p.quantity);
 
-  // Split total_paid evenly across tickets using integer kobo arithmetic so the
-  // sum of all per-ticket total_paid equals the original transaction amount exactly.
-  const baseKobo    = Math.floor(p.totalPaidKobo / qty);
-  const lastKobo    = p.totalPaidKobo - baseKobo * (qty - 1);
+  const baseKobo = Math.floor(p.totalPaidKobo / qty);
+  const lastKobo = p.totalPaidKobo - baseKobo * (qty - 1);
 
   const subtotal    = tierRow.price * qty;
   const { fee, net } = calculateFees(subtotal);
   const email       = (p.buyerEmail || p.customerEmail || '').toLowerCase().trim();
   const purchasedAt = new Date().toISOString();
+  const consent     = p.marketingConsent === true;
 
   const ticketIds: string[]   = [];
   const refundCodes: string[] = [];
@@ -105,6 +102,7 @@ export async function createTicketFromPayment(p: PaymentData): Promise<string | 
     refund_code:        refundCodes[i],
     qr_token:           id,
     paystack_reference: p.reference,
+    marketing_consent:  consent,
   }));
 
   await db.from('tickets').insert(rows);
@@ -114,7 +112,6 @@ export async function createTicketFromPayment(p: PaymentData): Promise<string | 
     upsertPayout(db, p.eventId, eventRow, subtotal, fee, net),
   ]);
 
-  // Notify the organizer of the new purchase (fire-and-forget — non-blocking)
   notify(
     { type: 'organizer', id: eventRow.organizer_id },
     {
@@ -125,8 +122,6 @@ export async function createTicketFromPayment(p: PaymentData): Promise<string | 
     },
   ).catch(err => console.error('createTicketFromPayment: notify error', err));
 
-  // Fire-and-forget — email failure must never block the webhook response.
-  // The ticket page at /ticket/{id} always shows the QR so buyers can recover.
   sendTicketEmail({
     to:          email,
     buyerName:   p.buyerName || '',
@@ -150,18 +145,12 @@ async function upsertPayout(
   fee: number,
   net: number,
 ) {
-  // Fetch organiser name for the initial INSERT (the ON CONFLICT path doesn't need it).
   const { data: org } = await db
     .from('users')
     .select('name')
     .eq('id', eventRow.organizer_id)
     .maybeSingle();
 
-  // upsert_payout is an atomic Postgres function (migration section 7).
-  // It does INSERT ... ON CONFLICT (event_id) DO UPDATE gross += ..., eliminating
-  // the read-then-write TOCTOU race present in the old JS SELECT + INSERT/UPDATE pattern.
-  // `reference` is intentionally omitted — the release route sets it as a distributed
-  // lock (IS NULL guard) before calling Paystack, preventing concurrent double-transfers.
   await db.rpc('upsert_payout', {
     p_event_id:       eventId,
     p_organizer_id:   eventRow.organizer_id,
