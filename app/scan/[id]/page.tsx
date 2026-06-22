@@ -1,8 +1,8 @@
 'use client';
 
 import { useEffect, useState } from 'react';
-import { useParams } from 'next/navigation';
-import { CheckCircle, XCircle, AlertCircle, Loader2, KeyRound, ScanLine } from 'lucide-react';
+import { useParams, useRouter } from 'next/navigation';
+import { CheckCircle, XCircle, AlertCircle, Loader2, KeyRound, ScanLine, Keyboard } from 'lucide-react';
 
 type PageState = 'loading' | 'staff_auth' | 'success' | 'already_used' | 'invalid' | 'ready';
 
@@ -17,13 +17,16 @@ interface ScanData {
 
 export default function ScanValidatePage() {
   const params   = useParams();
+  const router   = useRouter();
   const ticketId = (params?.id as string) ?? '';
 
-  const [state,      setState]      = useState<PageState>('loading');
-  const [scanData,   setScanData]   = useState<ScanData | null>(null);
-  const [codeInput,  setCodeInput]  = useState('');
-  const [codeError,  setCodeError]  = useState('');
-  const [codeLoading,setCodeLoading]= useState(false);
+  const [state,       setState]       = useState<PageState>('loading');
+  const [scanData,    setScanData]    = useState<ScanData | null>(null);
+  const [codeInput,   setCodeInput]   = useState('');
+  const [codeError,   setCodeError]   = useState('');
+  const [codeLoading, setCodeLoading] = useState(false);
+  const [manualRaw,   setManualRaw]   = useState('');
+  const [manualErr,   setManualErr]   = useState('');
 
   // ── Validate ticket ──────────────────────────────────────────────
   // No staffCode argument — auth is carried by the ventry_staff HttpOnly cookie
@@ -68,16 +71,31 @@ export default function ScanValidatePage() {
   // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [ticketId]);
 
-  // Auto-reset to ready after 3 seconds on any result
-  useEffect(() => {
-    if (state !== 'success' && state !== 'already_used' && state !== 'invalid') return;
-    const t = setTimeout(() => setState('ready'), 3000);
-    return () => clearTimeout(t);
-  }, [state]);
+  // ── Manual ticket ID entry ────────────────────────────────────────
+  const manualDisplay = manualRaw.length === 0 ? '' :
+    'TKT-' + manualRaw.slice(0, 4) + (manualRaw.length > 4 ? '-' + manualRaw.slice(4) : '');
+
+  const handleManualChange = (e: React.ChangeEvent<HTMLInputElement>) => {
+    const raw = e.target.value
+      .replace(/^TKT[-\s]?/i, '')
+      .replace(/[^A-Z0-9]/gi, '')
+      .toUpperCase()
+      .slice(0, 8);
+    setManualRaw(raw);
+    setManualErr('');
+  };
+
+  const handleManualSubmit = (e: React.FormEvent) => {
+    e.preventDefault();
+    if (manualRaw.length !== 8) { setManualErr('Enter all 8 characters'); return; }
+    const id = `TKT-${manualRaw.slice(0, 4)}-${manualRaw.slice(4)}`;
+    setManualErr(''); setManualRaw('');
+    router.push(`/scan/${id}`);
+  };
+
+  const resetReady = () => { setState('ready'); setManualRaw(''); setManualErr(''); };
 
   // ── Staff code submit ─────────────────────────────────────────────
-  // Calls /api/staff/session which validates the code AND sets the HttpOnly
-  // cookie. All subsequent Camera-opened scans will carry the cookie automatically.
   const handleStaffAuth = async (e: React.FormEvent) => {
     e.preventDefault();
     const code = codeInput.trim().toUpperCase();
@@ -180,8 +198,48 @@ export default function ScanValidatePage() {
   if (state === 'ready') {
     return (
       <Screen bg="var(--color-bg)">
+        <ScanLine size={52} className="mb-5" style={{ color: 'var(--color-purple)' }} />
         <BigText style={{ color: 'var(--color-text)' }}>Ready</BigText>
         <Sub style={{ color: 'var(--color-text-muted)' }}>Point camera at next ticket</Sub>
+
+        <div className="w-full max-w-xs mt-10 pt-8 border-t" style={{ borderColor: 'var(--color-border)' }}>
+          <div className="flex items-center gap-2 mb-3 justify-center">
+            <Keyboard size={15} style={{ color: 'var(--color-text-dim)' }} />
+            <p className="text-xs font-medium" style={{ color: 'var(--color-text-dim)' }}>
+              Camera not working? Type ticket ID
+            </p>
+          </div>
+          <form onSubmit={handleManualSubmit} className="flex flex-col gap-2">
+            <input
+              value={manualDisplay}
+              onChange={handleManualChange}
+              placeholder="Type 8 chars — e.g. A3BKZ912"
+              autoCapitalize="characters"
+              autoCorrect="off"
+              autoComplete="off"
+              spellCheck={false}
+              className="w-full px-4 py-3 rounded-xl text-center font-mono text-base font-bold tracking-widest border-2 focus:outline-none"
+              style={{
+                backgroundColor: 'var(--color-surface)',
+                borderColor:     manualErr ? 'var(--color-red)' : 'var(--color-border)',
+                color:           'var(--color-text)',
+              }}
+            />
+            {manualErr && (
+              <p className="text-xs text-center" style={{ color: 'var(--color-red)' }}>{manualErr}</p>
+            )}
+            <button
+              type="submit"
+              disabled={manualRaw.length !== 8}
+              className="w-full py-2.5 rounded-xl font-bold text-sm disabled:opacity-40"
+              style={{ backgroundColor: 'var(--color-surface-2)', color: 'var(--color-text)' }}
+            >
+              {manualRaw.length > 0 && manualRaw.length < 8
+                ? `${8 - manualRaw.length} more character${8 - manualRaw.length !== 1 ? 's' : ''}…`
+                : 'Validate Ticket'}
+            </button>
+          </form>
+        </div>
       </Screen>
     );
   }
@@ -201,7 +259,7 @@ export default function ScanValidatePage() {
         {scanData?.eventName && (
           <p className="text-sm text-green-300 mt-3 font-medium">{scanData.eventName}</p>
         )}
-        <NewScanButton onClick={() => setState('ready')} />
+        <NewScanButton onClick={resetReady} />
       </Screen>
     );
   }
@@ -219,7 +277,7 @@ export default function ScanValidatePage() {
         {scanData?.attendeeName && (
           <p className="text-xl font-medium text-red-200 mt-2">{scanData.attendeeName}</p>
         )}
-        <NewScanButton onClick={() => setState('ready')} />
+        <NewScanButton onClick={resetReady} />
       </Screen>
     );
   }
@@ -239,7 +297,7 @@ export default function ScanValidatePage() {
 
 function Screen({ bg, children }: { bg: string; children: React.ReactNode }) {
   return (
-    <div className="fixed inset-0 flex flex-col items-center justify-center px-8 text-center"
+    <div className="fixed inset-0 flex flex-col items-center justify-center px-8 py-10 text-center overflow-y-auto"
       style={{ backgroundColor: bg }}>
       {children}
     </div>
