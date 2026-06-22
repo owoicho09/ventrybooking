@@ -6,6 +6,7 @@ import { Badge } from '@/components/ui/Badge';
 import { Button } from '@/components/ui/Button';
 import { Input } from '@/components/ui/Input';
 import { Select } from '@/components/ui/Select';
+import { useToast } from '@/components/ui/Toast';
 import { formatShortDate } from '@/lib/utils';
 
 interface StaffId {
@@ -20,32 +21,43 @@ interface StaffId {
 interface EventOption { value: string; label: string; }
 
 export default function StaffPage() {
-  const [staffIds,      setStaffIds]      = useState<StaffId[]>([]);
-  const [eventOptions,  setEventOptions]  = useState<EventOption[]>([]);
-  const [loading,       setLoading]       = useState(true);
-  const [creating,      setCreating]      = useState(false);
-  const [newEventId,    setNewEventId]    = useState('');
-  const [newLabel,      setNewLabel]      = useState('');
-  const [createError,   setCreateError]   = useState('');
-  const [copiedCode,    setCopiedCode]    = useState<string | null>(null);
+  const { toast } = useToast();
+
+  const [staffIds,     setStaffIds]     = useState<StaffId[]>([]);
+  const [eventOptions, setEventOptions] = useState<EventOption[]>([]);
+  const [loading,      setLoading]      = useState(true);
+  const [loadError,    setLoadError]    = useState('');
+  const [creating,     setCreating]     = useState(false);
+  const [newEventId,   setNewEventId]   = useState('');
+  const [newLabel,     setNewLabel]     = useState('');
+  const [createError,  setCreateError]  = useState('');
+  const [copiedCode,   setCopiedCode]   = useState<string | null>(null);
+  const [togglingCode, setTogglingCode] = useState<string | null>(null);
 
   const load = async () => {
-    const [staffRes, eventsRes] = await Promise.all([
-      fetch('/api/organizer/staff').then(r => r.json()),
-      fetch('/api/organizer/events').then(r => r.json()),
-    ]);
-    if (staffRes.success) {
-      setStaffIds(staffRes.data.map((s: StaffId & { event: { id: string; event_name: string; date: string }[] | { id: string; event_name: string; date: string } | null }) => ({
-        ...s,
-        event: Array.isArray(s.event) ? s.event[0] ?? null : s.event,
-      })));
-    }
-    if (eventsRes.success) {
-      const opts = (eventsRes.data as { id: string; name: string; status: string }[])
-        .filter(e => e.status === 'approved')
-        .map(e => ({ value: e.id, label: e.name }));
-      setEventOptions(opts);
-      if (opts.length > 0 && !newEventId) setNewEventId(opts[0].value);
+    setLoadError('');
+    try {
+      const [staffRes, eventsRes] = await Promise.all([
+        fetch('/api/organizer/staff').then(r => r.json()),
+        fetch('/api/organizer/events').then(r => r.json()),
+      ]);
+      if (staffRes.success) {
+        setStaffIds(staffRes.data.map((s: StaffId & { event: { id: string; event_name: string; date: string }[] | { id: string; event_name: string; date: string } | null }) => ({
+          ...s,
+          event: Array.isArray(s.event) ? s.event[0] ?? null : s.event,
+        })));
+      } else {
+        setLoadError(staffRes.error ?? 'Failed to load staff IDs');
+      }
+      if (eventsRes.success) {
+        const opts = (eventsRes.data as { id: string; name: string; status: string }[])
+          .filter(e => e.status === 'approved')
+          .map(e => ({ value: e.id, label: e.name }));
+        setEventOptions(opts);
+        if (opts.length > 0 && !newEventId) setNewEventId(opts[0].value);
+      }
+    } catch {
+      setLoadError('Network error — please refresh the page');
     }
     setLoading(false);
   };
@@ -55,35 +67,87 @@ export default function StaffPage() {
   const handleCreate = async (e: React.FormEvent) => {
     e.preventDefault();
     if (!newEventId) { setCreateError('Select an event'); return; }
-    setCreating(true); setCreateError('');
-    const res  = await fetch('/api/organizer/staff', {
-      method:  'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body:    JSON.stringify({ eventId: newEventId, label: newLabel }),
-    });
-    const data = await res.json();
-    if (!data.success) { setCreateError(data.error ?? 'Failed to create'); setCreating(false); return; }
-    setNewLabel('');
-    await load();
+    setCreating(true);
+    setCreateError('');
+    try {
+      const res  = await fetch('/api/organizer/staff', {
+        method:  'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body:    JSON.stringify({ eventId: newEventId, label: newLabel }),
+      });
+      const data = await res.json();
+      if (!data.success) {
+        setCreateError(data.error ?? 'Failed to create staff ID');
+        setCreating(false);
+        return;
+      }
+      setNewLabel('');
+      await load();
+      toast('Staff ID created — copy the link and send it to your door staff', 'success');
+    } catch {
+      setCreateError('Network error — please try again');
+    }
     setCreating(false);
   };
 
   const toggleActive = async (code: string, active: boolean) => {
-    await fetch(`/api/organizer/staff/${code}`, {
-      method:  'PATCH',
-      headers: { 'Content-Type': 'application/json' },
-      body:    JSON.stringify({ active }),
-    });
+    if (togglingCode) return;
+    setTogglingCode(code);
+    // Optimistic update
     setStaffIds(prev => prev.map(s => s.code === code ? { ...s, active } : s));
+    try {
+      const res  = await fetch(`/api/organizer/staff/${code}`, {
+        method:  'PATCH',
+        headers: { 'Content-Type': 'application/json' },
+        body:    JSON.stringify({ active }),
+      });
+      const data = await res.json();
+      if (!data.success) {
+        // Revert on failure
+        setStaffIds(prev => prev.map(s => s.code === code ? { ...s, active: !active } : s));
+        toast(data.error ?? 'Failed to update staff ID', 'error');
+      } else {
+        toast(active ? 'Staff ID reactivated' : 'Staff ID deactivated', 'success');
+      }
+    } catch {
+      // Revert on network error
+      setStaffIds(prev => prev.map(s => s.code === code ? { ...s, active: !active } : s));
+      toast('Network error — change not saved, please try again', 'error');
+    }
+    setTogglingCode(null);
   };
 
   const isExpired = (expiresAt: string) => new Date() > new Date(expiresAt);
 
   const copyScanLink = async (code: string) => {
     const url = `${window.location.origin}/staff-scan/${code}`;
-    await navigator.clipboard.writeText(url);
-    setCopiedCode(code);
-    setTimeout(() => setCopiedCode(null), 2000);
+    let success = false;
+    try {
+      await navigator.clipboard.writeText(url);
+      success = true;
+    } catch {
+      // Fallback for HTTP or browsers that deny clipboard permission
+      try {
+        const el = document.createElement('textarea');
+        el.value = url;
+        el.style.position = 'fixed';
+        el.style.opacity = '0';
+        document.body.appendChild(el);
+        el.select();
+        success = document.execCommand('copy');
+        document.body.removeChild(el);
+      } catch {
+        success = false;
+      }
+    }
+
+    if (success) {
+      setCopiedCode(code);
+      setTimeout(() => setCopiedCode(null), 2000);
+      toast('Scan link copied! Send it to your door staff via WhatsApp or iMessage.', 'success');
+    } else {
+      toast(`Couldn't copy automatically. Link: ${url}`, 'error');
+    }
   };
 
   return (
@@ -123,7 +187,9 @@ export default function StaffPage() {
             <Plus size={16} />{creating ? 'Creating…' : 'Create'}
           </Button>
         </form>
-        {createError && <p className="text-sm mt-2" style={{ color: 'var(--color-red)' }}>{createError}</p>}
+        {createError && (
+          <p className="text-sm mt-2" style={{ color: 'var(--color-red)' }}>{createError}</p>
+        )}
         <p className="text-xs mt-4" style={{ color: 'var(--color-text-dim)' }}>
           Staff IDs expire automatically 24 hours after the event date. Copy the scan link and send it to your door staff — they open it once in Safari before the event and keep the tab open all night.
         </p>
@@ -135,9 +201,24 @@ export default function StaffPage() {
           <h2 className="font-semibold" style={{ color: 'var(--color-text)' }}>Active Staff IDs</h2>
         </div>
 
-        {loading && <p className="text-center py-8 text-sm" style={{ color: 'var(--color-text-muted)' }}>Loading…</p>}
+        {loading && (
+          <p className="text-center py-8 text-sm" style={{ color: 'var(--color-text-muted)' }}>Loading…</p>
+        )}
 
-        {!loading && staffIds.length === 0 && (
+        {!loading && loadError && (
+          <div className="flex flex-col items-center gap-3 py-10 px-6 text-center">
+            <p className="text-sm" style={{ color: 'var(--color-red)' }}>{loadError}</p>
+            <button
+              onClick={load}
+              className="text-sm font-medium underline"
+              style={{ color: 'var(--color-purple-light)' }}
+            >
+              Try again
+            </button>
+          </div>
+        )}
+
+        {!loading && !loadError && staffIds.length === 0 && (
           <div className="flex flex-col items-center gap-3 py-12 px-6 text-center">
             <KeyRound size={32} style={{ color: 'var(--color-text-dim)' }} />
             <p className="text-sm" style={{ color: 'var(--color-text-muted)' }}>No staff IDs yet.</p>
@@ -147,7 +228,7 @@ export default function StaffPage() {
           </div>
         )}
 
-        {!loading && staffIds.length > 0 && (
+        {!loading && !loadError && staffIds.length > 0 && (
           <div className="flex flex-col divide-y" style={{ borderColor: 'var(--color-border)' }}>
             {staffIds.map(s => {
               const expired = isExpired(s.expires_at);
@@ -156,7 +237,9 @@ export default function StaffPage() {
                   <div className="flex-1 min-w-0">
                     <div className="flex items-center gap-2 flex-wrap">
                       <span className="font-mono font-bold text-sm" style={{ color: 'var(--color-text)' }}>{s.code}</span>
-                      {s.label && <span className="text-xs" style={{ color: 'var(--color-text-muted)' }}>{s.label}</span>}
+                      {s.label && (
+                        <span className="text-xs" style={{ color: 'var(--color-text-muted)' }}>{s.label}</span>
+                      )}
                       {expired
                         ? <Badge variant="gray">Expired</Badge>
                         : s.active
@@ -173,21 +256,24 @@ export default function StaffPage() {
                     <div className="flex items-center gap-3">
                       <button
                         onClick={() => copyScanLink(s.code)}
-                        className="flex items-center gap-1.5 text-sm font-medium"
-                        style={{ color: 'var(--color-purple-light)' }}
+                        className="flex items-center gap-1.5 text-sm font-medium transition-colors"
+                        style={{ color: copiedCode === s.code ? 'var(--color-green)' : 'var(--color-purple-light)' }}
                         title="Copy scan link to share with staff"
                       >
                         {copiedCode === s.code
-                          ? <><Check size={15} /> Copied</>
+                          ? <><Check size={15} /> Copied!</>
                           : <><Link2 size={15} /> Copy link</>
                         }
                       </button>
                       <button
                         onClick={() => toggleActive(s.code, !s.active)}
-                        className="flex items-center gap-1.5 text-sm font-medium"
+                        disabled={togglingCode === s.code}
+                        className="flex items-center gap-1.5 text-sm font-medium disabled:opacity-50 transition-opacity"
                         style={{ color: s.active ? 'var(--color-red)' : 'var(--color-green)' }}
                       >
-                        {s.active
+                        {togglingCode === s.code
+                          ? 'Saving…'
+                          : s.active
                           ? <><ToggleRight size={16} /> Deactivate</>
                           : <><ToggleLeft size={16} /> Reactivate</>
                         }

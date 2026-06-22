@@ -161,15 +161,18 @@ export function NotificationBell({ align = 'right', openUp = false }: {
             ) : (
               notifications.map(n => {
                 const Icon = TYPE_ICON[n.type] ?? Bell;
-                const inner = (
+                const handleClick = () => {
+                  if (!n.read) markOneRead(n.id);
+                  if (n.link) setOpen(false);
+                };
+                const row = (
                   <div
-                    key={n.id}
                     className="flex items-start gap-3 px-4 py-3 border-b cursor-pointer transition-colors"
                     style={{
                       borderColor:     'var(--color-border)',
                       backgroundColor: n.read ? 'transparent' : 'var(--color-purple-dim)',
                     }}
-                    onClick={() => { if (!n.read) markOneRead(n.id); }}
+                    onClick={handleClick}
                   >
                     <div
                       className="flex-shrink-0 w-8 h-8 rounded-lg flex items-center justify-center mt-0.5"
@@ -198,11 +201,9 @@ export function NotificationBell({ align = 'right', openUp = false }: {
                 );
 
                 return n.link ? (
-                  <Link key={n.id} href={n.link} onClick={() => { setOpen(false); if (!n.read) markOneRead(n.id); }}>
-                    {inner}
-                  </Link>
+                  <Link key={n.id} href={n.link}>{row}</Link>
                 ) : (
-                  <div key={n.id}>{inner}</div>
+                  <div key={n.id}>{row}</div>
                 );
               })
             )}

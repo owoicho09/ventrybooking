@@ -68,6 +68,13 @@ export default function ScanValidatePage() {
   // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [ticketId]);
 
+  // Auto-reset to ready after 3 seconds on any result
+  useEffect(() => {
+    if (state !== 'success' && state !== 'already_used' && state !== 'invalid') return;
+    const t = setTimeout(() => setState('ready'), 3000);
+    return () => clearTimeout(t);
+  }, [state]);
+
   // ── Staff code submit ─────────────────────────────────────────────
   // Calls /api/staff/session which validates the code AND sets the HttpOnly
   // cookie. All subsequent Camera-opened scans will carry the cookie automatically.

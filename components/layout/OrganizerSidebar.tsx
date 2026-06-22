@@ -71,7 +71,7 @@ export function OrganizerSidebar() {
           Logout
         </button>
         <div className="flex items-center gap-2">
-          <NotificationBell />
+          <NotificationBell openUp align="left" />
           <ThemeToggle />
         </div>
       </div>
