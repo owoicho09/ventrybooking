@@ -40,7 +40,7 @@ export async function POST(req: NextRequest) {
         verified: user.verified,
       },
     });
-    res.cookies.set({ ...cookieOptions(7 * 24 * 60 * 60), value: token });
+    res.cookies.set({ ...cookieOptions(30 * 24 * 60 * 60), value: token });
     return res;
   } catch (err) {
     console.error('login error', err);

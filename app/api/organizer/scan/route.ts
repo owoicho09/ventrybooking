@@ -88,7 +88,7 @@ export async function POST(req: NextRequest) {
       }
       ticketId = payload.ticketId;
     } else {
-      ticketId = qrToken.trim();
+      ticketId = qrToken.trim().toUpperCase();
     }
 
     // ── Fetch ticket ─────────────────────────────────────────────────

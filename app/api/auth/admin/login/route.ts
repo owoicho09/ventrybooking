@@ -21,7 +21,7 @@ export async function POST(req: NextRequest) {
 
     const token = signAuthToken({ sub: 'admin', role: 'admin', email });
     const res = NextResponse.json({ success: true, data: { role: 'admin' } });
-    res.cookies.set({ ...cookieOptions(24 * 60 * 60), value: token });
+    res.cookies.set({ ...cookieOptions(30 * 24 * 60 * 60), value: token });
     return res;
   } catch {
     return NextResponse.json({ error: 'Login failed' }, { status: 500 });

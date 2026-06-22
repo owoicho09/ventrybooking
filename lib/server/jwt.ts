@@ -14,7 +14,7 @@ export interface QrPayload {
 }
 
 export function signAuthToken(payload: AuthPayload): string {
-  return jwt.sign(payload, SECRET, { expiresIn: '7d' });
+  return jwt.sign(payload, SECRET, { expiresIn: '30d' });
 }
 
 export function verifyAuthToken(token: string): AuthPayload {
