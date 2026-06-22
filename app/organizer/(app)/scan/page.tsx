@@ -46,9 +46,8 @@ export default function ScanPage() {
       .catch(console.error);
   }, []);
 
-  useEffect(() => {
-    if (!selectedEvent) return;
-    fetch(`/api/organizer/scan/logs?eventId=${selectedEvent}`)
+  const refreshLogs = (eventId: string) => {
+    fetch(`/api/organizer/scan/logs?eventId=${eventId}`)
       .then(r => r.json())
       .then(d => {
         if (d.success) {
@@ -61,7 +60,12 @@ export default function ScanPage() {
         }
       })
       .catch(console.error);
-  }, [selectedEvent, manualResult]);
+  };
+
+  useEffect(() => {
+    if (!selectedEvent) return;
+    refreshLogs(selectedEvent);
+  }, [selectedEvent]); // eslint-disable-line react-hooks/exhaustive-deps
 
   const handleManualValidate = async () => {
     const id = manualId.trim();
@@ -90,10 +94,11 @@ export default function ScanPage() {
           reason:     r.reason,
         });
         setManualId('');
+        // Refresh log once after a scan result
+        refreshLogs(selectedEvent);
       } else {
         setManualResult({ type: 'invalid', reason: data.error ?? 'Validation failed' });
       }
-      // Auto-clear after 5 s so it doesn't linger
       setTimeout(() => setManualResult(null), 5000);
     } catch (err) {
       console.error(err);
@@ -237,7 +242,7 @@ export default function ScanPage() {
               <Input
                 label=""
                 value={manualId}
-                onChange={e => setManualId(e.target.value.trim())}
+                onChange={e => setManualId(e.target.value)}
                 onKeyDown={e => e.key === 'Enter' && handleManualValidate()}
                 placeholder="Ticket ID — e.g. TKT-XXXX-XXXX"
                 className="font-mono text-xs"

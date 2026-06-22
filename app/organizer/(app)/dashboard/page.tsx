@@ -92,7 +92,7 @@ export default function OrganizerDashboardPage() {
                 <Td><span style={{ color: 'var(--color-text)' }}>{event.totalSold?.toLocaleString() ?? 0}</span></Td>
                 <Td>{statusBadge(event.status)}</Td>
                 <Td>
-                  <Link href={`/events/${event.id}`} className="text-xs font-medium hover:underline" style={{ color: 'var(--color-purple-light)' }}>View</Link>
+                  <Link href={`/organizer/events/${event.id}`} className="text-xs font-medium hover:underline" style={{ color: 'var(--color-purple-light)' }}>View</Link>
                 </Td>
               </Tr>
             ))}

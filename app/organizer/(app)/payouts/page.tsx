@@ -44,7 +44,7 @@ export default function PayoutsPage() {
     setSaving(true); setBankMsg('');
     const res = await fetch('/api/organizer/bank', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(bank) });
     const d = await res.json();
-    setBankMsg(d.success ? 'Bank details saved.' : d.error);
+    setBankMsg(d.success ? 'Bank details saved.' : (d.error ?? 'Failed to save bank details'));
     setSaving(false);
     if (d.success) setEditingBank(false);
   };

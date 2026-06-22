@@ -1,8 +1,10 @@
 'use client';
 
 import { useState, useEffect } from 'react';
+import { useRouter } from 'next/navigation';
 import { Button } from '@/components/ui/Button';
 import { Input, Textarea } from '@/components/ui/Input';
+import { Modal } from '@/components/ui/Modal';
 import { NIGERIAN_BANKS } from '@/lib/banks';
 
 function Toggle({ checked, onChange }: { checked: boolean; onChange: () => void }) {
@@ -23,6 +25,8 @@ interface Me {
 }
 
 export default function OrganizerSettingsPage() {
+  const router = useRouter();
+
   const [me, setMe]                   = useState<Partial<Me>>({});
   const [profileSaving, setProfileSaving] = useState(false);
   const [bankSaving, setBankSaving]   = useState(false);
@@ -32,6 +36,10 @@ export default function OrganizerSettingsPage() {
   const [pwMsg, setPwMsg]             = useState('');
   const [pw, setPw]                   = useState({ current: '', newPw: '', confirm: '' });
   const [editingBank, setEditingBank] = useState(false);
+  const [deleteOpen,     setDeleteOpen]     = useState(false);
+  const [deletePassword, setDeletePassword] = useState('');
+  const [deleteError,    setDeleteError]    = useState('');
+  const [deleting,       setDeleting]       = useState(false);
 
   useEffect(() => {
     fetch('/api/organizer/me')
@@ -49,7 +57,7 @@ export default function OrganizerSettingsPage() {
       body: JSON.stringify({ name: me.name, phone: me.phone, bio: me.bio, email_notifications: me.email_notifications, sms_alerts: me.sms_alerts }),
     });
     const d = await res.json();
-    setProfileMsg(d.success ? 'Profile saved.' : d.error);
+    setProfileMsg(d.success ? 'Profile saved.' : (d.error ?? 'Failed to save profile'));
     setProfileSaving(false);
   };
 
@@ -66,7 +74,7 @@ export default function OrganizerSettingsPage() {
       }),
     });
     const d = await res.json();
-    setBankMsg(d.success ? 'Bank details saved.' : d.error);
+    setBankMsg(d.success ? 'Bank details saved.' : (d.error ?? 'Failed to save bank details'));
     setBankSaving(false);
     if (d.success) setEditingBank(false);
   };
@@ -82,7 +90,7 @@ export default function OrganizerSettingsPage() {
       body: JSON.stringify({ currentPassword: pw.current, newPassword: pw.newPw }),
     });
     const d = await res.json();
-    setPwMsg(d.success ? 'Password changed successfully.' : d.error);
+    setPwMsg(d.success ? 'Password changed successfully.' : (d.error ?? 'Failed to change password'));
     setPwSaving(false);
     if (d.success) setPw({ current: '', newPw: '', confirm: '' });
   };
@@ -200,7 +208,17 @@ export default function OrganizerSettingsPage() {
           </div>
         ))}
         <Button
-          onClick={(e: React.MouseEvent) => { e.preventDefault(); saveProfile(new Event('submit') as unknown as React.FormEvent); }}
+          onClick={async () => {
+            setProfileSaving(true); setProfileMsg('');
+            const res = await fetch('/api/organizer/settings', {
+              method: 'PATCH',
+              headers: { 'Content-Type': 'application/json' },
+              body: JSON.stringify({ name: me.name, phone: me.phone, bio: me.bio, email_notifications: me.email_notifications, sms_alerts: me.sms_alerts }),
+            });
+            const d = await res.json();
+            setProfileMsg(d.success ? 'Preferences saved.' : (d.error ?? 'Failed to save'));
+            setProfileSaving(false);
+          }}
           disabled={profileSaving}
         >
           Save Notification Preferences
@@ -229,10 +247,66 @@ export default function OrganizerSettingsPage() {
         style={{ backgroundColor: '#ef444408', borderColor: '#ef444430' }}>
         <h2 className="font-semibold" style={{ color: 'var(--color-red)' }}>Danger Zone</h2>
         <p className="text-sm" style={{ color: 'var(--color-text-muted)' }}>
-          Permanently delete your organizer account. This cannot be undone.
+          Permanently delete your organizer account and all associated data. This cannot be undone.
         </p>
-        <Button variant="danger" className="self-start">Delete Account</Button>
+        <Button variant="danger" className="self-start" onClick={() => { setDeleteOpen(true); setDeletePassword(''); setDeleteError(''); }}>
+          Delete Account
+        </Button>
       </section>
+
+      {/* Delete confirmation modal */}
+      <Modal open={deleteOpen} onClose={() => !deleting && setDeleteOpen(false)} title="Delete Account">
+        <div className="flex flex-col gap-4">
+          <p className="text-sm" style={{ color: 'var(--color-text-muted)' }}>
+            This will permanently delete your account, profile, and all event data. You cannot undo this.
+          </p>
+          <p className="text-sm font-medium" style={{ color: 'var(--color-text)' }}>
+            Enter your password to confirm:
+          </p>
+          <Input
+            label="Password"
+            type="password"
+            value={deletePassword}
+            onChange={e => setDeletePassword(e.target.value)}
+            placeholder="Your current password"
+          />
+          {deleteError && (
+            <p className="text-sm" style={{ color: 'var(--color-red)' }}>{deleteError}</p>
+          )}
+          <div className="flex gap-3 pt-1">
+            <Button
+              variant="danger"
+              disabled={deleting || !deletePassword}
+              onClick={async () => {
+                setDeleting(true);
+                setDeleteError('');
+                try {
+                  const res = await fetch('/api/organizer/account', {
+                    method: 'DELETE',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ password: deletePassword }),
+                  });
+                  const data = await res.json();
+                  if (!res.ok) {
+                    setDeleteError(data.error ?? 'Failed to delete account');
+                    setDeleting(false);
+                    return;
+                  }
+                  router.push('/organizer/login');
+                } catch {
+                  setDeleteError('Network error — please try again');
+                  setDeleting(false);
+                }
+              }}
+            >
+              {deleting ? 'Deleting…' : 'Yes, delete my account'}
+            </Button>
+            <Button variant="outline" disabled={deleting} onClick={() => setDeleteOpen(false)}>
+              Cancel
+            </Button>
+          </div>
+        </div>
+      </Modal>
     </div>
   );
 }

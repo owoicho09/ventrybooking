@@ -91,7 +91,7 @@ export default function StaffPage() {
   };
 
   const toggleActive = async (code: string, active: boolean) => {
-    if (togglingCode) return;
+    if (togglingCode === code) return;
     setTogglingCode(code);
     // Optimistic update
     setStaffIds(prev => prev.map(s => s.code === code ? { ...s, active } : s));

@@ -215,7 +215,7 @@ export default function OrganizerEventDetailPage() {
       a.href = url;
       a.download = `${event?.event_name ?? 'attendees'}.csv`;
       a.click();
-      URL.revokeObjectURL(url);
+      setTimeout(() => URL.revokeObjectURL(url), 10000);
     } finally {
       setDownloadLoading(false);
     }
