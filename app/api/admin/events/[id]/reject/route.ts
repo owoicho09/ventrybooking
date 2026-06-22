@@ -28,7 +28,10 @@ export async function POST(
 
     if (!event) return NextResponse.json({ error: 'Event not found' }, { status: 404 });
 
-    await db.from('events').update({ status: 'rejected', rejection_reason: reason }).eq('id', id);
+    // Delete the event — ticket_tiers cascade automatically.
+    // Rejected events are always under_review (never published), so no tickets exist.
+    const { error: deleteErr } = await db.from('events').delete().eq('id', id);
+    if (deleteErr) return NextResponse.json({ error: 'Failed to reject event' }, { status: 500 });
 
     const organizerRaw = Array.isArray(event.organizer) ? event.organizer[0] : event.organizer;
     const organizer = organizerRaw as { id: string; name: string; email: string } | null;

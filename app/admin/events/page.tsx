@@ -9,13 +9,12 @@ import { Textarea } from '@/components/ui/Input';
 import { Table, Thead, Tbody, Th, Tr, Td } from '@/components/ui/Table';
 import { formatShortDate, formatNGN } from '@/lib/utils';
 
-type Filter = 'all' | 'under_review' | 'approved' | 'rejected' | 'cancelled';
+type Filter = 'all' | 'under_review' | 'approved' | 'cancelled';
 
 const filters: { value: Filter; label: string }[] = [
   { value: 'all',          label: 'All' },
   { value: 'under_review', label: 'Under Review' },
   { value: 'approved',     label: 'Approved' },
-  { value: 'rejected',     label: 'Rejected' },
   { value: 'cancelled',    label: 'Cancelled' },
 ];
 
@@ -23,7 +22,6 @@ const statusBadge = (status: string) => {
   switch (status) {
     case 'approved':     return <Badge variant="green">Approved</Badge>;
     case 'under_review': return <Badge variant="amber">Under Review</Badge>;
-    case 'rejected':     return <Badge variant="red">Rejected</Badge>;
     case 'completed':    return <Badge variant="blue">Completed</Badge>;
     case 'cancelled':    return <Badge variant="red">Cancelled</Badge>;
     default:             return <Badge variant="gray">{status}</Badge>;
