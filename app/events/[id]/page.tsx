@@ -4,7 +4,7 @@ import { useState, useEffect } from 'react';
 import { useRouter, useParams } from 'next/navigation';
 import Link from 'next/link';
 import Image from 'next/image';
-import { Calendar, MapPin, Clock, ChevronRight, CheckCircle, Shield, Minus, Plus, AlertTriangle } from 'lucide-react';
+import { Calendar, MapPin, Clock, ChevronRight, CheckCircle, Shield, Minus, Plus, AlertTriangle, Share2 } from 'lucide-react';
 import { PublicNav } from '@/components/layout/PublicNav';
 import { Footer } from '@/components/layout/Footer';
 import { Button } from '@/components/ui/Button';
@@ -12,10 +12,12 @@ import { Badge } from '@/components/ui/Badge';
 import { formatNGN, formatDate } from '@/lib/utils';
 import type { Event, TicketTier } from '@/types';
 import { EventReviews } from '@/components/events/EventReviews';
+import { useToast } from '@/components/ui/Toast';
 
 export default function EventDetailPage() {
   const { id } = useParams<{ id: string }>();
   const router = useRouter();
+  const { toast } = useToast();
   const [event, setEvent] = useState<Event | null>(null);
   const [loading, setLoading] = useState(true);
   const [quantities, setQuantities] = useState<Record<string, number>>({});
@@ -88,6 +90,29 @@ export default function EventDetailPage() {
     router.push('/checkout');
   };
 
+  const handleShare = async () => {
+    if (!event) return;
+    const url = `${window.location.origin}/events/${event.id}`;
+    const shareData = {
+      title: event.name,
+      text: `Check out ${event.name} on Ventry`,
+      url,
+    };
+
+    try {
+      if (navigator.share && navigator.canShare?.(shareData)) {
+        await navigator.share(shareData);
+        return;
+      }
+      await navigator.clipboard.writeText(url);
+      toast('Event link copied', 'success');
+    } catch (err) {
+      if ((err as DOMException).name !== 'AbortError') {
+        toast('Could not share event link', 'error');
+      }
+    }
+  };
+
   if (loading) return (
     <div style={{ backgroundColor: 'var(--color-bg)', minHeight: '100vh' }}>
       <PublicNav />
@@ -141,6 +166,9 @@ export default function EventDetailPage() {
                 <div className="flex items-center gap-2"><Clock size={15} style={{ color: 'var(--color-purple)' }} />{event.time}</div>
                 <div className="flex items-center gap-2"><MapPin size={15} style={{ color: 'var(--color-purple)' }} />{locationSummary}</div>
               </div>
+              <Button variant="outline" size="sm" onClick={handleShare} className="mb-6">
+                <Share2 size={15} />Share Event
+              </Button>
               <p className="text-base leading-relaxed" style={{ color: 'var(--color-text-muted)' }}>{event.description}</p>
             </div>
 
