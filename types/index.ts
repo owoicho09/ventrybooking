@@ -56,6 +56,9 @@ export interface Event {
   venue: string;
   address: string;
   city: string;
+  landmark?: string | null;
+  location_hidden?: boolean;
+  locationHidden?: boolean;
   organizer: Organizer;
   tiers: TicketTier[];
   status: EventStatus;

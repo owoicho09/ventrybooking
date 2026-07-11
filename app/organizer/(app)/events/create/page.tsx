@@ -33,6 +33,8 @@ export default function CreateEventPage() {
   const [venue, setVenue] = useState('');
   const [address, setAddress] = useState('');
   const [city, setCity] = useState('');
+  const [landmark, setLandmark] = useState('');
+  const [locationHidden, setLocationHidden] = useState(false);
   const [banner, setBanner] = useState<File | null>(null);
   const [venueProof, setVenueProof] = useState<File | null>(null);
   const [tiers, setTiers] = useState<Tier[]>([{ id: '1', name: 'Regular', price: '', quantity: '' }]);
@@ -55,6 +57,8 @@ export default function CreateEventPage() {
       fd.append('venue', venue);
       fd.append('address', address);
       fd.append('city', city);
+      fd.append('landmark', landmark);
+      fd.append('locationHidden', String(locationHidden));
       fd.append('tiers', JSON.stringify(tiers.map(t => ({ name: t.name, price: t.price, quantity: t.quantity }))));
       if (banner) fd.append('banner', banner);
       if (venueProof) fd.append('venueProof', venueProof);
@@ -108,6 +112,19 @@ export default function CreateEventPage() {
         <Input label="Venue Name" value={venue} onChange={e => setVenue(e.target.value)} placeholder="e.g. Eko Atlantic City Arena" required />
         <Input label="Venue Address" value={address} onChange={e => setAddress(e.target.value)} placeholder="Full street address" required />
         <Input label="City" value={city} onChange={e => setCity(e.target.value)} placeholder="Lagos" required />
+        <Input label="Nearby Landmark" value={landmark} onChange={e => setLandmark(e.target.value)} placeholder="e.g. Landmark Towers, Victoria Island" />
+        <label className="flex items-start gap-3 rounded-lg border px-4 py-3 cursor-pointer"
+          style={{ borderColor: 'var(--color-border)', backgroundColor: 'var(--color-surface-2)' }}>
+          <input
+            type="checkbox"
+            checked={locationHidden}
+            onChange={e => setLocationHidden(e.target.checked)}
+            className="mt-0.5 flex-shrink-0 w-4 h-4 rounded accent-[var(--color-purple)]"
+          />
+          <span className="text-sm leading-relaxed" style={{ color: 'var(--color-text-muted)' }}>
+            Hide exact venue and address from the public event page until I reveal it. Admins and ticket buyers will still receive exact location updates.
+          </span>
+        </label>
         <div>
           <label className="text-sm font-medium block mb-1.5" style={{ color: 'var(--color-text)' }}>Venue Proof Document</label>
           <label className="flex items-center gap-3 rounded-xl border-2 border-dashed px-4 py-3.5 cursor-pointer transition-colors hover:border-[var(--color-purple)]" style={{ borderColor: 'var(--color-border)' }}>

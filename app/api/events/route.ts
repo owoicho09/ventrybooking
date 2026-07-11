@@ -16,6 +16,7 @@ function computeBadge(tiers: RawTier[]) {
 
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
 function shapeEvent(row: any) {
+  const locationHidden = row.location_hidden ?? false;
   return {
     id: row.id,
     name: row.event_name,
@@ -23,9 +24,12 @@ function shapeEvent(row: any) {
     description: row.description,
     date: row.date,
     time: row.time,
-    venue: row.venue,
-    address: row.address,
+    venue: locationHidden ? 'Exact location undisclosed' : row.venue,
+    address: locationHidden ? '' : row.address,
     city: row.city,
+    landmark: row.landmark ?? null,
+    location_hidden: locationHidden,
+    locationHidden: locationHidden,
     status: row.status,
     bannerColor: row.banner_color,
     banner_url: row.banner_url ?? null,
@@ -37,7 +41,7 @@ function shapeEvent(row: any) {
 }
 
 const EVENT_SELECT = `
-  id, event_name, category, description, date, time, venue, address, city,
+  id, event_name, category, description, date, time, venue, address, city, landmark, location_hidden,
   status, total_sold, banner_color, banner_url,
   organizer:users!events_organizer_id_fkey(id, name, tier, verified, member_since, events_hosted),
   tiers:ticket_tiers(id, name, price, available, sold)

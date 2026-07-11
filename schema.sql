@@ -69,6 +69,8 @@ CREATE TABLE IF NOT EXISTS events (
   venue             TEXT        NOT NULL,
   address           TEXT        NOT NULL,
   city              TEXT        NOT NULL DEFAULT '',
+  landmark          TEXT,
+  location_hidden   BOOLEAN     NOT NULL DEFAULT FALSE,
 
   -- Lifecycle: under_review → approved | rejected → completed
   status            TEXT        NOT NULL DEFAULT 'under_review'

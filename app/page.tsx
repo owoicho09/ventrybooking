@@ -72,7 +72,7 @@ export default async function HomePage() {
   const { data: rawEvents } = await db
     .from('events')
     .select(`
-      id, event_name, category, description, date, time, venue, address, city,
+      id, event_name, category, description, date, time, venue, address, city, landmark, location_hidden,
       status, total_sold, banner_color, banner_url,
       organizer:users!events_organizer_id_fkey(id, name, tier, verified, member_since, events_hosted),
       tiers:ticket_tiers(id, name, price, available, sold)
@@ -115,6 +115,9 @@ export default async function HomePage() {
       venue:       row.venue,
       address:     row.address,
       city:        row.city,
+      landmark:    row.landmark ?? null,
+      location_hidden: row.location_hidden ?? false,
+      locationHidden: row.location_hidden ?? false,
       status:      row.status,
       bannerColor: row.banner_color,
       banner_url:  row.banner_url ?? null,

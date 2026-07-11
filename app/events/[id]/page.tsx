@@ -53,6 +53,22 @@ export default function EventDetailPage() {
   const serviceFee       = subtotal > 0 ? 100 : 0;
   const total            = subtotal + serviceFee;
   const multiTierWarning = selectedTiers.length > 1;
+  const exactLocationVisible = event ? !event.location_hidden : false;
+  const locationSummary = event
+    ? exactLocationVisible
+      ? `${event.venue}, ${event.city}`
+      : event.landmark
+      ? `Near ${event.landmark}, ${event.city}`
+      : `Exact location undisclosed, ${event.city}`
+    : '';
+  const mapQuery = event
+    ? exactLocationVisible
+      ? [event.venue, event.address, event.city].filter(Boolean).join(', ')
+      : [event.landmark, event.city].filter(Boolean).join(', ')
+    : '';
+  const mapSrc = mapQuery
+    ? `https://www.google.com/maps?q=${encodeURIComponent(mapQuery)}&output=embed`
+    : '';
 
   const handlePurchase = async () => {
     if (!event || !hasSelection) return;
@@ -123,7 +139,7 @@ export default function EventDetailPage() {
               <div className="flex flex-wrap gap-4 text-sm mb-6" style={{ color: 'var(--color-text-muted)' }}>
                 <div className="flex items-center gap-2"><Calendar size={15} style={{ color: 'var(--color-purple)' }} />{formatDate(event.date)}</div>
                 <div className="flex items-center gap-2"><Clock size={15} style={{ color: 'var(--color-purple)' }} />{event.time}</div>
-                <div className="flex items-center gap-2"><MapPin size={15} style={{ color: 'var(--color-purple)' }} />{event.venue}, {event.city}</div>
+                <div className="flex items-center gap-2"><MapPin size={15} style={{ color: 'var(--color-purple)' }} />{locationSummary}</div>
               </div>
               <p className="text-base leading-relaxed" style={{ color: 'var(--color-text-muted)' }}>{event.description}</p>
             </div>
@@ -149,11 +165,42 @@ export default function EventDetailPage() {
 
             <div className="rounded-xl border p-5" style={{ backgroundColor: 'var(--color-surface)', borderColor: 'var(--color-border)' }}>
               <h3 className="font-semibold mb-3" style={{ color: 'var(--color-text)' }}>Event Details</h3>
-              <div className="h-36 rounded-lg mb-3 flex items-center justify-center border" style={{ backgroundColor: 'var(--color-surface-2)', borderColor: 'var(--color-border)' }}>
-                <div className="flex flex-col items-center gap-1"><MapPin size={24} style={{ color: 'var(--color-text-dim)' }} /><p className="text-sm" style={{ color: 'var(--color-text-dim)' }}>Map placeholder</p></div>
+              <div className="h-52 rounded-lg mb-3 border overflow-hidden" style={{ backgroundColor: 'var(--color-surface-2)', borderColor: 'var(--color-border)' }}>
+                {mapSrc ? (
+                  <iframe
+                    title={`${event.name} location map`}
+                    src={mapSrc}
+                    className="w-full h-full border-0"
+                    loading="lazy"
+                    referrerPolicy="no-referrer-when-downgrade"
+                  />
+                ) : (
+                  <div className="h-full flex flex-col items-center justify-center gap-1">
+                    <MapPin size={24} style={{ color: 'var(--color-text-dim)' }} />
+                    <p className="text-sm" style={{ color: 'var(--color-text-dim)' }}>Location unavailable</p>
+                  </div>
+                )}
               </div>
-              <p className="text-sm font-medium" style={{ color: 'var(--color-text)' }}>{event.venue}</p>
-              <p className="text-sm mt-0.5" style={{ color: 'var(--color-text-muted)' }}>{event.address}</p>
+              {exactLocationVisible ? (
+                <>
+                  <p className="text-sm font-medium" style={{ color: 'var(--color-text)' }}>{event.venue}</p>
+                  <p className="text-sm mt-0.5" style={{ color: 'var(--color-text-muted)' }}>{event.address}</p>
+                  {event.landmark && (
+                    <p className="text-sm mt-0.5" style={{ color: 'var(--color-text-muted)' }}>Landmark: {event.landmark}</p>
+                  )}
+                </>
+              ) : (
+                <>
+                  <p className="text-sm font-medium" style={{ color: 'var(--color-text)' }}>
+                    Exact location undisclosed
+                  </p>
+                  <p className="text-sm mt-0.5" style={{ color: 'var(--color-text-muted)' }}>
+                    {event.landmark
+                      ? `Landmark: ${event.landmark}. Exact venue and address will be shared with ticket buyers.`
+                      : `Exact venue and address will be shared with ticket buyers.`}
+                  </p>
+                </>
+              )}
             </div>
 
             <div className="rounded-xl border p-5" style={{ backgroundColor: 'var(--color-surface)', borderColor: 'var(--color-border)' }}>

@@ -1,7 +1,7 @@
 'use client';
 
 import { useState, useEffect } from 'react';
-import { CheckCircle, XCircle, AlertTriangle } from 'lucide-react';
+import { CheckCircle, XCircle, AlertTriangle, ExternalLink, FileText } from 'lucide-react';
 import { Badge } from '@/components/ui/Badge';
 import { Button } from '@/components/ui/Button';
 import { Drawer } from '@/components/ui/Drawer';
@@ -30,6 +30,8 @@ const statusBadge = (status: string) => {
 
 interface EventData {
   id: string; name: string; category: string; date: string; city: string; venue: string;
+  address?: string; landmark?: string | null; location_hidden?: boolean;
+  venue_proof_url?: string | null;
   description: string; status: string;
   organizer: { name: string; tier?: string };
 }
@@ -216,7 +218,10 @@ export default function AdminEventsPage() {
                 ['Category', selectedEvent.category],
                 ['Date',     formatShortDate(selectedEvent.date)],
                 ['Venue',    selectedEvent.venue],
+                ['Address',  selectedEvent.address || 'Not provided'],
                 ['City',     selectedEvent.city],
+                ['Landmark', selectedEvent.landmark || 'Not provided'],
+                ['Public Location', selectedEvent.location_hidden ? 'Hidden until organizer reveals it' : 'Exact location visible'],
                 ['Organizer', selectedEvent.organizer.name],
               ].map(([k, v]) => (
                 <div key={k} className="flex justify-between">
@@ -229,6 +234,31 @@ export default function AdminEventsPage() {
             <div className="rounded-lg p-4 text-sm"
               style={{ backgroundColor: 'var(--color-surface-2)', color: 'var(--color-text-muted)' }}>
               {selectedEvent.description}
+            </div>
+
+            <div className="rounded-lg border p-4"
+              style={{ backgroundColor: 'var(--color-surface-2)', borderColor: 'var(--color-border)' }}>
+              <div className="flex items-center gap-2 mb-2">
+                <FileText size={15} style={{ color: 'var(--color-purple-light)' }} />
+                <p className="text-sm font-semibold" style={{ color: 'var(--color-text)' }}>
+                  Venue Proof
+                </p>
+              </div>
+              {selectedEvent.venue_proof_url ? (
+                <a
+                  href={selectedEvent.venue_proof_url}
+                  target="_blank"
+                  rel="noopener noreferrer"
+                  className="inline-flex items-center gap-1.5 text-sm"
+                  style={{ color: 'var(--color-purple-light)' }}
+                >
+                  View uploaded proof <ExternalLink size={13} />
+                </a>
+              ) : (
+                <p className="text-sm" style={{ color: 'var(--color-text-muted)' }}>
+                  No venue proof was uploaded for this event.
+                </p>
+              )}
             </div>
 
             {statusBadge(selectedEvent.status)}

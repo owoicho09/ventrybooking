@@ -5,7 +5,7 @@ import { useParams, useRouter } from 'next/navigation';
 import Link from 'next/link';
 import {
   ArrowLeft, Download, Upload, Plus, Pencil, Check, X,
-  AlertTriangle, Ticket,
+  AlertTriangle, Ticket, Copy, Eye, EyeOff,
 } from 'lucide-react';
 import { Badge } from '@/components/ui/Badge';
 import { Button } from '@/components/ui/Button';
@@ -17,6 +17,7 @@ interface Tier { id: string; name: string; price: number; available: number; sol
 interface OrgEvent {
   id: string; event_name: string; category: string; description: string;
   date: string; time: string; venue: string; address: string; city: string;
+  landmark: string | null; location_hidden: boolean;
   status: string; total_sold: number; banner_url: string | null; banner_color: string;
   organizer_id: string; tiers: Tier[];
 }
@@ -110,7 +111,11 @@ export default function OrganizerEventDetailPage() {
   const [loading, setLoading]     = useState(true);
   const [editingInfo, setEditingInfo] = useState(false);
   const [description, setDescription] = useState('');
+  const [venue, setVenue] = useState('');
   const [address, setAddress]     = useState('');
+  const [city, setCity] = useState('');
+  const [landmark, setLandmark] = useState('');
+  const [locationHidden, setLocationHidden] = useState(false);
   const [savingInfo, setSavingInfo] = useState(false);
   const [editingTierId, setEditingTierId] = useState<string | null>(null);
   const [addingTier, setAddingTier] = useState(false);
@@ -129,7 +134,11 @@ export default function OrganizerEventDetailPage() {
         if (d.success) {
           setEvent(d.data);
           setDescription(d.data.description);
+          setVenue(d.data.venue);
           setAddress(d.data.address);
+          setCity(d.data.city);
+          setLandmark(d.data.landmark ?? '');
+          setLocationHidden(Boolean(d.data.location_hidden));
         } else {
           toast(d.error || 'Event not found', 'error');
           router.push('/organizer/events');
@@ -147,7 +156,14 @@ export default function OrganizerEventDetailPage() {
       const res = await fetch(`/api/organizer/events/${id}`, {
         method: 'PATCH',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ description, address }),
+        body: JSON.stringify({
+          description,
+          venue,
+          address,
+          city,
+          landmark,
+          location_hidden: locationHidden,
+        }),
       });
       const data = await res.json();
       if (!res.ok) { toast(data.error || 'Update failed', 'error'); return; }
@@ -218,6 +234,17 @@ export default function OrganizerEventDetailPage() {
       setTimeout(() => URL.revokeObjectURL(url), 10000);
     } finally {
       setDownloadLoading(false);
+    }
+  };
+
+  const handleCopyLink = async () => {
+    const origin = typeof window !== 'undefined' ? window.location.origin : '';
+    const url = `${origin}/events/${event?.id ?? id}`;
+    try {
+      await navigator.clipboard.writeText(url);
+      toast('Ticket link copied', 'success');
+    } catch {
+      toast('Could not copy link', 'error');
     }
   };
 
@@ -342,7 +369,7 @@ export default function OrganizerEventDetailPage() {
             <h2 className="font-semibold" style={{ color: 'var(--color-text)' }}>Event Details</h2>
             {isApproved && (
               <p className="text-xs mt-0.5" style={{ color: 'var(--color-text-dim)' }}>
-                Name and date are locked after approval. You can edit description and address.
+                Name and date are locked after approval. You can edit description and location details.
               </p>
             )}
           </div>
@@ -356,10 +383,33 @@ export default function OrganizerEventDetailPage() {
         {editingInfo ? (
           <div className="flex flex-col gap-4">
             <Textarea label="Description" value={description} onChange={e => setDescription(e.target.value)} rows={4} />
+            <Input label="Venue Name" value={venue} onChange={e => setVenue(e.target.value)} />
             <Input label="Venue Address" value={address} onChange={e => setAddress(e.target.value)} />
+            <Input label="City" value={city} onChange={e => setCity(e.target.value)} />
+            <Input label="Nearby Landmark" value={landmark} onChange={e => setLandmark(e.target.value)} placeholder="e.g. Landmark Towers, Victoria Island" />
+            <label className="flex items-start gap-3 rounded-lg border px-4 py-3 cursor-pointer"
+              style={{ borderColor: 'var(--color-border)', backgroundColor: 'var(--color-surface-2)' }}>
+              <input
+                type="checkbox"
+                checked={locationHidden}
+                onChange={e => setLocationHidden(e.target.checked)}
+                className="mt-0.5 flex-shrink-0 w-4 h-4 rounded accent-[var(--color-purple)]"
+              />
+              <span className="text-sm leading-relaxed" style={{ color: 'var(--color-text-muted)' }}>
+                Hide exact venue and address on the public event page until I reveal it.
+              </span>
+            </label>
             <div className="flex gap-2">
               <Button size="sm" disabled={savingInfo} onClick={handleSaveInfo}><Check size={13} />Save</Button>
-              <Button size="sm" variant="outline" disabled={savingInfo} onClick={() => { setEditingInfo(false); setDescription(event.description); setAddress(event.address); }}>
+              <Button size="sm" variant="outline" disabled={savingInfo} onClick={() => {
+                setEditingInfo(false);
+                setDescription(event.description);
+                setVenue(event.venue);
+                setAddress(event.address);
+                setCity(event.city);
+                setLandmark(event.landmark ?? '');
+                setLocationHidden(Boolean(event.location_hidden));
+              }}>
                 <X size={13} />Cancel
               </Button>
             </div>
@@ -367,7 +417,15 @@ export default function OrganizerEventDetailPage() {
         ) : (
           <div className="flex flex-col gap-2 text-sm">
             <p style={{ color: 'var(--color-text-muted)' }}>{event.description}</p>
-            <p className="mt-1" style={{ color: 'var(--color-text-dim)' }}>{event.address}, {event.city}</p>
+            <div className="mt-1 flex items-center gap-2" style={{ color: event.location_hidden ? 'var(--color-amber)' : 'var(--color-green)' }}>
+              {event.location_hidden ? <EyeOff size={14} /> : <Eye size={14} />}
+              <span>{event.location_hidden ? 'Exact location hidden from public page' : 'Exact location visible publicly'}</span>
+            </div>
+            <p style={{ color: 'var(--color-text-dim)' }}>{event.venue}</p>
+            <p style={{ color: 'var(--color-text-dim)' }}>{event.address}, {event.city}</p>
+            {event.landmark && (
+              <p style={{ color: 'var(--color-text-dim)' }}>Landmark: {event.landmark}</p>
+            )}
           </div>
         )}
       </div>
@@ -417,15 +475,25 @@ export default function OrganizerEventDetailPage() {
 
       {/* Link to public event page */}
       <div className="pb-4">
-        <a
-          href={`/events/${event.id}`}
-          target="_blank"
-          rel="noopener noreferrer"
-          className="inline-flex items-center gap-1.5 text-sm"
-          style={{ color: 'var(--color-purple-light)' }}
-        >
-          <Ticket size={14} />View public event page
-        </a>
+        <div className="flex flex-wrap items-center gap-3">
+          <a
+            href={`/events/${event.id}`}
+            target="_blank"
+            rel="noopener noreferrer"
+            className="inline-flex items-center gap-1.5 text-sm"
+            style={{ color: 'var(--color-purple-light)' }}
+          >
+            <Ticket size={14} />View public event page
+          </a>
+          <button
+            type="button"
+            onClick={handleCopyLink}
+            className="inline-flex items-center gap-1.5 text-sm"
+            style={{ color: 'var(--color-text-muted)' }}
+          >
+            <Copy size={14} />Copy ticket link
+          </button>
+        </div>
       </div>
     </div>
   );

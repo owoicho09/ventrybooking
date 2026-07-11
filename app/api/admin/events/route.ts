@@ -15,7 +15,8 @@ export async function GET(req: NextRequest) {
   let qb = db
     .from('events')
     .select(`
-      id, name:event_name, category, date, city, venue, status, description, banner_url, venue_proof_url,
+      id, name:event_name, category, date, city, venue, address, landmark, location_hidden,
+      status, description, banner_url, venue_proof_url,
       organizer:users!events_organizer_id_fkey(id, name, tier, verified),
       tiers:ticket_tiers(id, name, price, available)
     `)

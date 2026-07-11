@@ -30,7 +30,7 @@ export async function GET(
     const { data, error } = await db
       .from('events')
       .select(`
-        id, event_name, category, description, date, time, venue, address, city,
+        id, event_name, category, description, date, time, venue, address, city, landmark, location_hidden,
         status, total_sold, banner_color, banner_url,
         organizer:users!events_organizer_id_fkey(id, name, tier, verified, member_since, events_hosted),
         tiers:ticket_tiers(id, name, price, available, sold)
@@ -48,6 +48,7 @@ export async function GET(
     }
 
     const tiers = (data.tiers as RawTier[]) ?? [];
+    const locationHidden = data.location_hidden ?? false;
     const event = {
       id: data.id,
       name: data.event_name,
@@ -55,9 +56,12 @@ export async function GET(
       description: data.description,
       date: data.date,
       time: data.time,
-      venue: data.venue,
-      address: data.address,
+      venue: locationHidden ? 'Exact location undisclosed' : data.venue,
+      address: locationHidden ? '' : data.address,
       city: data.city,
+      landmark: data.landmark ?? null,
+      location_hidden: locationHidden,
+      locationHidden: locationHidden,
       status: data.status,
       bannerColor: data.banner_color,
       banner_url: data.banner_url ?? null,

@@ -61,3 +61,9 @@ ALTER TABLE events
 ALTER TABLE events
   ADD CONSTRAINT events_status_check
   CHECK (status IN ('under_review', 'approved', 'rejected', 'completed', 'cancelled'));
+
+
+-- 7. Event location visibility controls
+ALTER TABLE events
+  ADD COLUMN IF NOT EXISTS landmark TEXT,
+  ADD COLUMN IF NOT EXISTS location_hidden BOOLEAN NOT NULL DEFAULT FALSE;

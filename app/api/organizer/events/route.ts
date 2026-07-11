@@ -48,9 +48,10 @@ export async function POST(req: NextRequest) {
 
   try {
     const db = getServerSupabase();
+    const organizerId = user.sub;
 
     // Verify KYC approved
-    const { data: org, error: orgError } = await db.from('users').select('verified').eq('id', user.sub).maybeSingle();
+    const { data: org, error: orgError } = await db.from('users').select('verified').eq('id', organizerId).maybeSingle();
     if (orgError) {
       console.error('POST /api/organizer/events kyc check db error:', orgError.message);
       return NextResponse.json({ error: orgError.message }, { status: 500 });
@@ -68,28 +69,41 @@ export async function POST(req: NextRequest) {
     const venue = formData.get('venue') as string;
     const address = formData.get('address') as string;
     const city = formData.get('city') as string;
+    const landmark = formData.get('landmark') as string;
+    const locationHidden = formData.get('locationHidden') === 'true';
     const tiersJson = formData.get('tiers') as string;
     const bannerFile = formData.get('banner') as File | null;
+    const venueProofFile = formData.get('venueProof') as File | null;
 
     if (!name || !category || !description || !date || !time || !venue || !address) {
       return NextResponse.json({ error: 'Missing required fields' }, { status: 400 });
     }
 
-    let bannerUrl: string | null = null;
-    if (bannerFile && bannerFile.size > 0) {
-      if (bannerFile.size > 5 * 1024 * 1024) {
-        return NextResponse.json({ error: 'Banner image must be under 5MB' }, { status: 400 });
+    async function uploadEventFile(file: File, folder: string, maxMb: number) {
+      if (file.size > maxMb * 1024 * 1024) {
+        throw new Error(`${folder === 'venue-proofs' ? 'Venue proof' : 'Banner image'} must be under ${maxMb}MB`);
       }
-      const ext = bannerFile.name.split('.').pop();
-      const path = `${user.sub}/${uuidv4()}.${ext}`;
-      const arrayBuffer = await bannerFile.arrayBuffer();
+      const ext = file.name.split('.').pop() || 'bin';
+      const path = `${folder}/${organizerId}/${uuidv4()}.${ext}`;
+      const arrayBuffer = await file.arrayBuffer();
       const { error: uploadError } = await db.storage
         .from('event-assets')
-        .upload(path, arrayBuffer, { contentType: bannerFile.type });
-      if (!uploadError) {
-        const { data: urlData } = db.storage.from('event-assets').getPublicUrl(path);
-        bannerUrl = urlData.publicUrl;
+        .upload(path, arrayBuffer, { contentType: file.type || 'application/octet-stream' });
+      if (uploadError) {
+        throw uploadError;
       }
+      const { data: urlData } = db.storage.from('event-assets').getPublicUrl(path);
+      return urlData.publicUrl;
+    }
+
+    let bannerUrl: string | null = null;
+    if (bannerFile && bannerFile.size > 0) {
+      bannerUrl = await uploadEventFile(bannerFile, 'banners', 5);
+    }
+
+    let venueProofUrl: string | null = null;
+    if (venueProofFile && venueProofFile.size > 0) {
+      venueProofUrl = await uploadEventFile(venueProofFile, 'venue-proofs', 10);
     }
 
     const tiers = tiersJson ? JSON.parse(tiersJson) : [];
@@ -103,10 +117,13 @@ export async function POST(req: NextRequest) {
       venue,
       address,
       city: city || '',
-      organizer_id: user.sub,
+      landmark: landmark || null,
+      location_hidden: locationHidden,
+      organizer_id: organizerId,
       status: 'under_review',
       total_sold: 0,
       banner_url: bannerUrl,
+      venue_proof_url: venueProofUrl,
       banner_color: 'from-purple-900 to-indigo-900',
       created_at: new Date().toISOString(),
     }).select('id').single();

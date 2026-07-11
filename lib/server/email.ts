@@ -196,6 +196,51 @@ export async function sendEventRejectedEmail(to: string, organizerName: string, 
   });
 }
 
+export async function sendLocationUpdatedEmail(params: {
+  to: string;
+  buyerName: string;
+  eventName: string;
+  eventDate: string;
+  eventTime: string;
+  venue: string;
+  address: string;
+  city: string;
+  landmark?: string;
+  eventUrl: string;
+}) {
+  const locationLines = [
+    params.venue,
+    params.address,
+    params.landmark ? `Landmark: ${params.landmark}` : '',
+    params.city,
+  ].filter(Boolean);
+
+  await resend.emails.send({
+    from: `Ventry <${FROM}>`,
+    to: params.to,
+    subject: `Location update for ${params.eventName}`,
+    html: emailShell(`
+      <h1 style="color:#a855f7;font-size:22px;margin:0 0 12px;">Event Location Updated</h1>
+      <p style="color:#f1f0ff;">Hi ${esc(params.buyerName || params.to)}, the organizer updated the location details for <strong>${esc(params.eventName)}</strong>.</p>
+      <table width="100%" cellpadding="0" cellspacing="0"
+        style="background:#12121a;border:1px solid #2d2d3d;border-radius:8px;margin:20px 0 24px;">
+        <tr><td style="padding:20px;">
+          <p style="margin:4px 0;color:#9ca3af;font-size:13px;">
+            <strong style="color:#f1f0ff;">Date:</strong> ${esc(params.eventDate)}
+          </p>
+          <p style="margin:4px 0;color:#9ca3af;font-size:13px;">
+            <strong style="color:#f1f0ff;">Time:</strong> ${esc(params.eventTime)}
+          </p>
+          <p style="margin:12px 0 4px;color:#f1f0ff;font-size:13px;"><strong>Exact location:</strong></p>
+          ${locationLines.map(line => `<p style="margin:4px 0;color:#9ca3af;font-size:13px;">${esc(line)}</p>`).join('')}
+        </td></tr>
+      </table>
+      <a href="${params.eventUrl}" class="btn">View Event Page</a>
+      <p class="footer">You received this because you purchased a ticket for this event.</p>
+    `),
+  });
+}
+
 export async function sendRefundConfirmationEmail(to: string, ticketId: string, amount: number, eventName: string) {
   const fmt = (n: number) =>
     new Intl.NumberFormat('en-NG', { style: 'currency', currency: 'NGN', minimumFractionDigits: 0 }).format(n);
