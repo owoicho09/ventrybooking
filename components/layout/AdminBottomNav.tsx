@@ -6,6 +6,7 @@ import {
   LayoutDashboard,
   UserCheck,
   CalendarCheck,
+  Users,
   Wallet,
   ShieldAlert,
 } from 'lucide-react';
@@ -15,6 +16,7 @@ const navItems = [
   { href: '/admin',            label: 'Dashboard', icon: LayoutDashboard },
   { href: '/admin/organizers', label: 'KYC',        icon: UserCheck },
   { href: '/admin/events',     label: 'Events',     icon: CalendarCheck },
+  { href: '/admin/buyers',     label: 'Buyers',     icon: Users },
   { href: '/admin/payouts',    label: 'Payouts',    icon: Wallet },
   { href: '/admin/fraud',      label: 'Fraud',      icon: ShieldAlert },
 ];

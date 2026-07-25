@@ -1,0 +1,159 @@
+'use client';
+
+import { useState, useEffect, useCallback, Suspense } from 'react';
+import { useSearchParams } from 'next/navigation';
+import { Search } from 'lucide-react';
+import { Badge } from '@/components/ui/Badge';
+import { Input } from '@/components/ui/Input';
+import { Table, Thead, Tbody, Th, Tr, Td } from '@/components/ui/Table';
+import { formatNGN, formatShortDate } from '@/lib/utils';
+
+type Filter = 'all' | 'valid' | 'used' | 'refunded';
+
+const filters: { value: Filter; label: string }[] = [
+  { value: 'all',      label: 'All' },
+  { value: 'valid',    label: 'Valid' },
+  { value: 'used',     label: 'Used' },
+  { value: 'refunded', label: 'Refunded' },
+];
+
+const statusBadge = (status: string) => {
+  switch (status) {
+    case 'valid':    return <Badge variant="green">Valid</Badge>;
+    case 'used':     return <Badge variant="blue">Used</Badge>;
+    case 'refunded': return <Badge variant="red">Refunded</Badge>;
+    default:         return <Badge variant="gray">{status}</Badge>;
+  }
+};
+
+interface BuyerData {
+  id: string;
+  buyer_name: string;
+  buyer_email: string;
+  total_paid: number;
+  status: string;
+  purchased_at: string;
+  paystack_reference: string;
+  event_name: string;
+  event_date: string | null;
+}
+
+function AdminBuyersPageInner() {
+  const searchParams = useSearchParams();
+
+  const [activeFilter, setActiveFilter] = useState<Filter>('all');
+  const [search, setSearch] = useState(searchParams.get('search') || '');
+  const [buyers, setBuyers] = useState<BuyerData[]>([]);
+  const [loading, setLoading] = useState(true);
+
+  const load = useCallback(() => {
+    setLoading(true);
+    const params = new URLSearchParams();
+    if (activeFilter !== 'all') params.set('status', activeFilter);
+    if (search.trim()) params.set('search', search.trim());
+    const qs = params.toString();
+
+    fetch(`/api/admin/buyers${qs ? `?${qs}` : ''}`)
+      .then(r => r.json())
+      .then(d => { if (d.success) setBuyers(d.data); })
+      .catch(console.error)
+      .finally(() => setLoading(false));
+  }, [activeFilter, search]);
+
+  useEffect(() => {
+    const t = setTimeout(load, 300);
+    return () => clearTimeout(t);
+  }, [load]);
+
+  return (
+    <div className="flex flex-col gap-6">
+      <div>
+        <h1 className="text-2xl font-bold"
+          style={{ color: 'var(--color-text)', fontFamily: 'var(--font-syne), sans-serif' }}>
+          Buyers
+        </h1>
+        <p className="text-sm mt-0.5" style={{ color: 'var(--color-text-muted)' }}>
+          Every ticket purchase across all events.
+        </p>
+      </div>
+
+      <div className="flex flex-col sm:flex-row gap-3 sm:items-center sm:justify-between">
+        <div className="flex gap-1.5 flex-wrap">
+          {filters.map(({ value, label }) => (
+            <button key={value} onClick={() => setActiveFilter(value)}
+              className="px-4 py-2 rounded-lg text-sm font-medium transition-all"
+              style={{
+                backgroundColor: activeFilter === value ? 'var(--color-purple)' : 'var(--color-surface)',
+                color:           activeFilter === value ? '#fff'               : 'var(--color-text-muted)',
+                border:          `1px solid ${activeFilter === value ? 'var(--color-purple)' : 'var(--color-border)'}`,
+              }}>
+              {label}
+            </button>
+          ))}
+        </div>
+
+        <div className="w-full sm:w-72">
+          <Input
+            icon={<Search size={15} />}
+            placeholder="Search name, email, or ticket ID..."
+            value={search}
+            onChange={(e) => setSearch(e.target.value)}
+          />
+        </div>
+      </div>
+
+      {loading && <p className="text-sm" style={{ color: 'var(--color-text-muted)' }}>Loading...</p>}
+      {!loading && buyers.length === 0 && (
+        <p className="text-sm" style={{ color: 'var(--color-text-muted)' }}>No buyers found.</p>
+      )}
+
+      {buyers.length > 0 && (
+        <div className="rounded-xl border overflow-hidden"
+          style={{ backgroundColor: 'var(--color-surface)', borderColor: 'var(--color-border)' }}>
+          <Table>
+            <Thead>
+              <tr>
+                <Th>Buyer</Th><Th>Event</Th><Th>Event Date</Th>
+                <Th>Price</Th><Th>Purchased</Th><Th>Status</Th><Th>Ticket ID</Th>
+              </tr>
+            </Thead>
+            <Tbody>
+              {buyers.map((buyer) => (
+                <Tr key={buyer.id}>
+                  <Td>
+                    <div>
+                      <p className="font-medium text-sm" style={{ color: 'var(--color-text)' }}>{buyer.buyer_name}</p>
+                      <p className="text-xs" style={{ color: 'var(--color-text-dim)' }}>{buyer.buyer_email}</p>
+                    </div>
+                  </Td>
+                  <Td><p className="text-sm max-w-[160px] truncate" style={{ color: 'var(--color-text-muted)' }}>{buyer.event_name}</p></Td>
+                  <Td>
+                    <span style={{ color: 'var(--color-text-muted)' }}>
+                      {buyer.event_date ? formatShortDate(buyer.event_date) : '—'}
+                    </span>
+                  </Td>
+                  <Td><span className="font-semibold" style={{ color: 'var(--color-text)' }}>{formatNGN(buyer.total_paid)}</span></Td>
+                  <Td>
+                    <span style={{ color: 'var(--color-text-muted)' }}>
+                      {formatShortDate(buyer.purchased_at.split('T')[0])}
+                    </span>
+                  </Td>
+                  <Td>{statusBadge(buyer.status)}</Td>
+                  <Td><span className="text-xs font-mono" style={{ color: 'var(--color-text-dim)' }}>{buyer.id}</span></Td>
+                </Tr>
+              ))}
+            </Tbody>
+          </Table>
+        </div>
+      )}
+    </div>
+  );
+}
+
+export default function AdminBuyersPage() {
+  return (
+    <Suspense fallback={<p className="text-sm" style={{ color: 'var(--color-text-muted)' }}>Loading...</p>}>
+      <AdminBuyersPageInner />
+    </Suspense>
+  );
+}

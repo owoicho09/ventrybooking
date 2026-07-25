@@ -122,17 +122,30 @@ export async function createTicketFromPayment(p: PaymentData): Promise<string | 
     },
   ).catch(err => console.error('createTicketFromPayment: notify error', err));
 
-  sendTicketEmail({
-    to:          email,
-    buyerName:   p.buyerName || '',
-    tickets:     ticketIds.map((id, i) => ({ ticketId: id, refundCode: refundCodes[i] })),
-    paystackRef: p.reference,
-    eventName:   eventRow.event_name,
-    eventDate:   eventRow.date,
-    eventVenue:  eventRow.venue,
-    tierName:    tierRow.name,
-    totalPaid:   p.totalPaidKobo / 100,
-  }).catch(err => console.error('createTicketFromPayment: email error (ticket created)', err));
+  try {
+    await sendTicketEmail({
+      to:          email,
+      buyerName:   p.buyerName || '',
+      tickets:     ticketIds.map((id, i) => ({ ticketId: id, refundCode: refundCodes[i] })),
+      paystackRef: p.reference,
+      eventName:   eventRow.event_name,
+      eventDate:   eventRow.date,
+      eventVenue:  eventRow.venue,
+      tierName:    tierRow.name,
+      totalPaid:   p.totalPaidKobo / 100,
+    });
+  } catch (err) {
+    console.error('createTicketFromPayment: email error (ticket created)', { ticketId: ticketIds[0], email, err });
+    notify(
+      { type: 'admin' },
+      {
+        notifType: 'email_failed',
+        title:     `Ticket email failed — ${eventRow.event_name}`,
+        body:      `${p.buyerName || email} (${email}) bought ${qty} ticket(s) but the confirmation email failed to send. Ticket: ${ticketIds[0]}. Resend it from the ticket's admin page.`,
+        link:      `/admin/buyers?search=${encodeURIComponent(email)}`,
+      },
+    ).catch(notifyErr => console.error('createTicketFromPayment: notify-admin error', notifyErr));
+  }
 
   return ticketIds[0];
 }

@@ -116,12 +116,14 @@ export async function sendTicketEmail(params: {
     <p class="footer">Your payment is held in escrow by Ventry and only released to the organizer after the event occurs.</p>
   `);
 
-  await resend.emails.send({
+  const { error } = await resend.emails.send({
     from: `Ventry <${FROM}>`,
     to: params.to,
     subject,
     html,
   });
+
+  if (error) throw new Error(`Resend error: ${error.message}`);
 }
 
 export async function sendOTPEmail(to: string, name: string, otp: string) {
