@@ -4,6 +4,7 @@ import { getServerSupabase } from '@/lib/supabase/server';
 import { refundTransaction } from '@/lib/server/paystack';
 import { sendRefundConfirmationEmail } from '@/lib/server/email';
 import { notify } from '@/lib/server/notify';
+import { calculateFees } from '@/lib/server/fees';
 
 export async function POST(
   req: NextRequest,
@@ -36,7 +37,7 @@ export async function POST(
 
     const { data: ticket, error: tErr } = await db
       .from('tickets')
-      .select('id, total_paid, tier_id, paystack_reference, status')
+      .select('id, event_id, total_paid, tier_id, paystack_reference, status')
       .eq('id', complaint.ticket_id)
       .maybeSingle();
 
@@ -103,6 +104,22 @@ export async function POST(
           link:      `/admin/buyers?search=${encodeURIComponent(complaint.buyer_email)}`,
         },
       ).catch(err => console.error('approve-refund: notify (DB failure) error', err));
+    }
+
+    // Reduce the linked payout by the refunded amount, same as the full-event-cancel flow.
+    const { data: payout } = await db
+      .from('payouts')
+      .select('id, gross')
+      .eq('event_id', ticket.event_id)
+      .maybeSingle();
+
+    if (payout) {
+      const newGross = Math.max(0, payout.gross - refundAmount);
+      const { fee, net } = calculateFees(newGross);
+      const { error: payoutErr } = await db.from('payouts').update({ gross: newGross, fee, net }).eq('id', payout.id);
+      if (payoutErr) {
+        console.error('approve-refund: payout adjustment failed', { ticketId: ticket.id, payoutId: payout.id, payoutErr });
+      }
     }
 
     try {

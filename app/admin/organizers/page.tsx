@@ -83,7 +83,7 @@ export default function AdminOrganizersPage() {
         KYC Review Queue
       </h1>
 
-      <div className="flex gap-1.5">
+      <div className="flex gap-1.5 flex-wrap">
         {filters.map(({ value, label }) => (
           <button key={value} onClick={() => setActiveFilter(value)}
             className="px-4 py-2 rounded-lg text-sm font-medium transition-all"
@@ -151,15 +151,15 @@ export default function AdminOrganizersPage() {
                 ['KYC Status', selectedOrg.kyc_status],
                 ['Submitted', selectedOrg.kyc_submitted_at ? formatShortDate(selectedOrg.kyc_submitted_at) : '—'],
               ].map(([k, v]) => (
-                <div key={k} className="flex justify-between">
-                  <span style={{ color: 'var(--color-text-muted)' }}>{k}</span>
-                  <span style={{ color: 'var(--color-text)' }}>{v}</span>
+                <div key={k} className="flex flex-col sm:flex-row sm:justify-between gap-1">
+                  <span className="flex-shrink-0" style={{ color: 'var(--color-text-muted)' }}>{k}</span>
+                  <span className="min-w-0 break-words" style={{ color: 'var(--color-text)' }}>{v}</span>
                 </div>
               ))}
             </div>
 
             {!rejecting ? (
-              <div className="flex gap-3">
+              <div className="flex flex-col sm:flex-row gap-3">
                 <Button variant="success" fullWidth disabled={acting} onClick={() => handleApprove(selectedOrg.id)}>
                   <CheckCircle size={15} />Approve
                 </Button>
@@ -171,7 +171,7 @@ export default function AdminOrganizersPage() {
               <div className="flex flex-col gap-3">
                 <Textarea label="Rejection Reason" value={reason} onChange={(e) => setReason(e.target.value)}
                   placeholder="Explain why this KYC is being rejected..." rows={3} />
-                <div className="flex gap-3">
+                <div className="flex flex-col sm:flex-row gap-3">
                   <Button variant="outline" fullWidth onClick={() => setRejecting(false)}>Cancel</Button>
                   <Button variant="danger" fullWidth disabled={!reason.trim() || acting} onClick={() => handleReject(selectedOrg.id)}>
                     Confirm Rejection

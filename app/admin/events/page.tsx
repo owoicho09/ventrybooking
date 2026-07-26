@@ -224,9 +224,9 @@ export default function AdminEventsPage() {
                 ['Public Location', selectedEvent.location_hidden ? 'Hidden until organizer reveals it' : 'Exact location visible'],
                 ['Organizer', selectedEvent.organizer.name],
               ].map(([k, v]) => (
-                <div key={k} className="flex justify-between">
-                  <span style={{ color: 'var(--color-text-muted)' }}>{k}</span>
-                  <span style={{ color: 'var(--color-text)' }}>{v}</span>
+                <div key={k} className="flex flex-col sm:flex-row sm:justify-between gap-1">
+                  <span className="flex-shrink-0" style={{ color: 'var(--color-text-muted)' }}>{k}</span>
+                  <span className="min-w-0 break-words sm:text-right" style={{ color: 'var(--color-text)' }}>{v}</span>
                 </div>
               ))}
             </div>
@@ -312,7 +312,7 @@ export default function AdminEventsPage() {
                     Service fee (₦100 per ticket) is non-refundable. Only the base ticket price is returned.
                   </p>
                 </div>
-                <div className="flex gap-3">
+                <div className="flex flex-col sm:flex-row gap-3">
                   <Button variant="outline" fullWidth onClick={() => setCancelStep(null)}>Go Back</Button>
                   <Button variant="danger" fullWidth disabled={acting} onClick={handleCancelConfirm}>
                     Confirm Cancellation
@@ -378,7 +378,7 @@ export default function AdminEventsPage() {
             {/* ── Normal approve / reject / cancel actions ── */}
             {!rejecting && !cancelStep && (
               <div className="flex flex-col gap-3">
-                <div className="flex gap-3">
+                <div className="flex flex-col sm:flex-row gap-3">
                   <Button variant="success" fullWidth disabled={acting} onClick={() => handleApprove(selectedEvent.id)}>
                     <CheckCircle size={15} />Approve
                   </Button>

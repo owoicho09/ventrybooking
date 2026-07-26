@@ -2,8 +2,8 @@ import { cn } from '@/lib/utils';
 
 export function Table({ children, className }: { children: React.ReactNode; className?: string }) {
   return (
-    <div className="overflow-x-auto">
-      <table className={cn('w-full text-sm', className)}>{children}</table>
+    <div className="w-full max-w-full overflow-x-auto">
+      <table className={cn('w-full min-w-max text-sm', className)}>{children}</table>
     </div>
   );
 }
@@ -22,7 +22,7 @@ export function Thead({ children }: { children: React.ReactNode }) {
 export function Th({ children, className }: { children: React.ReactNode; className?: string }) {
   return (
     <th
-      className={cn('px-4 py-3 text-left font-medium text-xs tracking-wide uppercase', className)}
+      className={cn('whitespace-nowrap px-3 sm:px-4 py-3 text-left font-medium text-xs tracking-wide uppercase', className)}
       style={{ color: 'var(--color-text-muted)' }}
     >
       {children}
@@ -47,7 +47,7 @@ export function Tr({ children, className }: { children: React.ReactNode; classNa
 
 export function Td({ children, className }: { children: React.ReactNode; className?: string }) {
   return (
-    <td className={cn('px-4 py-3.5', className)} style={{ color: 'var(--color-text)' }}>
+    <td className={cn('whitespace-nowrap px-3 sm:px-4 py-3.5', className)} style={{ color: 'var(--color-text)' }}>
       {children}
     </td>
   );

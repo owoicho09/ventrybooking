@@ -143,7 +143,7 @@ export default function TermsPage() {
                 <><strong>&quot;Ticket&quot;</strong> means a digitally issued, QR-coded proof of entry to an Event.</>,
                 <><strong>&quot;Escrow&quot;</strong> means the holding of Buyer funds by Ventry until the conditions for release to the Organizer are met.</>,
                 <><strong>&quot;KYC&quot;</strong> means Know Your Customer — the identity verification process required of all Organizers.</>,
-                <><strong>&quot;Service Fee&quot;</strong> means the non-refundable {SERVICE_FEE} flat fee charged to Buyers on each ticket purchase.</>,
+                <><strong>&quot;Service Fee&quot;</strong> means the non-refundable {SERVICE_FEE} flat fee charged to Buyers on each ticket.</>,
                 <><strong>&quot;Platform Fee&quot;</strong> means the {PLATFORM_FEE} fee deducted from the Organizer&apos;s gross ticket revenue before payout.</>,
               ]} />
             </Section>
@@ -193,10 +193,10 @@ export default function TermsPage() {
               </Sub>
               <Sub title="3.2 Service Fee">
                 <P>
-                  A flat, non-refundable Service Fee of <strong>{SERVICE_FEE}</strong> is added to every ticket
-                  transaction. This fee covers the cost of payment processing, QR ticket generation, escrow
-                  management, and buyer protection services. The Service Fee is retained by Ventry even in the
-                  event of a refund.
+                  A flat, non-refundable Service Fee of <strong>{SERVICE_FEE}</strong> is charged on every ticket
+                  purchased (e.g. buying 3 tickets in one transaction incurs 3 &times; the Service Fee). This fee
+                  covers the cost of payment processing, QR ticket generation, escrow management, and buyer
+                  protection services. The Service Fee is retained by Ventry even in the event of a refund.
                 </P>
               </Sub>
               <Sub title="3.3 Ticket Delivery">
@@ -336,9 +336,10 @@ export default function TermsPage() {
               </Sub>
               <Sub title="6.3 Service Fee">
                 <P>
-                  The <strong>{SERVICE_FEE}</strong> Service Fee is non-refundable in all circumstances,
-                  including cancellations and upheld fraud complaints. This fee is the cost of the payment
-                  and buyer-protection infrastructure, which is incurred regardless of the event outcome.
+                  The <strong>{SERVICE_FEE}</strong> Service Fee (charged per ticket) is non-refundable in all
+                  circumstances, including cancellations and upheld fraud complaints. This fee is the cost of
+                  the payment and buyer-protection infrastructure, which is incurred regardless of the event
+                  outcome.
                 </P>
               </Sub>
               <Sub title="6.4 Refund Process">

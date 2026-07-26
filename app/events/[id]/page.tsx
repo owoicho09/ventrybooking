@@ -52,7 +52,7 @@ export default function EventDetailPage() {
   const hasSelection     = totalQty > 0;
   const allFree          = hasSelection && selectedTiers.every(t => t.price === 0);
   const subtotal         = selectedTiers.reduce((s, t) => s + t.price * (quantities[t.id] ?? 0), 0);
-  const serviceFee       = subtotal > 0 ? 100 : 0;
+  const serviceFee       = subtotal > 0 ? 100 * totalQty : 0;
   const total            = subtotal + serviceFee;
   const multiTierWarning = selectedTiers.length > 1;
   const exactLocationVisible = event ? !event.location_hidden : false;
@@ -297,7 +297,7 @@ export default function EventDetailPage() {
                           <span style={{ color: 'var(--color-text)' }}>Total</span><span style={{ color: 'var(--color-text)' }}>{formatNGN(total)}</span>
                         </div>
                         <p className="text-[10px] leading-snug mt-1" style={{ color: 'var(--color-text-dim)' }}>
-                          The ₦100 service fee is non-refundable — only the base ticket price is refundable. Paystack deducts their 1.5% processing fee on their end; this is not added to your total.
+                          The ₦100 per-ticket service fee is non-refundable — only the base ticket price is refundable. Paystack deducts their 1.5% processing fee on their end; this is not added to your total.
                         </p>
                       </>
                     )}

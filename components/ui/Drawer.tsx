@@ -40,17 +40,18 @@ export function Drawer({ open, onClose, title, children, width = '480px' }: Draw
       <div
         className={`fixed top-0 right-0 h-full z-50 border-l flex flex-col shadow-2xl transition-transform duration-300 ${open ? 'translate-x-0' : 'translate-x-full'}`}
         style={{
-          width,
+          width: `min(${width}, 100vw)`,
+          maxWidth: '100vw',
           backgroundColor: 'var(--color-surface)',
           borderColor: 'var(--color-border)',
         }}
       >
         {title && (
           <div
-            className="flex items-center justify-between px-6 py-4 border-b flex-shrink-0"
+            className="flex items-center justify-between gap-3 px-4 sm:px-6 py-4 border-b flex-shrink-0"
             style={{ borderColor: 'var(--color-border)' }}
           >
-            <h2 className="text-base font-semibold" style={{ color: 'var(--color-text)' }}>
+            <h2 className="min-w-0 text-base font-semibold truncate" style={{ color: 'var(--color-text)' }}>
               {title}
             </h2>
             <button
@@ -62,7 +63,7 @@ export function Drawer({ open, onClose, title, children, width = '480px' }: Draw
             </button>
           </div>
         )}
-        <div className="flex-1 overflow-y-auto p-6">{children}</div>
+        <div className="flex-1 min-w-0 overflow-y-auto p-4 sm:p-6">{children}</div>
       </div>
     </>
   );

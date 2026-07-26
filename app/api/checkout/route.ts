@@ -52,8 +52,9 @@ export async function POST(req: NextRequest) {
       return NextResponse.json({ error: `Only ${remaining} tickets remaining` }, { status: 400 });
     }
 
-    const subtotal = tier.price * quantity;
-    const total    = subtotal + SERVICE_FEE;
+    const subtotal   = tier.price * quantity;
+    const serviceFee = SERVICE_FEE * quantity;
+    const total      = subtotal + serviceFee;
     const reference = `VTR-${uuidv4().replace(/-/g, '').toUpperCase().slice(0, 12)}`;
     const appUrl = process.env.NEXT_PUBLIC_APP_URL!;
 
@@ -71,7 +72,7 @@ export async function POST(req: NextRequest) {
         buyerName:        buyerName || '',
         marketingConsent: marketingConsent === true,
         subtotal,
-        serviceFee: SERVICE_FEE,
+        serviceFee,
         total,
       },
     });
@@ -86,7 +87,7 @@ export async function POST(req: NextRequest) {
         buyer_email:      buyerEmail,
         buyer_name:       buyerName || '',
         subtotal,
-        service_fee:      SERVICE_FEE,
+        service_fee:      serviceFee,
         total,
         organizer_id:     event.organizer_id,
         marketing_consent: marketingConsent === true,

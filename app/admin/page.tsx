@@ -45,7 +45,7 @@ export default function AdminDashboardPage() {
         </p>
       </div>
 
-      <div className="grid grid-cols-2 xl:grid-cols-3 gap-4">
+      <div className="grid grid-cols-1 sm:grid-cols-2 xl:grid-cols-3 gap-3 sm:gap-4">
         <StatsCard label="Total Events" value={stats?.totalEvents ?? '—'} icon={CalendarDays} trend="All time" />
         <StatsCard label="Active Events" value={stats?.activeEvents ?? '—'} icon={Activity} trend="Currently live" />
         <StatsCard label="Tickets Sold" value={stats ? stats.totalTicketsSold.toLocaleString() : '—'} icon={Ticket} trend="Across all events" />
@@ -68,7 +68,7 @@ export default function AdminDashboardPage() {
               <p className="px-6 py-4 text-sm" style={{ color: 'var(--color-text-muted)' }}>No pending KYC submissions</p>
             )}
             {pendingOrgs.map((org) => (
-              <div key={org.id} className="flex items-center gap-4 px-6 py-4">
+            <div key={org.id} className="flex flex-wrap sm:flex-nowrap items-center gap-3 sm:gap-4 px-4 sm:px-6 py-4">
                 <div className="w-9 h-9 rounded-full flex items-center justify-center text-sm font-bold text-white flex-shrink-0"
                   style={{ backgroundColor: 'var(--color-purple)' }}>
                   {org.name[0]}
@@ -79,8 +79,10 @@ export default function AdminDashboardPage() {
                     Submitted {org.submittedAt ? formatShortDate(org.submittedAt) : 'N/A'}
                   </p>
                 </div>
-                <Badge variant="amber">Pending</Badge>
-                <Link href="/admin/organizers"><Button size="sm" variant="outline">Review</Button></Link>
+                <div className="ml-11 sm:ml-0 flex items-center gap-2">
+                  <Badge variant="amber">Pending</Badge>
+                  <Link href="/admin/organizers"><Button size="sm" variant="outline">Review</Button></Link>
+                </div>
               </div>
             ))}
           </div>
@@ -99,15 +101,17 @@ export default function AdminDashboardPage() {
               <p className="px-6 py-4 text-sm" style={{ color: 'var(--color-text-muted)' }}>No events pending approval</p>
             )}
             {pendingEvents.map((event) => (
-              <div key={event.id} className="flex items-center gap-4 px-6 py-4">
+              <div key={event.id} className="flex flex-wrap sm:flex-nowrap items-center gap-3 sm:gap-4 px-4 sm:px-6 py-4">
                 <div className="flex-1 min-w-0">
                   <p className="text-sm font-medium truncate" style={{ color: 'var(--color-text)' }}>{event.name}</p>
                   <p className="text-xs" style={{ color: 'var(--color-text-muted)' }}>
                     by {event.organizer.name} &middot; {formatShortDate(event.date)}
                   </p>
                 </div>
-                <Badge variant="amber">Under Review</Badge>
-                <Link href="/admin/events"><Button size="sm" variant="outline">Review</Button></Link>
+                <div className="flex items-center gap-2">
+                  <Badge variant="amber">Under Review</Badge>
+                  <Link href="/admin/events"><Button size="sm" variant="outline">Review</Button></Link>
+                </div>
               </div>
             ))}
           </div>

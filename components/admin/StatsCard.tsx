@@ -11,14 +11,14 @@ interface StatsCardProps {
 export function StatsCard({ label, value, icon: Icon, trend, accent }: StatsCardProps) {
   return (
     <div
-      className="rounded-xl border p-5 flex flex-col gap-3"
+      className="min-w-0 rounded-xl border p-4 sm:p-5 flex flex-col gap-3"
       style={{
         backgroundColor: accent ? 'var(--color-purple-dim)' : 'var(--color-surface)',
         borderColor: accent ? '#7c3aed40' : 'var(--color-border)',
       }}
     >
       <div className="flex items-center justify-between">
-        <span className="text-xs font-medium uppercase tracking-wider" style={{ color: 'var(--color-text-muted)' }}>
+        <span className="min-w-0 text-xs font-medium uppercase tracking-wider break-words" style={{ color: 'var(--color-text-muted)' }}>
           {label}
         </span>
         <div
@@ -33,7 +33,7 @@ export function StatsCard({ label, value, icon: Icon, trend, accent }: StatsCard
       </div>
       <div>
         <p
-          className="text-2xl font-bold"
+          className="text-xl sm:text-2xl font-bold break-words"
           style={{
             color: accent ? 'var(--color-purple-light)' : 'var(--color-text)',
             fontFamily: 'var(--font-syne), sans-serif',

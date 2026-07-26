@@ -138,14 +138,14 @@ export default function AdminPayoutsPage() {
       </h1>
 
       {/* ── Global payout percentage ── */}
-      <div className="rounded-xl border p-6"
+      <div className="rounded-xl border p-4 sm:p-6"
         style={{ backgroundColor: 'var(--color-surface)', borderColor: 'var(--color-border)' }}>
         <h2 className="font-semibold mb-1" style={{ color: 'var(--color-text)' }}>Global Payout Percentage</h2>
         <p className="text-sm mb-5" style={{ color: 'var(--color-text-muted)' }}>
           Control what percentage of escrow is released to organizers.
         </p>
-        <div className="flex items-center gap-4">
-          <div className="flex-1">
+        <div className="flex flex-col sm:flex-row sm:items-center gap-4">
+          <div className="w-full sm:flex-1 min-w-0">
             <input type="range" min={0} max={100} value={percentage}
               onChange={(e) => setPercentage(Number(e.target.value))}
               className="w-full accent-[var(--color-purple)]" />
@@ -276,6 +276,7 @@ export default function AdminPayoutsPage() {
                   <Td>
                     {payout.status === 'pending' && (
                       <Button size="sm" variant="outline" disabled={acting === payout.id}
+                        className="whitespace-nowrap"
                         style={{ borderColor: 'var(--color-amber)', color: 'var(--color-amber)' }}
                         onClick={() => handleConfirmEvent(payout.id)}>
                         <Clock size={13} />Confirm Event
@@ -284,6 +285,7 @@ export default function AdminPayoutsPage() {
 
                     {payout.status === 'processing' && (
                       <Button size="sm" variant="success" disabled={acting === payout.id}
+                        className="whitespace-nowrap"
                         onClick={() => handleRelease(payout)}>
                         <CheckCircle size={13} />Release Payout
                       </Button>
@@ -292,6 +294,7 @@ export default function AdminPayoutsPage() {
                     {payout.status === 'otp_pending' && (
                       <a href="https://dashboard.paystack.com/" target="_blank" rel="noopener noreferrer">
                         <Button size="sm" variant="outline"
+                          className="whitespace-nowrap"
                           style={{ borderColor: '#f59e0b', color: '#f59e0b' }}>
                           <ExternalLink size={13} />Confirm OTP
                         </Button>
