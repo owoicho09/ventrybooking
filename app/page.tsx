@@ -142,39 +142,24 @@ export default async function HomePage() {
         />
         <div className="absolute inset-0 grid-pattern pointer-events-none" />
 
-        <div className="relative z-10 max-w-4xl mx-auto px-4 sm:px-6 text-center py-20">
-          <div
-            className="inline-flex items-center gap-2 px-3 py-1.5 rounded-full text-xs font-medium mb-8 border"
-            style={{
-              backgroundColor: 'var(--color-purple-dim)',
-              borderColor: '#7c3aed40',
-              color: 'var(--color-purple-light)',
-            }}
-          >
-            <span
-              className="w-1.5 h-1.5 rounded-full animate-pulse"
-              style={{ backgroundColor: 'var(--color-purple-light)' }}
-            />
-            Vibes on Vibes
-          </div>
-
+        <div className="relative z-10 max-w-3xl mx-auto px-4 sm:px-6 text-center py-20">
           <h1
-            className="text-4xl sm:text-5xl md:text-6xl lg:text-7xl font-extrabold leading-tight mb-6 break-words"
+            className="text-3xl sm:text-4xl md:text-5xl lg:text-6xl font-extrabold leading-tight mb-6 break-words"
             style={{
               color: 'var(--color-text)',
               fontFamily: 'var(--font-syne), sans-serif',
               overflowWrap: 'break-word',
             }}
           >
-            The Party.{' '}
-            <span style={{ color: 'var(--color-purple)' }}>Starts Here.</span>
+            Your ticket to{' '}
+            <span style={{ color: 'var(--color-purple)' }}>every experience.</span>
           </h1>
 
           <p
-            className="text-lg md:text-xl leading-relaxed max-w-2xl mx-auto mb-10"
+            className="text-base sm:text-lg md:text-xl leading-relaxed max-w-xl mx-auto mb-10"
             style={{ color: 'var(--color-text-muted)' }}
           >
-            Discover and buy tickets to the best parties, concerts, uni events and more across Nigeria. Your money is protected in escrow — and fully refundable if anything goes wrong.
+            Get your ticket to the best parties, sport events, conferences, seminars and every other experience, worry-free. Every ticket on Ventry is fully refundable if anything goes wrong.
           </p>
 
           <div className="flex flex-col sm:flex-row gap-3 justify-center mb-12">
