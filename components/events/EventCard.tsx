@@ -12,7 +12,7 @@ interface EventCardProps {
 
 const categoryIcon: Record<string, string> = {
   Concert: '♪',
-  'Uni Party': '★',
+  Party: '★',
   Sports: '⬡',
   Theater: '◈',
   Festival: '◉',

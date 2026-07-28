@@ -28,12 +28,12 @@ const jetbrainsMono = JetBrains_Mono({
 export const metadata: Metadata = {
   metadataBase: new URL('https://ventrybooking.com'),
 
-  title: 'Ventry — The Party Starts Here',
+  title: 'Ventry — Your Ticket to Every Experience',
   description:
     'Discover and buy tickets to the best parties, concerts and events across Nigeria. Every payment protected in escrow.',
 
   openGraph: {
-    title: 'Ventry — The Party Starts Here',
+    title: 'Ventry — Your Ticket to Every Experience',
     description:
       'Discover and buy tickets to the best parties, concerts and events across Nigeria. Every payment protected in escrow.',
     siteName: 'Ventry',
@@ -45,14 +45,14 @@ export const metadata: Metadata = {
         url: '/opengraph-image',
         width: 1200,
         height: 630,
-        alt: 'Ventry — The Party Starts Here',
+        alt: 'Ventry — Your Ticket to Every Experience',
       },
     ],
   },
 
   twitter: {
     card: 'summary_large_image',
-    title: 'Ventry — The Party Starts Here',
+    title: 'Ventry — Your Ticket to Every Experience',
     description:
       'Discover and buy tickets to the best parties, concerts and events across Nigeria. Every payment protected in escrow.',
     images: ['/opengraph-image'],

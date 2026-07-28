@@ -8,7 +8,7 @@ import { EventGrid } from '@/components/events/EventGrid';
 
 const categoryMap: Record<string, string> = {
   'Concerts':    'Concert',
-  'Uni Parties': 'Uni Party',
+  'Parties':     'Party',
   'Sports':      'Sports',
   'Theater':     'Theater',
   'Festivals':   'Festival',
@@ -20,7 +20,15 @@ export default function EventsPage() {
   const [category, setCategory] = useState('All');
   const [city,     setCity]     = useState('All Cities');
   const [events,   setEvents]   = useState([]);
+  const [cities,   setCities]   = useState<string[]>([]);
   const [loading,  setLoading]  = useState(true);
+
+  useEffect(() => {
+    fetch('/api/events/cities')
+      .then(r => r.json())
+      .then(d => { if (d.success) setCities(d.data); })
+      .catch(console.error);
+  }, []);
 
   useEffect(() => {
     setLoading(true);
@@ -42,13 +50,14 @@ export default function EventsPage() {
       <PublicNav />
       <div className="pt-16">
         <FilterBar
+          cities={cities}
           onSearch={setQuery}
           onFilter={f => {
             setCategory(f.category);
             setCity(f.city);
           }}
         />
-        <div className="max-w-7xl mx-auto px-6 py-8">
+        <div className="max-w-7xl mx-auto px-4 sm:px-6 py-8">
           <div className="flex items-center justify-between mb-6">
             <p className="text-sm" style={{ color: 'var(--color-text-muted)' }}>
               {loading

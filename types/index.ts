@@ -1,6 +1,6 @@
 export type EventCategory =
   | 'Concert'
-  | 'Uni Party'
+  | 'Party'
   | 'Sports'
   | 'Theater'
   | 'Festival'

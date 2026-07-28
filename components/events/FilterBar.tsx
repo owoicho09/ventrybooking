@@ -1,24 +1,28 @@
 'use client';
 
 import { useState, useEffect, useRef } from 'react';
-import { Search } from 'lucide-react';
+import { Search, ChevronDown } from 'lucide-react';
 
-const categories = ['All', 'Concerts', 'Uni Parties', 'Sports', 'Theater', 'Festivals', 'Conferences'];
-const cities     = ['All Cities', 'Lagos', 'Abuja', 'Port Harcourt'];
-const dates      = ['All', 'This Weekend', 'This Month'];
-const sorts      = ['Soonest', 'Most Popular', 'Price Low', 'Price High'];
+const categories = ['All', 'Concerts', 'Parties', 'Sports', 'Theater', 'Festivals', 'Conferences'];
+// Shown until the real list of cities (fetched from actual events) arrives.
+const FALLBACK_CITIES = ['Lagos', 'Abuja', 'Port Harcourt'];
+const dates = ['All', 'This Weekend', 'This Month'];
+const sorts = ['Soonest', 'Most Popular', 'Price Low', 'Price High'];
 
 interface FilterBarProps {
+  cities?: string[];
   onSearch?: (q: string) => void;
   onFilter?: (filter: { category: string; city: string; date: string; sort: string }) => void;
 }
 
-export function FilterBar({ onSearch, onFilter }: FilterBarProps) {
+export function FilterBar({ cities, onSearch, onFilter }: FilterBarProps) {
   const [query,          setQuery]          = useState('');
   const [activeCategory, setActiveCategory] = useState('All');
   const [city,           setCity]           = useState('All Cities');
   const [date,           setDate]           = useState('All');
   const [sort,           setSort]           = useState('Soonest');
+
+  const cityOptions = ['All Cities', ...(cities?.length ? cities : FALLBACK_CITIES)];
 
   const didMount = useRef(false);
   const searchTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
@@ -46,7 +50,7 @@ export function FilterBar({ onSearch, onFilter }: FilterBarProps) {
         borderColor: 'var(--color-border)',
       }}
     >
-      <div className="max-w-7xl mx-auto px-6 flex flex-col gap-3">
+      <div className="max-w-7xl mx-auto px-4 sm:px-6 flex flex-col gap-3">
         {/* Search */}
         <div className="relative">
           <Search size={16} className="absolute left-3 top-1/2 -translate-y-1/2"
@@ -61,10 +65,10 @@ export function FilterBar({ onSearch, onFilter }: FilterBarProps) {
           />
         </div>
 
-        {/* Filters row */}
-        <div className="flex flex-wrap items-center gap-2">
-          {/* Category chips — horizontal scroll on mobile */}
-          <div className="flex gap-1.5 flex-1 overflow-x-auto pb-0.5 sm:flex-wrap sm:overflow-visible">
+        {/* Filters — stacked on mobile, single row from sm up */}
+        <div className="flex flex-col sm:flex-row sm:items-center gap-2">
+          {/* Category chips — horizontal scroll on mobile, wraps at sm+ */}
+          <div className="flex gap-1.5 overflow-x-auto pb-0.5 sm:flex-1 sm:flex-wrap sm:overflow-visible">
             {categories.map(cat => (
               <button
                 key={cat}
@@ -82,21 +86,28 @@ export function FilterBar({ onSearch, onFilter }: FilterBarProps) {
           </div>
 
           {/* Dropdowns */}
-          <div className="flex gap-2 flex-wrap">
+          <div className="grid grid-cols-3 sm:flex gap-2">
             {([
-              { value: city, setValue: setCity, options: cities,  label: 'Location' },
-              { value: date, setValue: setDate, options: dates,   label: 'Date' },
-              { value: sort, setValue: setSort, options: sorts,   label: 'Sort' },
+              { value: city, setValue: setCity, options: cityOptions, label: 'Location' },
+              { value: date, setValue: setDate, options: dates,       label: 'Date' },
+              { value: sort, setValue: setSort, options: sorts,       label: 'Sort' },
             ] as { value: string; setValue: (v: string) => void; options: string[]; label: string }[]).map(({ value, setValue, options, label }) => (
-              <select
-                key={label}
-                value={value}
-                onChange={e => setValue(e.target.value)}
-                className="text-xs px-3 py-1.5 rounded-lg border outline-none focus:border-[var(--color-purple)] appearance-none cursor-pointer"
-                style={{ backgroundColor: 'var(--color-surface)', borderColor: 'var(--color-border)', color: 'var(--color-text-muted)' }}
-              >
-                {options.map(opt => <option key={opt} value={opt}>{opt}</option>)}
-              </select>
+              <div key={label} className="relative min-w-0">
+                <select
+                  aria-label={label}
+                  value={value}
+                  onChange={e => setValue(e.target.value)}
+                  className="w-full truncate text-xs pl-3 pr-6 py-1.5 rounded-lg border outline-none focus:border-[var(--color-purple)] appearance-none cursor-pointer"
+                  style={{ backgroundColor: 'var(--color-surface)', borderColor: 'var(--color-border)', color: 'var(--color-text-muted)' }}
+                >
+                  {options.map(opt => <option key={opt} value={opt}>{opt}</option>)}
+                </select>
+                <ChevronDown
+                  size={12}
+                  className="absolute right-2 top-1/2 -translate-y-1/2 pointer-events-none"
+                  style={{ color: 'var(--color-text-dim)' }}
+                />
+              </div>
             ))}
           </div>
         </div>

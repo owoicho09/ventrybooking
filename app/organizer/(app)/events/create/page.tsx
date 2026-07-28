@@ -12,7 +12,7 @@ interface Tier { id: string; name: string; price: string; quantity: string; }
 
 const eventTypes = [
   { value: 'Concert', label: 'Concert' },
-  { value: 'Uni Party', label: 'Uni Party' },
+  { value: 'Party', label: 'Party' },
   { value: 'Festival', label: 'Festival' },
   { value: 'Sports', label: 'Sports' },
   { value: 'Theater', label: 'Theater' },
