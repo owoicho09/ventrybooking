@@ -4,7 +4,7 @@ import { getServerSupabase } from '@/lib/supabase/server';
 import { refundTransaction } from '@/lib/server/paystack';
 import { sendRefundConfirmationEmail } from '@/lib/server/email';
 import { notify } from '@/lib/server/notify';
-import { calculateFees } from '@/lib/server/fees';
+import { calculateFees, SERVICE_FEE } from '@/lib/server/fees';
 
 export async function POST(
   req: NextRequest,
@@ -46,6 +46,9 @@ export async function POST(
       return NextResponse.json({ error: 'Database error' }, { status: 500 });
     }
     if (!ticket) return NextResponse.json({ error: 'Ticket not found' }, { status: 404 });
+    if (ticket.status === 'refunded') {
+      return NextResponse.json({ error: 'Ticket has already been refunded' }, { status: 400 });
+    }
 
     if (!ticket.paystack_reference) {
       return NextResponse.json(
@@ -54,17 +57,14 @@ export async function POST(
       );
     }
 
-    // Refund the exact base ticket price from the tier, not total_paid − SERVICE_FEE.
-    // total_paid is split evenly across ticket rows for multi-ticket orders, so
-    // subtracting the flat ₦100 from each row under-refunds by ₦50 per extra ticket.
-    // The tier price is the canonical per-ticket base price regardless of order size.
-    const { data: tier } = await db
-      .from('ticket_tiers')
-      .select('price')
-      .eq('id', ticket.tier_id)
-      .maybeSingle();
-
-    const refundAmount = tier?.price ?? Math.max(0, ticket.total_paid - 100);
+    // Refund based on what THIS ticket actually paid, not the tier's current price.
+    // Tier prices can be edited by the organizer after tickets are sold (e.g. early-bird
+    // pricing that steps up over time), so re-reading ticket_tiers.price at refund time
+    // refunds the wrong amount for any ticket sold before the price changed.
+    // total_paid is fixed at purchase and already excludes nothing — it's the ticket's
+    // base price plus its own per-ticket service fee, so subtracting SERVICE_FEE recovers
+    // exactly what the buyer paid for the ticket itself.
+    const refundAmount = Math.max(0, ticket.total_paid - SERVICE_FEE);
 
     try {
       await refundTransaction({
@@ -104,6 +104,16 @@ export async function POST(
           link:      `/admin/buyers?search=${encodeURIComponent(complaint.buyer_email)}`,
         },
       ).catch(err => console.error('approve-refund: notify (DB failure) error', err));
+    }
+
+    // Give the ticket back to inventory — increment_tier_sold accepts a negative delta,
+    // so this atomically decrements both ticket_tiers.sold and events.total_sold. Only
+    // do this once we know the ticket row itself was actually marked refunded above.
+    if (!ticketErr) {
+      const { error: tierErr } = await db.rpc('increment_tier_sold', { tier_id: ticket.tier_id, amount: -1 });
+      if (tierErr) {
+        console.error('approve-refund: tier sold-count decrement failed', { ticketId: ticket.id, tierErr });
+      }
     }
 
     // Reduce the linked payout by the refunded amount, same as the full-event-cancel flow.

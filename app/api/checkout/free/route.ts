@@ -20,7 +20,7 @@ export async function POST(req: NextRequest) {
 
     const { data: event } = await db
       .from('events')
-      .select('id, event_name, date, time, venue, status, organizer_id')
+      .select('id, event_name, date, time, venue, status, organizer_id, banner_url')
       .eq('id', eventId)
       .maybeSingle();
 
@@ -106,6 +106,7 @@ export async function POST(req: NextRequest) {
       eventVenue:  event.venue,
       tierName:    tier.name,
       totalPaid:   0,
+      bannerUrl:   event.banner_url,
     }).catch(err => console.error('free checkout: email error', err));
 
     return NextResponse.json({

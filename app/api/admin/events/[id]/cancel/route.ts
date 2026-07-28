@@ -3,7 +3,7 @@ import { getAuthUser } from '@/lib/server/auth';
 import { getServerSupabase } from '@/lib/supabase/server';
 import { refundTransaction } from '@/lib/server/paystack';
 import { notify } from '@/lib/server/notify';
-import { calculateFees } from '@/lib/server/fees';
+import { calculateFees, SERVICE_FEE } from '@/lib/server/fees';
 
 // GET — preview: count of refundable tickets + total refund amount (no side effects)
 export async function GET(
@@ -31,24 +31,20 @@ export async function GET(
 
   const { data: tickets } = await db
     .from('tickets')
-    .select('id, tier_id, paystack_reference')
+    .select('id, tier_id, paystack_reference, total_paid')
     .eq('event_id', id)
     .neq('status', 'refunded');
 
   const ticketCount     = tickets?.length ?? 0;
   const refundableCount = tickets?.filter(t => t.paystack_reference).length ?? 0;
 
-  let totalRefund = 0;
-  if (tickets && tickets.length > 0) {
-    const tierIds = [...new Set(tickets.map(t => t.tier_id).filter(Boolean))] as string[];
-    const { data: tiers } = await db
-      .from('ticket_tiers')
-      .select('id, price')
-      .in('id', tierIds);
-
-    const tierMap = Object.fromEntries((tiers ?? []).map(t => [t.id, t.price]));
-    totalRefund = tickets.reduce((sum, t) => sum + (tierMap[t.tier_id] ?? 0), 0);
-  }
+  // Refund basis is what each ticket actually paid (total_paid − SERVICE_FEE), not the
+  // tier's current price — see the note in approve-refund/route.ts on why live tier
+  // prices drift from what was charged at purchase time.
+  const totalRefund = (tickets ?? []).reduce(
+    (sum, t) => sum + Math.max(0, t.total_paid - SERVICE_FEE),
+    0,
+  );
 
   return NextResponse.json({
     success: true,
@@ -96,7 +92,7 @@ export async function POST(
 
   const { data: tickets } = await db
     .from('tickets')
-    .select('id, tier_id, paystack_reference, buyer_email')
+    .select('id, tier_id, paystack_reference, buyer_email, total_paid')
     .eq('event_id', id)
     .neq('status', 'refunded');
 
@@ -110,27 +106,33 @@ export async function POST(
     return NextResponse.json({ success: true, data: { refunded: 0, failed: 0, failures: [] } });
   }
 
-  // Build tier price map so each refund uses the canonical base price (not total_paid).
-  const tierIds = [...new Set(tickets.map(t => t.tier_id).filter(Boolean))] as string[];
-  const { data: tiers } = await db.from('ticket_tiers').select('id, price').in('id', tierIds);
-  const tierMap = Object.fromEntries((tiers ?? []).map(t => [t.id, t.price]));
-
   let refunded = 0;
   let totalRefundedAmount = 0;
   const failures: { ticketId: string; email: string; reason: string }[] = [];
+
+  // Tracks how many tickets were actually marked refunded per tier, so ticket_tiers.sold
+  // and events.total_sold can be given back to inventory once the loops below finish.
+  const tierRefundCounts = new Map<string, number>();
+  const bumpTierRefundCount = (tierId: string | null) => {
+    if (!tierId) return;
+    tierRefundCounts.set(tierId, (tierRefundCounts.get(tierId) ?? 0) + 1);
+  };
 
   // Free tickets (no reference) — mark refunded without a Paystack call.
   const freeTickets  = tickets.filter(t => !t.paystack_reference);
   const paidTickets  = tickets.filter(t =>  t.paystack_reference);
 
   for (const ticket of freeTickets) {
-    const refundAmount = tierMap[ticket.tier_id] ?? 0;
+    // Refund basis is what this ticket actually paid (total_paid − SERVICE_FEE), not the
+    // tier's current price — see the note in approve-refund/route.ts for why.
+    const refundAmount = Math.max(0, ticket.total_paid - SERVICE_FEE);
     if (refundAmount > 0) {
       failures.push({ ticketId: ticket.id, email: ticket.buyer_email, reason: 'No payment reference on file — refund manually via Paystack dashboard' });
       continue;
     }
     await db.from('tickets').update({ status: 'refunded' }).eq('id', ticket.id);
     refunded++;
+    bumpTierRefundCount(ticket.tier_id);
   }
 
   // Group paid tickets by paystack_reference so that multi-ticket orders placed in
@@ -145,13 +147,14 @@ export async function POST(
   }
 
   for (const [reference, group] of byReference) {
-    const totalRefundAmount = group.reduce((sum, t) => sum + (tierMap[t.tier_id] ?? 0), 0);
+    const totalRefundAmount = group.reduce((sum, t) => sum + Math.max(0, t.total_paid - SERVICE_FEE), 0);
 
     if (totalRefundAmount === 0) {
       // All tickets in this order were free-tier — mark refunded without Paystack.
       for (const ticket of group) {
         await db.from('tickets').update({ status: 'refunded' }).eq('id', ticket.id);
         refunded++;
+        bumpTierRefundCount(ticket.tier_id);
       }
       continue;
     }
@@ -177,10 +180,21 @@ export async function POST(
         .eq('id', ticket.id);
       if (updateErr) {
         console.error(`cancel event: Paystack refund succeeded but DB update failed for ticket ${ticket.id}`, updateErr);
+      } else {
+        bumpTierRefundCount(ticket.tier_id);
       }
       refunded++;
     }
     totalRefundedAmount += totalRefundAmount;
+  }
+
+  // Give refunded tickets back to inventory. increment_tier_sold accepts a negative
+  // delta, so this atomically decrements both ticket_tiers.sold and events.total_sold.
+  for (const [tierId, count] of tierRefundCounts) {
+    const { error: tierErr } = await db.rpc('increment_tier_sold', { tier_id: tierId, amount: -count });
+    if (tierErr) {
+      console.error('cancel event: tier sold-count decrement failed', { tierId, count, tierErr });
+    }
   }
 
   // Reduce the payout record by the total amount successfully refunded to buyers.

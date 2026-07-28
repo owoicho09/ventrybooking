@@ -20,13 +20,21 @@ export async function GET(req: NextRequest) {
       const { eventId, tierId, buyerEmail, buyerName } = metadata || {};
       const quantity = Math.max(1, Number(metadata?.quantity) || 1);
 
+      // See webhook/route.ts — Paystack's `amount` can include a customer-borne
+      // processing fee on top of what we charged, so prefer the exact total we
+      // requested at checkout (echoed back in metadata) over the gateway's figure.
+      const declaredTotal = Number(metadata?.total);
+      const totalPaidKobo = Number.isFinite(declaredTotal) && declaredTotal > 0
+        ? Math.round(declaredTotal * 100)
+        : amount;
+
       if (eventId && tierId) {
         const ticketId = await createTicketFromPayment({
           reference,
           eventId,
           tierId,
           quantity,
-          totalPaidKobo: amount,
+          totalPaidKobo,
           buyerEmail,
           buyerName,
           customerEmail: customer?.email,

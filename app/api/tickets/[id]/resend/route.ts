@@ -17,7 +17,7 @@ export async function POST(
       .from('tickets')
       .select(`
         id, buyer_name, buyer_email, paystack_reference, total_paid,
-        event:events!tickets_event_id_fkey(event_name, date, venue),
+        event:events!tickets_event_id_fkey(event_name, date, venue, banner_url),
         tier:ticket_tiers!tickets_tier_id_fkey(name)
       `)
       .eq('id', id)
@@ -32,7 +32,7 @@ export async function POST(
       return NextResponse.json({ error: 'Ticket not found or email mismatch' }, { status: 404 });
     }
 
-    type EvRow   = { event_name: string; date: string; venue: string };
+    type EvRow   = { event_name: string; date: string; venue: string; banner_url: string | null };
     type TierRow = { name: string };
     const evRaw   = anchor.event   as EvRow[]   | EvRow   | null | undefined;
     const tierRaw = anchor.tier    as TierRow[] | TierRow | null | undefined;
@@ -62,6 +62,7 @@ export async function POST(
       eventVenue:  ev?.venue || '',
       tierName:    tier?.name || '',
       totalPaid,
+      bannerUrl:   ev?.banner_url ?? null,
     });
 
     return NextResponse.json({ success: true });

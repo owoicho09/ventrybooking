@@ -41,6 +41,7 @@ export async function sendTicketEmail(params: {
   eventVenue: string;
   tierName: string;
   totalPaid: number;
+  bannerUrl?: string | null;
 }) {
   const fmt = (n: number) =>
     new Intl.NumberFormat('en-NG', { style: 'currency', currency: 'NGN', minimumFractionDigits: 0 }).format(n);
@@ -87,7 +88,19 @@ export async function sendTicketEmail(params: {
     ? `Your ticket for ${params.eventName} — ${tickets[0].ticketId}`
     : `Your ${count} tickets for ${params.eventName}`;
 
+  // Fixed banner height with object-fit:cover keeps varied upload aspect
+  // ratios looking uniform in modern mail clients (Gmail, Apple Mail,
+  // mobile). Clients that ignore object-fit (older Outlook) still get a
+  // clean, undistorted image scaled to the container width.
+  const bannerBlock = params.bannerUrl
+    ? `<div style="margin:0 0 20px;border-radius:8px;overflow:hidden;line-height:0;">
+         <img src="${esc(params.bannerUrl)}" alt="${esc(params.eventName)}" width="496"
+              style="display:block;width:100%;max-width:496px;height:180px;object-fit:cover;background:#1a1a2e;" />
+       </div>`
+    : '';
+
   const html = emailShell(`
+    ${bannerBlock}
     <h1 style="color:#a855f7;font-size:22px;margin:0 0 6px;">
       ${count === 1 ? 'Your ticket is confirmed ✓' : `Your ${count} tickets are confirmed ✓`}
     </h1>

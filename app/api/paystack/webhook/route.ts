@@ -26,13 +26,25 @@ export async function POST(req: NextRequest) {
       return NextResponse.json({ success: true }); // 200 — retrying won't help
     }
 
+    // Paystack's `amount` is what was actually deducted from the customer's card,
+    // which can run 1.5–3%+ higher than what we charged them for — Paystack adds its
+    // own processing fee on top when the fee bearer is the customer. Recording that
+    // inflated figure as total_paid corrupts every downstream use of it (the "Total
+    // Paid" shown in the ticket email, and refund amounts). `metadata.total` is the
+    // exact subtotal+serviceFee we requested at checkout, so prefer that and only
+    // fall back to `amount` if metadata is somehow missing it.
+    const declaredTotal = Number(metadata?.total);
+    const totalPaidKobo = Number.isFinite(declaredTotal) && declaredTotal > 0
+      ? Math.round(declaredTotal * 100)
+      : amount;
+
     try {
       await createTicketFromPayment({
         reference,
         eventId,
         tierId,
         quantity,
-        totalPaidKobo: amount,
+        totalPaidKobo,
         buyerEmail,
         buyerName,
         customerEmail: customer?.email,

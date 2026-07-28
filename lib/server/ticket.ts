@@ -52,7 +52,7 @@ export async function createTicketFromPayment(p: PaymentData): Promise<string | 
   // ── Fetch event and tier in parallel ────────────────────────────
   const [{ data: eventRow, error: eventErr }, { data: tierRow, error: tierErr }] = await Promise.all([
     db.from('events')
-      .select('event_name, date, time, venue, organizer_id')
+      .select('event_name, date, time, venue, organizer_id, banner_url')
       .eq('id', p.eventId)
       .maybeSingle(),
     db.from('ticket_tiers')
@@ -133,6 +133,7 @@ export async function createTicketFromPayment(p: PaymentData): Promise<string | 
       eventVenue:  eventRow.venue,
       tierName:    tierRow.name,
       totalPaid:   p.totalPaidKobo / 100,
+      bannerUrl:   eventRow.banner_url,
     });
   } catch (err) {
     console.error('createTicketFromPayment: email error (ticket created)', { ticketId: ticketIds[0], email, err });
