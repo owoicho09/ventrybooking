@@ -3,7 +3,7 @@
 import { useState, useEffect, useRef } from 'react';
 import { Search, ChevronDown } from 'lucide-react';
 
-const categories = ['All', 'Concerts', 'Parties', 'Sports', 'Theater', 'Festivals', 'Conferences'];
+const categories = ['All', 'Concert', 'Party', 'Sports', 'Theater', 'Festival', 'Conference'];
 // Shown until the real list of cities (fetched from actual events) arrives.
 const FALLBACK_CITIES = ['Lagos', 'Abuja', 'Port Harcourt'];
 const dates = ['All', 'This Weekend', 'This Month'];
