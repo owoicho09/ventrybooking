@@ -1,5 +1,6 @@
 import type { Metadata } from 'next';
 import { Syne, DM_Sans, JetBrains_Mono } from 'next/font/google';
+import { Analytics } from '@vercel/analytics/next';
 import './globals.css';
 import { ThemeProvider } from '@/components/layout/ThemeProvider';
 import { ToastProvider } from '@/components/ui/Toast';
@@ -72,6 +73,7 @@ export default function RootLayout({ children }: { children: React.ReactNode }) 
     >
       <body>
         <ThemeProvider><ToastProvider>{children}</ToastProvider></ThemeProvider>
+        <Analytics />
       </body>
     </html>
   );
