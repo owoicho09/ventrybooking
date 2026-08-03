@@ -30,7 +30,7 @@ export async function GET(
     const { data, error } = await db
       .from('events')
       .select(`
-        id, event_name, category, description, date, time, venue, address, city, landmark, location_hidden,
+        id, event_name, category, description, date, time, event_mode, venue, address, city, landmark, location_hidden,
         status, total_sold, banner_color, banner_url,
         organizer:users!events_organizer_id_fkey(id, name, tier, verified, member_since, events_hosted),
         tiers:ticket_tiers(id, name, price, available, sold)
@@ -56,6 +56,7 @@ export async function GET(
       description: data.description,
       date: data.date,
       time: data.time,
+      event_mode: data.event_mode ?? 'physical',
       venue: locationHidden ? 'Exact location undisclosed' : data.venue,
       address: locationHidden ? '' : data.address,
       city: data.city,

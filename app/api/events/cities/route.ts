@@ -11,7 +11,8 @@ export async function GET() {
     const { data, error } = await db
       .from('events')
       .select('city')
-      .eq('status', 'approved');
+      .eq('status', 'approved')
+      .eq('event_mode', 'physical');
 
     if (error) throw error;
 

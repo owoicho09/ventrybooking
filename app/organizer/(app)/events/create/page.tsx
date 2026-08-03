@@ -30,11 +30,14 @@ export default function CreateEventPage() {
   const [description, setDescription] = useState('');
   const [date, setDate] = useState('');
   const [time, setTime] = useState('');
+  const [eventMode, setEventMode] = useState<'physical' | 'online'>('physical');
   const [venue, setVenue] = useState('');
   const [address, setAddress] = useState('');
   const [city, setCity] = useState('');
   const [landmark, setLandmark] = useState('');
   const [locationHidden, setLocationHidden] = useState(false);
+  const [meetingLink, setMeetingLink] = useState('');
+  const [meetingPasscode, setMeetingPasscode] = useState('');
   const [banner, setBanner] = useState<File | null>(null);
   const [venueProof, setVenueProof] = useState<File | null>(null);
   const [tiers, setTiers] = useState<Tier[]>([{ id: '1', name: 'Regular', price: '', quantity: '' }]);
@@ -54,14 +57,20 @@ export default function CreateEventPage() {
       fd.append('description', description);
       fd.append('date', date);
       fd.append('time', time);
-      fd.append('venue', venue);
-      fd.append('address', address);
-      fd.append('city', city);
-      fd.append('landmark', landmark);
-      fd.append('locationHidden', String(locationHidden));
+      fd.append('eventMode', eventMode);
+      if (eventMode === 'physical') {
+        fd.append('venue', venue);
+        fd.append('address', address);
+        fd.append('city', city);
+        fd.append('landmark', landmark);
+        fd.append('locationHidden', String(locationHidden));
+        if (venueProof) fd.append('venueProof', venueProof);
+      } else {
+        fd.append('meetingLink', meetingLink);
+        fd.append('meetingPasscode', meetingPasscode);
+      }
       fd.append('tiers', JSON.stringify(tiers.map(t => ({ name: t.name, price: t.price, quantity: t.quantity }))));
       if (banner) fd.append('banner', banner);
-      if (venueProof) fd.append('venueProof', venueProof);
 
       const res = await fetch('/api/organizer/events', { method: 'POST', body: fd });
       const data = await res.json();
@@ -104,37 +113,82 @@ export default function CreateEventPage() {
       </section>
 
       <section className="rounded-xl border p-6 flex flex-col gap-5" style={{ backgroundColor: 'var(--color-surface)', borderColor: 'var(--color-border)' }}>
-        <h2 className="font-semibold text-lg" style={{ color: 'var(--color-text)' }}>2. Date & Venue</h2>
+        <h2 className="font-semibold text-lg" style={{ color: 'var(--color-text)' }}>2. Date & Location</h2>
         <div className="grid grid-cols-2 gap-4">
           <Input label="Event Date" type="date" value={date} onChange={e => setDate(e.target.value)} required />
           <Input label="Start Time" type="time" value={time} onChange={e => setTime(e.target.value)} required />
         </div>
-        <Input label="Venue Name" value={venue} onChange={e => setVenue(e.target.value)} placeholder="e.g. Eko Atlantic City Arena" required />
-        <Input label="Venue Address" value={address} onChange={e => setAddress(e.target.value)} placeholder="Full street address" required />
-        <Input label="City" value={city} onChange={e => setCity(e.target.value)} placeholder="Lagos" required />
-        <Input label="Nearby Landmark" value={landmark} onChange={e => setLandmark(e.target.value)} placeholder="e.g. Landmark Towers, Victoria Island" />
-        <label className="flex items-start gap-3 rounded-lg border px-4 py-3 cursor-pointer"
-          style={{ borderColor: 'var(--color-border)', backgroundColor: 'var(--color-surface-2)' }}>
-          <input
-            type="checkbox"
-            checked={locationHidden}
-            onChange={e => setLocationHidden(e.target.checked)}
-            className="mt-0.5 flex-shrink-0 w-4 h-4 rounded accent-[var(--color-purple)]"
-          />
-          <span className="text-sm leading-relaxed" style={{ color: 'var(--color-text-muted)' }}>
-            Hide exact venue and address from the public event page until I reveal it. Admins and ticket buyers will still receive exact location updates.
-          </span>
-        </label>
+
         <div>
-          <label className="text-sm font-medium block mb-1.5" style={{ color: 'var(--color-text)' }}>Venue Proof Document</label>
-          <label className="flex items-center gap-3 rounded-xl border-2 border-dashed px-4 py-3.5 cursor-pointer transition-colors hover:border-[var(--color-purple)]" style={{ borderColor: 'var(--color-border)' }}>
-            <input type="file" className="sr-only" accept=".pdf,image/*" onChange={e => setVenueProof(e.target.files?.[0] ?? null)} />
-            <Upload size={16} style={{ color: 'var(--color-text-dim)' }} />
-            <span className="text-sm" style={{ color: venueProof ? 'var(--color-green)' : 'var(--color-text-muted)' }}>
-              {venueProof ? venueProof.name : 'Upload venue booking confirmation or rental agreement'}
-            </span>
-          </label>
+          <label className="text-sm font-medium block mb-1.5" style={{ color: 'var(--color-text)' }}>Event Type</label>
+          <div className="grid grid-cols-2 gap-3">
+            <button
+              type="button"
+              onClick={() => setEventMode('physical')}
+              className="rounded-lg border px-4 py-3 text-sm font-medium text-left transition-colors"
+              style={{
+                borderColor: eventMode === 'physical' ? 'var(--color-purple)' : 'var(--color-border)',
+                backgroundColor: eventMode === 'physical' ? 'var(--color-purple-dim)' : 'var(--color-surface-2)',
+                color: eventMode === 'physical' ? 'var(--color-purple-light)' : 'var(--color-text-muted)',
+              }}
+            >
+              Physical
+              <span className="block text-xs font-normal mt-0.5" style={{ color: 'var(--color-text-dim)' }}>Happens at a venue</span>
+            </button>
+            <button
+              type="button"
+              onClick={() => setEventMode('online')}
+              className="rounded-lg border px-4 py-3 text-sm font-medium text-left transition-colors"
+              style={{
+                borderColor: eventMode === 'online' ? 'var(--color-purple)' : 'var(--color-border)',
+                backgroundColor: eventMode === 'online' ? 'var(--color-purple-dim)' : 'var(--color-surface-2)',
+                color: eventMode === 'online' ? 'var(--color-purple-light)' : 'var(--color-text-muted)',
+              }}
+            >
+              Online
+              <span className="block text-xs font-normal mt-0.5" style={{ color: 'var(--color-text-dim)' }}>Hosted via a meeting link (e.g. Zoom)</span>
+            </button>
+          </div>
         </div>
+
+        {eventMode === 'physical' ? (
+          <>
+            <Input label="Venue Name" value={venue} onChange={e => setVenue(e.target.value)} placeholder="e.g. Eko Atlantic City Arena" required />
+            <Input label="Venue Address" value={address} onChange={e => setAddress(e.target.value)} placeholder="Full street address" required />
+            <Input label="City" value={city} onChange={e => setCity(e.target.value)} placeholder="Lagos" required />
+            <Input label="Nearby Landmark" value={landmark} onChange={e => setLandmark(e.target.value)} placeholder="e.g. Landmark Towers, Victoria Island" />
+            <label className="flex items-start gap-3 rounded-lg border px-4 py-3 cursor-pointer"
+              style={{ borderColor: 'var(--color-border)', backgroundColor: 'var(--color-surface-2)' }}>
+              <input
+                type="checkbox"
+                checked={locationHidden}
+                onChange={e => setLocationHidden(e.target.checked)}
+                className="mt-0.5 flex-shrink-0 w-4 h-4 rounded accent-[var(--color-purple)]"
+              />
+              <span className="text-sm leading-relaxed" style={{ color: 'var(--color-text-muted)' }}>
+                Hide exact venue and address from the public event page until I reveal it. Admins and ticket buyers will still receive exact location updates.
+              </span>
+            </label>
+            <div>
+              <label className="text-sm font-medium block mb-1.5" style={{ color: 'var(--color-text)' }}>Venue Proof Document</label>
+              <label className="flex items-center gap-3 rounded-xl border-2 border-dashed px-4 py-3.5 cursor-pointer transition-colors hover:border-[var(--color-purple)]" style={{ borderColor: 'var(--color-border)' }}>
+                <input type="file" className="sr-only" accept=".pdf,image/*" onChange={e => setVenueProof(e.target.files?.[0] ?? null)} />
+                <Upload size={16} style={{ color: 'var(--color-text-dim)' }} />
+                <span className="text-sm" style={{ color: venueProof ? 'var(--color-green)' : 'var(--color-text-muted)' }}>
+                  {venueProof ? venueProof.name : 'Upload venue booking confirmation or rental agreement'}
+                </span>
+              </label>
+            </div>
+          </>
+        ) : (
+          <>
+            <Input label="Meeting Link" value={meetingLink} onChange={e => setMeetingLink(e.target.value)} placeholder="https://zoom.us/j/..." required />
+            <Input label="Passcode (optional)" value={meetingPasscode} onChange={e => setMeetingPasscode(e.target.value)} placeholder="e.g. 482913" />
+            <div className="rounded-lg px-4 py-3 text-sm" style={{ backgroundColor: 'var(--color-surface-2)', color: 'var(--color-text-muted)' }}>
+              Ticket buyers never see this link directly on Ventry — it&apos;s emailed to them automatically before the event starts, along with their reminders.
+            </div>
+          </>
+        )}
       </section>
 
       <section className="rounded-xl border p-6 flex flex-col gap-4" style={{ backgroundColor: 'var(--color-surface)', borderColor: 'var(--color-border)' }}>

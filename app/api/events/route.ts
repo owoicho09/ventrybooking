@@ -24,6 +24,7 @@ function shapeEvent(row: any) {
     description: row.description,
     date: row.date,
     time: row.time,
+    event_mode: row.event_mode ?? 'physical',
     venue: locationHidden ? 'Exact location undisclosed' : row.venue,
     address: locationHidden ? '' : row.address,
     city: row.city,
@@ -41,7 +42,7 @@ function shapeEvent(row: any) {
 }
 
 const EVENT_SELECT = `
-  id, event_name, category, description, date, time, venue, address, city, landmark, location_hidden,
+  id, event_name, category, description, date, time, event_mode, venue, address, city, landmark, location_hidden,
   status, total_sold, banner_color, banner_url,
   organizer:users!events_organizer_id_fkey(id, name, tier, verified, member_since, events_hosted),
   tiers:ticket_tiers(id, name, price, available, sold)
@@ -53,6 +54,7 @@ export async function GET(req: NextRequest) {
     const query = searchParams.get('q') || '';
     const category = searchParams.get('category') || '';
     const city = searchParams.get('city') || '';
+    const mode = searchParams.get('mode') || '';
     const limit = parseInt(searchParams.get('limit') || '0', 10);
 
     const db = getServerSupabase();
@@ -68,7 +70,9 @@ export async function GET(req: NextRequest) {
     if (category) {
       qb = qb.eq('category', category);
     }
-    if (city) {
+    if (mode === 'online') {
+      qb = qb.eq('event_mode', 'online');
+    } else if (city) {
       qb = qb.ilike('city', `%${city}%`);
     }
     if (limit > 0) {

@@ -66,11 +66,16 @@ CREATE TABLE IF NOT EXISTS events (
   description       TEXT        NOT NULL,
   date              DATE        NOT NULL,
   time              TEXT        NOT NULL,   -- e.g. "14:00"
+  -- Physical events: venue/address required. Online events: meeting_link required instead.
+  event_mode        TEXT        NOT NULL DEFAULT 'physical'
+                      CHECK (event_mode IN ('physical', 'online')),
   venue             TEXT        NOT NULL,
   address           TEXT        NOT NULL,
   city              TEXT        NOT NULL DEFAULT '',
   landmark          TEXT,
   location_hidden   BOOLEAN     NOT NULL DEFAULT FALSE,
+  meeting_link      TEXT,
+  meeting_passcode  TEXT,
 
   -- Lifecycle: under_review → approved | rejected → completed
   status            TEXT        NOT NULL DEFAULT 'under_review'

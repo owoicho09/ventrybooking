@@ -17,7 +17,7 @@ export async function GET(req: NextRequest) {
   let qb = db
     .from('events')
     .select(`
-      id, name:event_name, category, date, time, venue, city, status, total_sold, banner_color,
+      id, name:event_name, category, date, time, event_mode, venue, city, status, total_sold, banner_color,
       tiers:ticket_tiers(id, name, price, available, sold)
     `)
     .eq('organizer_id', user.sub)
@@ -66,17 +66,26 @@ export async function POST(req: NextRequest) {
     const description = formData.get('description') as string;
     const date = formData.get('date') as string;
     const time = formData.get('time') as string;
-    const venue = formData.get('venue') as string;
-    const address = formData.get('address') as string;
+    const eventMode = (formData.get('eventMode') as string) === 'online' ? 'online' : 'physical';
+    const venue = (formData.get('venue') as string) || '';
+    const address = (formData.get('address') as string) || '';
     const city = formData.get('city') as string;
     const landmark = formData.get('landmark') as string;
     const locationHidden = formData.get('locationHidden') === 'true';
+    const meetingLink = (formData.get('meetingLink') as string) || '';
+    const meetingPasscode = (formData.get('meetingPasscode') as string) || '';
     const tiersJson = formData.get('tiers') as string;
     const bannerFile = formData.get('banner') as File | null;
     const venueProofFile = formData.get('venueProof') as File | null;
 
-    if (!name || !category || !description || !date || !time || !venue || !address) {
+    if (!name || !category || !description || !date || !time) {
       return NextResponse.json({ error: 'Missing required fields' }, { status: 400 });
+    }
+    if (eventMode === 'physical' && (!venue || !address)) {
+      return NextResponse.json({ error: 'Venue name and address are required' }, { status: 400 });
+    }
+    if (eventMode === 'online' && !meetingLink) {
+      return NextResponse.json({ error: 'Meeting link is required for online events' }, { status: 400 });
     }
 
     async function uploadEventFile(file: File, folder: string, maxMb: number) {
@@ -114,11 +123,14 @@ export async function POST(req: NextRequest) {
       description,
       date,
       time,
+      event_mode: eventMode,
       venue,
       address,
       city: city || '',
       landmark: landmark || null,
       location_hidden: locationHidden,
+      meeting_link: eventMode === 'online' ? meetingLink : null,
+      meeting_passcode: eventMode === 'online' && meetingPasscode ? meetingPasscode : null,
       organizer_id: organizerId,
       status: 'under_review',
       total_sold: 0,

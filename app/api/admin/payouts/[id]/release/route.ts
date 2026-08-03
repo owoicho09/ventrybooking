@@ -5,6 +5,7 @@ import { initiateTransfer, createTransferRecipient } from '@/lib/server/paystack
 import { generatePayoutRef } from '@/lib/server/ids';
 import { getBankCode } from '@/lib/banks';
 import { notify } from '@/lib/server/notify';
+import { sendMissingBankDetailsEmail } from '@/lib/server/email';
 
 export async function POST(
   req: NextRequest,
@@ -56,7 +57,7 @@ export async function POST(
 
     const { data: org, error: orgErr } = await db
       .from('users')
-      .select('name, account_number, account_name, bank_name')
+      .select('name, email, account_number, account_name, bank_name')
       .eq('id', payout.organizer_id)
       .maybeSingle();
 
@@ -65,7 +66,20 @@ export async function POST(
       return NextResponse.json({ error: 'Database error' }, { status: 500 });
     }
     if (!org?.account_number) {
-      return NextResponse.json({ error: 'Organizer has no bank account on file' }, { status: 400 });
+      if (org?.email) {
+        sendMissingBankDetailsEmail(org.email, org.name, payout.event_name)
+          .catch(err => console.error('release payout: missing-bank-details email error', err));
+      }
+      notify(
+        { type: 'organizer', id: payout.organizer_id },
+        {
+          notifType: 'payout',
+          title:     `Add your bank details — ${payout.event_name}`,
+          body:      `Your payout is ready to release but we need your bank account details first.`,
+          link:      '/organizer/settings',
+        },
+      ).catch(err => console.error('release payout: missing-bank-details notify error', err));
+      return NextResponse.json({ error: 'Organizer has no bank account on file — they have been notified by email' }, { status: 400 });
     }
 
     const bankCode = getBankCode(org.bank_name || '');
@@ -131,7 +145,8 @@ export async function POST(
         .update({ reference: null, released_at: null })
         .eq('id', id)
         .eq('reference', transferRef);
-      return NextResponse.json({ error: 'Failed to initiate Paystack transfer' }, { status: 502 });
+      const message = err instanceof Error ? err.message : 'Failed to initiate Paystack transfer';
+      return NextResponse.json({ error: `Paystack: ${message}` }, { status: 502 });
     }
 
     // Reference is already stored from the lock step. Now update the status.

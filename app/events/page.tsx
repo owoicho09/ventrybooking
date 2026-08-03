@@ -79,7 +79,8 @@ export default function EventsPage() {
     const params = new URLSearchParams();
     if (query)                          params.set('q', query);
     if (category && category !== 'All') params.set('category', category);
-    if (city && city !== 'All Cities')  params.set('city', city);
+    if (city === 'Online')              params.set('mode', 'online');
+    else if (city && city !== 'All Cities') params.set('city', city);
 
     fetch(`/api/events?${params}`)
       .then(r => r.json())

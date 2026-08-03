@@ -22,7 +22,7 @@ export function FilterBar({ cities, onSearch, onFilter }: FilterBarProps) {
   const [date,           setDate]           = useState('All');
   const [sort,           setSort]           = useState('Soonest');
 
-  const cityOptions = ['All Cities', ...(cities?.length ? cities : FALLBACK_CITIES)];
+  const cityOptions = ['All Cities', 'Online', ...(cities?.length ? cities : FALLBACK_CITIES)];
 
   const didMount = useRef(false);
   const searchTimer = useRef<ReturnType<typeof setTimeout> | null>(null);

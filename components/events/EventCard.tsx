@@ -29,11 +29,13 @@ const tierColors: Record<string, string> = {
 export function EventCard({ event }: EventCardProps) {
   const minPrice  = event.tiers.length ? Math.min(...event.tiers.map((t) => t.price)) : 0;
   const freeTier  = minPrice === 0 ? (event.tiers.find(t => t.price === 0) ?? null) : null;
-  const locationText = event.location_hidden || event.locationHidden
-    ? event.landmark
-      ? `Near ${event.landmark}, ${event.city}`
-      : `Location undisclosed, ${event.city}`
-    : `${event.venue}, ${event.city}`;
+  const locationText = event.event_mode === 'online'
+    ? 'Online Event'
+    : event.location_hidden || event.locationHidden
+      ? event.landmark
+        ? `Near ${event.landmark}, ${event.city}`
+        : `Location undisclosed, ${event.city}`
+      : `${event.venue}, ${event.city}`;
 
   return (
     <div

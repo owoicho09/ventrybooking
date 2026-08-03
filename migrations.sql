@@ -67,3 +67,11 @@ ALTER TABLE events
 ALTER TABLE events
   ADD COLUMN IF NOT EXISTS landmark TEXT,
   ADD COLUMN IF NOT EXISTS location_hidden BOOLEAN NOT NULL DEFAULT FALSE;
+
+
+-- 8. Online events (Zoom-style meeting link instead of a physical venue)
+ALTER TABLE events
+  ADD COLUMN IF NOT EXISTS event_mode TEXT NOT NULL DEFAULT 'physical'
+    CHECK (event_mode IN ('physical', 'online')),
+  ADD COLUMN IF NOT EXISTS meeting_link TEXT,
+  ADD COLUMN IF NOT EXISTS meeting_passcode TEXT;

@@ -16,7 +16,7 @@ export async function GET(req: NextRequest) {
     .from('payouts')
     .select(`
       id, event_id, event_name, organizer_name, date, gross, fee, net, status, reference,
-      organizer:users!payouts_organizer_id_fkey(id, name, email)
+      organizer:users!payouts_organizer_id_fkey(id, name, email, bank_name, account_number, account_name)
     `)
     .order('date', { ascending: false });
 

@@ -7,6 +7,7 @@ interface TicketCardProps {
 }
 
 export function TicketCard({ ticket }: TicketCardProps) {
+  const isOnline = ticket.event.event_mode === 'online';
   return (
     <div
       className="rounded-xl border overflow-hidden"
@@ -30,7 +31,7 @@ export function TicketCard({ ticket }: TicketCardProps) {
           <QRDisplay dataUrl={ticket.qrDataUrl} ticketId={ticket.id} size={140} />
           <div className="text-center">
             <p className="text-[10px] uppercase tracking-wider" style={{ color: 'var(--color-text-dim)' }}>
-              Show at entrance
+              {isOnline ? 'Ticket receipt' : 'Show at entrance'}
             </p>
           </div>
         </div>
@@ -57,7 +58,7 @@ export function TicketCard({ ticket }: TicketCardProps) {
               {formatDate(ticket.event.date)} &middot; {ticket.event.time}
             </p>
             <p className="text-sm" style={{ color: 'var(--color-text-muted)' }}>
-              {ticket.event.venue}
+              {isOnline ? 'Online Event — join link arrives by email before the event' : ticket.event.venue}
             </p>
           </div>
 

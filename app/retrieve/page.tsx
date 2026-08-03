@@ -2,37 +2,44 @@
 
 import { useState } from 'react';
 import Link from 'next/link';
-import { useRouter } from 'next/navigation';
 import { Search, Mail } from 'lucide-react';
 import { PublicNav } from '@/components/layout/PublicNav';
 import { Footer } from '@/components/layout/Footer';
 import { Input } from '@/components/ui/Input';
 import { Button } from '@/components/ui/Button';
+import { formatShortDate } from '@/lib/utils';
+
+interface FoundTicket {
+  id: string;
+  status: string;
+  eventName: string;
+  eventDate: string;
+}
 
 export default function RetrievePage() {
-  const router = useRouter();
   const [email, setEmail] = useState('');
-  const [ticketId, setTicketId] = useState('');
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState('');
+  const [tickets, setTickets] = useState<FoundTicket[] | null>(null);
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
-    if (!ticketId || !email) return;
+    if (!email) return;
     setError('');
+    setTickets(null);
     setLoading(true);
     try {
       const res = await fetch('/api/tickets/retrieve', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ ticketId: ticketId.trim(), email: email.trim() }),
+        body: JSON.stringify({ email: email.trim() }),
       });
       const data = await res.json();
       if (!res.ok || !data.success) {
-        setError(data.error || 'Ticket not found. Please check your details and try again.');
+        setError(data.error || 'No tickets found. Please check your email and try again.');
         return;
       }
-      router.push(`/ticket/${data.data.id}`);
+      setTickets(data.data);
     } catch {
       setError('Network error. Please try again.');
     } finally {
@@ -52,10 +59,10 @@ export default function RetrievePage() {
             </div>
             <h1 className="text-3xl font-bold mb-2"
               style={{ color: 'var(--color-text)', fontFamily: 'var(--font-syne), sans-serif' }}>
-              Find Your Ticket
+              Find Your Tickets
             </h1>
             <p className="text-sm" style={{ color: 'var(--color-text-muted)' }}>
-              Enter your email and Ticket ID to retrieve your QR code
+              Enter the email you used at checkout to find your tickets
             </p>
           </div>
 
@@ -78,33 +85,39 @@ export default function RetrievePage() {
                 required
               />
 
-              <div className="flex flex-col gap-1.5">
-                <label className="text-sm font-medium" style={{ color: 'var(--color-text)' }}>
-                  Ticket ID
-                </label>
-                <input
-                  type="text"
-                  value={ticketId}
-                  onChange={(e) => setTicketId(e.target.value.toUpperCase())}
-                  placeholder="TKT-XXXX-XXXX"
-                  required
-                  className="w-full rounded-lg border px-3 py-2.5 text-sm outline-none focus:border-[var(--color-purple)] focus:ring-1 focus:ring-[var(--color-purple)] placeholder:text-[var(--color-text-dim)] tracking-widest"
-                  style={{
-                    backgroundColor: 'var(--color-surface-2)',
-                    borderColor: 'var(--color-border)',
-                    color: 'var(--color-text)',
-                    fontFamily: 'var(--font-jetbrains-mono), monospace',
-                  }}
-                />
-                <p className="text-xs" style={{ color: 'var(--color-text-muted)' }}>
-                  Your Ticket ID was included in your confirmation email
-                </p>
-              </div>
-
-              <Button type="submit" size="lg" fullWidth disabled={!email || !ticketId || loading}>
-                {loading ? 'Searching...' : 'Find Ticket'}
+              <Button type="submit" size="lg" fullWidth disabled={!email || loading}>
+                {loading ? 'Searching...' : 'Find My Tickets'}
               </Button>
             </form>
+
+            {tickets && tickets.length > 0 && (
+              <div className="mt-5 pt-5 border-t flex flex-col gap-2" style={{ borderColor: 'var(--color-border)' }}>
+                {tickets.map(t => (
+                  <Link
+                    key={t.id}
+                    href={`/ticket/${t.id}`}
+                    className="flex items-center justify-between gap-3 rounded-lg border px-4 py-3 text-sm transition-colors hover:border-[var(--color-purple)]"
+                    style={{ borderColor: 'var(--color-border)', backgroundColor: 'var(--color-surface-2)' }}
+                  >
+                    <div className="min-w-0">
+                      <p className="font-medium truncate" style={{ color: 'var(--color-text)' }}>{t.eventName}</p>
+                      <p className="text-xs" style={{ color: 'var(--color-text-muted)' }}>
+                        {t.eventDate ? formatShortDate(t.eventDate) : ''} &middot; {t.id}
+                      </p>
+                    </div>
+                    <span
+                      className="flex-shrink-0 text-xs font-medium px-2 py-1 rounded"
+                      style={{
+                        color: t.status === 'valid' ? 'var(--color-green)' : 'var(--color-text-dim)',
+                        backgroundColor: t.status === 'valid' ? 'var(--color-green)15' : 'var(--color-surface)',
+                      }}
+                    >
+                      {t.status}
+                    </span>
+                  </Link>
+                ))}
+              </div>
+            )}
 
             <div className="mt-5 pt-5 border-t text-sm text-center"
               style={{ borderColor: 'var(--color-border)', color: 'var(--color-text-muted)' }}>

@@ -30,7 +30,7 @@ export async function GET(req: NextRequest) {
 
     const { data: events } = await db
       .from('events')
-      .select('id, event_name, date, time, venue, city, address')
+      .select('id, event_name, date, time, event_mode, venue, city, address, meeting_link, meeting_passcode')
       .eq('status', 'approved')
       .gte('date', todayStr)
       .lte('date', endStr);
@@ -84,8 +84,11 @@ export async function GET(req: NextRequest) {
                               day: 'numeric', month: 'long', year: 'numeric',
                             }),
               eventTime:    event.time,
+              eventMode:    event.event_mode,
               eventVenue:   event.venue,
               eventCity:    event.city,
+              meetingLink:     event.meeting_link,
+              meetingPasscode: event.meeting_passcode,
               reminderType: window.type,
             });
 

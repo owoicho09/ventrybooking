@@ -36,8 +36,8 @@ export default function ScanPage() {
       .then(r => r.json())
       .then(d => {
         if (d.success) {
-          const opts = (d.data as { status: string; id: string; name: string }[])
-            .filter(e => e.status === 'approved')
+          const opts = (d.data as { status: string; id: string; name: string; event_mode?: string }[])
+            .filter(e => e.status === 'approved' && e.event_mode !== 'online')
             .map(e => ({ value: e.id, label: e.name }));
           setEventOptions(opts);
           if (opts.length > 0) setSelectedEvent(opts[0].value);

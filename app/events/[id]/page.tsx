@@ -55,9 +55,12 @@ export default function EventDetailPage() {
   const serviceFee       = subtotal > 0 ? 100 * totalQty : 0;
   const total            = subtotal + serviceFee;
   const multiTierWarning = selectedTiers.length > 1;
+  const isOnline = event?.event_mode === 'online';
   const exactLocationVisible = event ? !event.location_hidden : false;
   const locationSummary = event
-    ? exactLocationVisible
+    ? isOnline
+      ? 'Online Event'
+      : exactLocationVisible
       ? `${event.venue}, ${event.city}`
       : event.landmark
       ? `Near ${event.landmark}, ${event.city}`
@@ -193,40 +196,54 @@ export default function EventDetailPage() {
 
             <div className="rounded-xl border p-5" style={{ backgroundColor: 'var(--color-surface)', borderColor: 'var(--color-border)' }}>
               <h3 className="font-semibold mb-3" style={{ color: 'var(--color-text)' }}>Event Details</h3>
-              <div className="h-52 rounded-lg mb-3 border overflow-hidden" style={{ backgroundColor: 'var(--color-surface-2)', borderColor: 'var(--color-border)' }}>
-                {mapSrc ? (
-                  <iframe
-                    title={`${event.name} location map`}
-                    src={mapSrc}
-                    className="w-full h-full border-0"
-                    loading="lazy"
-                    referrerPolicy="no-referrer-when-downgrade"
-                  />
-                ) : (
-                  <div className="h-full flex flex-col items-center justify-center gap-1">
-                    <MapPin size={24} style={{ color: 'var(--color-text-dim)' }} />
-                    <p className="text-sm" style={{ color: 'var(--color-text-dim)' }}>Location unavailable</p>
+              {isOnline ? (
+                <div className="rounded-lg p-4 flex items-start gap-3 text-sm" style={{ backgroundColor: 'var(--color-surface-2)' }}>
+                  <Shield size={16} className="flex-shrink-0 mt-0.5" style={{ color: 'var(--color-purple)' }} />
+                  <div>
+                    <p className="font-medium" style={{ color: 'var(--color-text)' }}>This is an online event</p>
+                    <p className="mt-0.5" style={{ color: 'var(--color-text-muted)' }}>
+                      The join link will be emailed to ticket holders before the event starts, along with their reminders.
+                    </p>
                   </div>
-                )}
-              </div>
-              {exactLocationVisible ? (
-                <>
-                  <p className="text-sm font-medium" style={{ color: 'var(--color-text)' }}>{event.venue}</p>
-                  <p className="text-sm mt-0.5" style={{ color: 'var(--color-text-muted)' }}>{event.address}</p>
-                  {event.landmark && (
-                    <p className="text-sm mt-0.5" style={{ color: 'var(--color-text-muted)' }}>Landmark: {event.landmark}</p>
-                  )}
-                </>
+                </div>
               ) : (
                 <>
-                  <p className="text-sm font-medium" style={{ color: 'var(--color-text)' }}>
-                    Exact location undisclosed
-                  </p>
-                  <p className="text-sm mt-0.5" style={{ color: 'var(--color-text-muted)' }}>
-                    {event.landmark
-                      ? `Landmark: ${event.landmark}. Exact venue and address will be shared with ticket buyers.`
-                      : `Exact venue and address will be shared with ticket buyers.`}
-                  </p>
+                  <div className="h-52 rounded-lg mb-3 border overflow-hidden" style={{ backgroundColor: 'var(--color-surface-2)', borderColor: 'var(--color-border)' }}>
+                    {mapSrc ? (
+                      <iframe
+                        title={`${event.name} location map`}
+                        src={mapSrc}
+                        className="w-full h-full border-0"
+                        loading="lazy"
+                        referrerPolicy="no-referrer-when-downgrade"
+                      />
+                    ) : (
+                      <div className="h-full flex flex-col items-center justify-center gap-1">
+                        <MapPin size={24} style={{ color: 'var(--color-text-dim)' }} />
+                        <p className="text-sm" style={{ color: 'var(--color-text-dim)' }}>Location unavailable</p>
+                      </div>
+                    )}
+                  </div>
+                  {exactLocationVisible ? (
+                    <>
+                      <p className="text-sm font-medium" style={{ color: 'var(--color-text)' }}>{event.venue}</p>
+                      <p className="text-sm mt-0.5" style={{ color: 'var(--color-text-muted)' }}>{event.address}</p>
+                      {event.landmark && (
+                        <p className="text-sm mt-0.5" style={{ color: 'var(--color-text-muted)' }}>Landmark: {event.landmark}</p>
+                      )}
+                    </>
+                  ) : (
+                    <>
+                      <p className="text-sm font-medium" style={{ color: 'var(--color-text)' }}>
+                        Exact location undisclosed
+                      </p>
+                      <p className="text-sm mt-0.5" style={{ color: 'var(--color-text-muted)' }}>
+                        {event.landmark
+                          ? `Landmark: ${event.landmark}. Exact venue and address will be shared with ticket buyers.`
+                          : `Exact venue and address will be shared with ticket buyers.`}
+                      </p>
+                    </>
+                  )}
                 </>
               )}
             </div>

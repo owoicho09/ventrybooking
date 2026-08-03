@@ -30,6 +30,7 @@ const statusBadge = (status: string) => {
 interface PayoutData {
   id: string; event_name: string; organizer_name?: string; date: string;
   gross: number; fee: number; net: number; status: string;
+  organizer?: { id: string; name: string; email: string; bank_name?: string; account_number?: string; account_name?: string };
 }
 
 interface PayoutSettings { percentage: number; }
@@ -254,7 +255,7 @@ export default function AdminPayoutsPage() {
           <Table>
             <Thead>
               <tr>
-                <Th>Event</Th><Th>Organizer</Th><Th>Date</Th>
+                <Th>Event</Th><Th>Organizer</Th><Th>Bank Details</Th><Th>Date</Th>
                 <Th>Gross</Th><Th>Fee</Th><Th>Net</Th>
                 <Th>Status</Th><Th>Action</Th>
               </tr>
@@ -268,6 +269,17 @@ export default function AdminPayoutsPage() {
                     </p>
                   </Td>
                   <Td><span style={{ color: 'var(--color-text-muted)' }}>{payout.organizer_name ?? '—'}</span></Td>
+                  <Td>
+                    {payout.organizer?.account_number && payout.organizer?.bank_name ? (
+                      <div className="text-xs leading-relaxed whitespace-nowrap">
+                        <p style={{ color: 'var(--color-text)' }}>{payout.organizer.bank_name}</p>
+                        <p style={{ color: 'var(--color-text-muted)' }}>{payout.organizer.account_number}</p>
+                        <p style={{ color: 'var(--color-text-dim)' }}>{payout.organizer.account_name}</p>
+                      </div>
+                    ) : (
+                      <Badge variant="red">No bank details</Badge>
+                    )}
+                  </Td>
                   <Td><span style={{ color: 'var(--color-text-muted)' }}>{formatShortDate(payout.date)}</span></Td>
                   <Td><span style={{ color: 'var(--color-text)' }}>{formatNGN(payout.gross)}</span></Td>
                   <Td><span style={{ color: 'var(--color-text-muted)' }}>{formatNGN(payout.fee)}</span></Td>

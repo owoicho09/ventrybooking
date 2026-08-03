@@ -16,8 +16,9 @@ import { formatNGN, formatShortDate } from '@/lib/utils';
 interface Tier { id: string; name: string; price: number; available: number; sold: number; }
 interface OrgEvent {
   id: string; event_name: string; category: string; description: string;
-  date: string; time: string; venue: string; address: string; city: string;
+  date: string; time: string; event_mode: 'physical' | 'online'; venue: string; address: string; city: string;
   landmark: string | null; location_hidden: boolean;
+  meeting_link: string | null; meeting_passcode: string | null;
   status: string; total_sold: number; banner_url: string | null; banner_color: string;
   organizer_id: string; tiers: Tier[];
 }
@@ -116,6 +117,8 @@ export default function OrganizerEventDetailPage() {
   const [city, setCity] = useState('');
   const [landmark, setLandmark] = useState('');
   const [locationHidden, setLocationHidden] = useState(false);
+  const [meetingLink, setMeetingLink] = useState('');
+  const [meetingPasscode, setMeetingPasscode] = useState('');
   const [savingInfo, setSavingInfo] = useState(false);
   const [editingTierId, setEditingTierId] = useState<string | null>(null);
   const [addingTier, setAddingTier] = useState(false);
@@ -139,6 +142,8 @@ export default function OrganizerEventDetailPage() {
           setCity(d.data.city);
           setLandmark(d.data.landmark ?? '');
           setLocationHidden(Boolean(d.data.location_hidden));
+          setMeetingLink(d.data.meeting_link ?? '');
+          setMeetingPasscode(d.data.meeting_passcode ?? '');
         } else {
           toast(d.error || 'Event not found', 'error');
           router.push('/organizer/events');
@@ -156,14 +161,11 @@ export default function OrganizerEventDetailPage() {
       const res = await fetch(`/api/organizer/events/${id}`, {
         method: 'PATCH',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          description,
-          venue,
-          address,
-          city,
-          landmark,
-          location_hidden: locationHidden,
-        }),
+        body: JSON.stringify(
+          event?.event_mode === 'online'
+            ? { description, meeting_link: meetingLink, meeting_passcode: meetingPasscode }
+            : { description, venue, address, city, landmark, location_hidden: locationHidden },
+        ),
       });
       const data = await res.json();
       if (!res.ok) { toast(data.error || 'Update failed', 'error'); return; }
@@ -277,7 +279,7 @@ export default function OrganizerEventDetailPage() {
               {event.event_name}
             </h1>
             <p className="text-sm mt-0.5" style={{ color: 'var(--color-text-muted)' }}>
-              {formatShortDate(event.date)} &bull; {event.venue}, {event.city}
+              {formatShortDate(event.date)} &bull; {event.event_mode === 'online' ? 'Online Event' : `${event.venue}, ${event.city}`}
             </p>
           </div>
           <div className="flex items-center gap-2 flex-wrap">
@@ -383,22 +385,34 @@ export default function OrganizerEventDetailPage() {
         {editingInfo ? (
           <div className="flex flex-col gap-4">
             <Textarea label="Description" value={description} onChange={e => setDescription(e.target.value)} rows={4} />
-            <Input label="Venue Name" value={venue} onChange={e => setVenue(e.target.value)} />
-            <Input label="Venue Address" value={address} onChange={e => setAddress(e.target.value)} />
-            <Input label="City" value={city} onChange={e => setCity(e.target.value)} />
-            <Input label="Nearby Landmark" value={landmark} onChange={e => setLandmark(e.target.value)} placeholder="e.g. Landmark Towers, Victoria Island" />
-            <label className="flex items-start gap-3 rounded-lg border px-4 py-3 cursor-pointer"
-              style={{ borderColor: 'var(--color-border)', backgroundColor: 'var(--color-surface-2)' }}>
-              <input
-                type="checkbox"
-                checked={locationHidden}
-                onChange={e => setLocationHidden(e.target.checked)}
-                className="mt-0.5 flex-shrink-0 w-4 h-4 rounded accent-[var(--color-purple)]"
-              />
-              <span className="text-sm leading-relaxed" style={{ color: 'var(--color-text-muted)' }}>
-                Hide exact venue and address on the public event page until I reveal it.
-              </span>
-            </label>
+            {event.event_mode === 'online' ? (
+              <>
+                <Input label="Meeting Link" value={meetingLink} onChange={e => setMeetingLink(e.target.value)} placeholder="https://zoom.us/j/..." />
+                <Input label="Passcode (optional)" value={meetingPasscode} onChange={e => setMeetingPasscode(e.target.value)} placeholder="e.g. 482913" />
+                <div className="rounded-lg px-4 py-3 text-sm" style={{ backgroundColor: 'var(--color-surface-2)', color: 'var(--color-text-muted)' }}>
+                  If you change this link after tickets are already sold, buyers who already received the old link will be emailed the new one.
+                </div>
+              </>
+            ) : (
+              <>
+                <Input label="Venue Name" value={venue} onChange={e => setVenue(e.target.value)} />
+                <Input label="Venue Address" value={address} onChange={e => setAddress(e.target.value)} />
+                <Input label="City" value={city} onChange={e => setCity(e.target.value)} />
+                <Input label="Nearby Landmark" value={landmark} onChange={e => setLandmark(e.target.value)} placeholder="e.g. Landmark Towers, Victoria Island" />
+                <label className="flex items-start gap-3 rounded-lg border px-4 py-3 cursor-pointer"
+                  style={{ borderColor: 'var(--color-border)', backgroundColor: 'var(--color-surface-2)' }}>
+                  <input
+                    type="checkbox"
+                    checked={locationHidden}
+                    onChange={e => setLocationHidden(e.target.checked)}
+                    className="mt-0.5 flex-shrink-0 w-4 h-4 rounded accent-[var(--color-purple)]"
+                  />
+                  <span className="text-sm leading-relaxed" style={{ color: 'var(--color-text-muted)' }}>
+                    Hide exact venue and address on the public event page until I reveal it.
+                  </span>
+                </label>
+              </>
+            )}
             <div className="flex gap-2">
               <Button size="sm" disabled={savingInfo} onClick={handleSaveInfo}><Check size={13} />Save</Button>
               <Button size="sm" variant="outline" disabled={savingInfo} onClick={() => {
@@ -409,10 +423,23 @@ export default function OrganizerEventDetailPage() {
                 setCity(event.city);
                 setLandmark(event.landmark ?? '');
                 setLocationHidden(Boolean(event.location_hidden));
+                setMeetingLink(event.meeting_link ?? '');
+                setMeetingPasscode(event.meeting_passcode ?? '');
               }}>
                 <X size={13} />Cancel
               </Button>
             </div>
+          </div>
+        ) : event.event_mode === 'online' ? (
+          <div className="flex flex-col gap-2 text-sm">
+            <p style={{ color: 'var(--color-text-muted)' }}>{event.description}</p>
+            <p style={{ color: 'var(--color-text-dim)' }}>Meeting link: {event.meeting_link || 'Not set'}</p>
+            {event.meeting_passcode && (
+              <p style={{ color: 'var(--color-text-dim)' }}>Passcode: {event.meeting_passcode}</p>
+            )}
+            <p className="text-xs" style={{ color: 'var(--color-text-dim)' }}>
+              Not shown to buyers on Ventry — delivered automatically by email before the event.
+            </p>
           </div>
         ) : (
           <div className="flex flex-col gap-2 text-sm">

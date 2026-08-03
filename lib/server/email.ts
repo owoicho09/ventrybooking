@@ -39,10 +39,12 @@ export async function sendTicketEmail(params: {
   eventName: string;
   eventDate: string;
   eventVenue: string;
+  eventMode?: 'physical' | 'online';
   tierName: string;
   totalPaid: number;
   bannerUrl?: string | null;
 }) {
+  const isOnline = params.eventMode === 'online';
   const fmt = (n: number) =>
     new Intl.NumberFormat('en-NG', { style: 'currency', currency: 'NGN', minimumFractionDigits: 0 }).format(n);
 
@@ -60,7 +62,7 @@ export async function sendTicketEmail(params: {
           <img src="${APP_URL}/api/tickets/${ticketId}/qr"
                alt="QR Code" width="180" height="180"
                style="border-radius:8px;display:block;margin:0 auto;border:4px solid #ffffff;" />
-          <p style="color:#9ca3af;font-size:11px;margin:8px 0 0;">Present at the venue entrance</p>
+          <p style="color:#9ca3af;font-size:11px;margin:8px 0 0;">${isOnline ? 'Your join link will be emailed to you before the event' : 'Present at the venue entrance'}</p>
         </div>
         <p style="margin:4px 0;color:#f1f0ff;font-size:13px;">
           <strong>Ticket&nbsp;ID:</strong> <span class="mono">${ticketId}</span>
@@ -112,7 +114,8 @@ export async function sendTicketEmail(params: {
       style="background:#12121a;border:1px solid #2d2d3d;border-radius:8px;margin-bottom:24px;">
       <tr><td style="padding:20px;">
         <p style="font-size:17px;font-weight:700;margin:0 0 4px;color:#f1f0ff;">${esc(params.eventName)}</p>
-        <p class="label" style="margin:0 0 12px;">${esc(params.eventDate)} &bull; ${esc(params.eventVenue)}</p>
+        <p class="label" style="margin:0 0 12px;">${esc(params.eventDate)}${isOnline ? ' &bull; Online Event' : ` &bull; ${esc(params.eventVenue)}`}</p>
+        ${isOnline ? `<p style="margin:0 0 12px;color:#9ca3af;font-size:12px;">Your Zoom link will be emailed to you before the event, along with your reminders.</p>` : ''}
         <p style="margin:4px 0;color:#f1f0ff;font-size:13px;">
           <strong>Ticket&nbsp;Type:</strong> ${params.tierName} &times; ${count}
         </p>
@@ -256,6 +259,41 @@ export async function sendLocationUpdatedEmail(params: {
   });
 }
 
+export async function sendMeetingLinkUpdatedEmail(params: {
+  to: string;
+  buyerName: string;
+  eventName: string;
+  eventDate: string;
+  eventTime: string;
+  meetingLink: string;
+  meetingPasscode?: string;
+}) {
+  await resend.emails.send({
+    from: `Ventry <${FROM}>`,
+    to: params.to,
+    subject: `Updated meeting link for ${params.eventName}`,
+    html: emailShell(`
+      <h1 style="color:#a855f7;font-size:22px;margin:0 0 12px;">Meeting Link Updated</h1>
+      <p style="color:#f1f0ff;">Hi ${esc(params.buyerName || params.to)}, the organizer updated the meeting link for <strong>${esc(params.eventName)}</strong>. Use the new link below to join.</p>
+      <table width="100%" cellpadding="0" cellspacing="0"
+        style="background:#12121a;border:1px solid #2d2d3d;border-radius:8px;margin:20px 0 24px;">
+        <tr><td style="padding:20px;">
+          <p style="margin:4px 0;color:#9ca3af;font-size:13px;">
+            <strong style="color:#f1f0ff;">Date:</strong> ${esc(params.eventDate)}
+          </p>
+          <p style="margin:4px 0;color:#9ca3af;font-size:13px;">
+            <strong style="color:#f1f0ff;">Time:</strong> ${esc(params.eventTime)}
+          </p>
+          <p style="margin:12px 0 4px;color:#f1f0ff;font-size:13px;"><strong>New meeting link:</strong></p>
+          <p style="margin:4px 0;color:#9ca3af;font-size:13px;word-break:break-all;">${esc(params.meetingLink)}</p>
+          ${params.meetingPasscode ? `<p style="margin:4px 0;color:#9ca3af;font-size:13px;"><strong style="color:#f1f0ff;">Passcode:</strong> ${esc(params.meetingPasscode)}</p>` : ''}
+        </td></tr>
+      </table>
+      <p class="footer">This link is personal to your ticket — please don't share it. You received this because you purchased a ticket for this event.</p>
+    `),
+  });
+}
+
 export async function sendRefundConfirmationEmail(to: string, ticketId: string, amount: number, eventName: string) {
   const fmt = (n: number) =>
     new Intl.NumberFormat('en-NG', { style: 'currency', currency: 'NGN', minimumFractionDigits: 0 }).format(n);
@@ -267,6 +305,21 @@ export async function sendRefundConfirmationEmail(to: string, ticketId: string, 
       <h1 style="color:#34d399;font-size:22px;margin:0 0 12px;">Refund Processed ✓</h1>
       <p style="color:#f1f0ff;">Your refund of <strong>${fmt(amount)}</strong> for <strong>${esc(eventName)}</strong> (${ticketId}) has been initiated.</p>
       <p style="color:#9ca3af;font-size:13px;">It will appear in your account within 3–5 business days.</p>
+    `),
+  });
+}
+
+export async function sendMissingBankDetailsEmail(to: string, organizerName: string, eventName: string) {
+  await resend.emails.send({
+    from: `Ventry <${FROM}>`,
+    to,
+    subject: `Action needed: add your bank details to receive payout for "${eventName}"`,
+    html: emailShell(`
+      <h1 style="color:#f59e0b;font-size:22px;margin:0 0 12px;">Bank Details Required</h1>
+      <p style="color:#f1f0ff;">Hi ${esc(organizerName)}, we tried to release your payout for <strong>&ldquo;${esc(eventName)}&rdquo;</strong> but couldn't find your bank account details on file.</p>
+      <p style="color:#9ca3af;font-size:13px;">Add your bank name, account number, and account name in your Ventry settings so we can send your funds.</p>
+      <br/>
+      <a href="${APP_URL}/organizer/settings" class="btn">Add Bank Details</a>
     `),
   });
 }
@@ -294,8 +347,11 @@ export async function sendReminderEmail(params: {
   eventName: string;
   eventDate: string;
   eventTime: string;
+  eventMode?: 'physical' | 'online';
   eventVenue: string;
   eventCity: string;
+  meetingLink?: string | null;
+  meetingPasscode?: string | null;
   reminderType: '1_week' | '1_day' | '3_hours';
 }) {
   const labels = {
@@ -322,12 +378,21 @@ export async function sendReminderEmail(params: {
         <p style="margin:4px 0;color:#9ca3af;font-size:13px;">
           <strong style="color:#f1f0ff;">Time:</strong> ${esc(params.eventTime)}
         </p>
+        ${params.eventMode === 'online' ? `
+        <p style="margin:12px 0 4px;color:#f1f0ff;font-size:13px;"><strong>Meeting Link:</strong></p>
+        <p style="margin:4px 0;color:#a855f7;font-size:13px;word-break:break-all;">
+          <a href="${esc(params.meetingLink || '')}" style="color:#a855f7;">${esc(params.meetingLink || 'Link not available — contact the organizer')}</a>
+        </p>
+        ${params.meetingPasscode ? `<p style="margin:4px 0;color:#9ca3af;font-size:13px;"><strong style="color:#f1f0ff;">Passcode:</strong> ${esc(params.meetingPasscode)}</p>` : ''}
+        ` : `
         <p style="margin:4px 0;color:#9ca3af;font-size:13px;">
           <strong style="color:#f1f0ff;">Venue:</strong> ${esc(params.eventVenue)}, ${esc(params.eventCity)}
         </p>
+        `}
       </td></tr>
     </table>
 
+    ${params.eventMode === 'online' ? `<p class="footer" style="margin:0 0 16px;">This link is personal to your ticket — please don't share it.</p>` : ''}
     <a href="${APP_URL}/ticket/${params.ticketId}" class="btn" style="margin-bottom:16px;">View My Ticket</a>
     <br/>
     <p class="footer">You received this reminder because you purchased a ticket on Ventry.</p>

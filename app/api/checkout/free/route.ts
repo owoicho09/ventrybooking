@@ -20,7 +20,7 @@ export async function POST(req: NextRequest) {
 
     const { data: event } = await db
       .from('events')
-      .select('id, event_name, date, time, venue, status, organizer_id, banner_url')
+      .select('id, event_name, date, time, event_mode, venue, status, organizer_id, banner_url')
       .eq('id', eventId)
       .maybeSingle();
 
@@ -104,6 +104,7 @@ export async function POST(req: NextRequest) {
       eventName:   event.event_name,
       eventDate:   event.date,
       eventVenue:  event.venue,
+      eventMode:   event.event_mode,
       tierName:    tier.name,
       totalPaid:   0,
       bannerUrl:   event.banner_url,

@@ -162,8 +162,17 @@ export default function TicketPage() {
           style={{ backgroundColor: '#f59e0b10', borderColor: '#f59e0b30' }}>
           <AlertTriangle size={16} className="flex-shrink-0 mt-0.5" style={{ color: 'var(--color-amber)' }} />
           <p className="text-sm leading-relaxed" style={{ color: 'var(--color-text-muted)' }}>
-            <span className="font-semibold" style={{ color: 'var(--color-text)' }}>Keep your QR code private.</span>{' '}
-            Only show it at the venue entrance when you are ready to be scanned in. Each QR code is single-use.
+            {ticket.event.event_mode === 'online' ? (
+              <>
+                <span className="font-semibold" style={{ color: 'var(--color-text)' }}>Watch your inbox.</span>{' '}
+                Your join link will be emailed to you before the event starts, along with your reminders.
+              </>
+            ) : (
+              <>
+                <span className="font-semibold" style={{ color: 'var(--color-text)' }}>Keep your QR code private.</span>{' '}
+                Only show it at the venue entrance when you are ready to be scanned in. Each QR code is single-use.
+              </>
+            )}
           </p>
         </div>
 

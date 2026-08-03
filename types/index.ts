@@ -53,6 +53,7 @@ export interface Event {
   description: string;
   date: string;
   time: string;
+  event_mode?: 'physical' | 'online';
   venue: string;
   address: string;
   city: string;

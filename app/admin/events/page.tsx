@@ -30,8 +30,10 @@ const statusBadge = (status: string) => {
 
 interface EventData {
   id: string; name: string; category: string; date: string; city: string; venue: string;
+  event_mode?: 'physical' | 'online';
   address?: string; landmark?: string | null; location_hidden?: boolean;
   venue_proof_url?: string | null;
+  meeting_link?: string | null; meeting_passcode?: string | null;
   description: string; status: string;
   organizer: { name: string; tier?: string };
 }
@@ -193,7 +195,7 @@ export default function AdminEventsPage() {
                   </Td>
                   <Td><span style={{ color: 'var(--color-text-muted)' }}>{event.category}</span></Td>
                   <Td><span style={{ color: 'var(--color-text-muted)' }}>{formatShortDate(event.date)}</span></Td>
-                  <Td><span style={{ color: 'var(--color-text-muted)' }}>{event.city}</span></Td>
+                  <Td><span style={{ color: 'var(--color-text-muted)' }}>{event.event_mode === 'online' ? 'Online' : event.city}</span></Td>
                   <Td>{statusBadge(event.status)}</Td>
                   <Td>
                     <Button size="sm" variant="outline"
@@ -214,16 +216,24 @@ export default function AdminEventsPage() {
 
             {/* Event detail fields */}
             <div className="flex flex-col gap-3 text-sm">
-              {[
-                ['Category', selectedEvent.category],
-                ['Date',     formatShortDate(selectedEvent.date)],
-                ['Venue',    selectedEvent.venue],
-                ['Address',  selectedEvent.address || 'Not provided'],
-                ['City',     selectedEvent.city],
-                ['Landmark', selectedEvent.landmark || 'Not provided'],
-                ['Public Location', selectedEvent.location_hidden ? 'Hidden until organizer reveals it' : 'Exact location visible'],
-                ['Organizer', selectedEvent.organizer.name],
-              ].map(([k, v]) => (
+              {(selectedEvent.event_mode === 'online'
+                ? [
+                    ['Category', selectedEvent.category],
+                    ['Date',     formatShortDate(selectedEvent.date)],
+                    ['Type',     'Online'],
+                    ['Organizer', selectedEvent.organizer.name],
+                  ]
+                : [
+                    ['Category', selectedEvent.category],
+                    ['Date',     formatShortDate(selectedEvent.date)],
+                    ['Venue',    selectedEvent.venue],
+                    ['Address',  selectedEvent.address || 'Not provided'],
+                    ['City',     selectedEvent.city],
+                    ['Landmark', selectedEvent.landmark || 'Not provided'],
+                    ['Public Location', selectedEvent.location_hidden ? 'Hidden until organizer reveals it' : 'Exact location visible'],
+                    ['Organizer', selectedEvent.organizer.name],
+                  ]
+              ).map(([k, v]) => (
                 <div key={k} className="flex flex-col sm:flex-row sm:justify-between gap-1">
                   <span className="flex-shrink-0" style={{ color: 'var(--color-text-muted)' }}>{k}</span>
                   <span className="min-w-0 break-words sm:text-right" style={{ color: 'var(--color-text)' }}>{v}</span>
@@ -236,30 +246,50 @@ export default function AdminEventsPage() {
               {selectedEvent.description}
             </div>
 
-            <div className="rounded-lg border p-4"
-              style={{ backgroundColor: 'var(--color-surface-2)', borderColor: 'var(--color-border)' }}>
-              <div className="flex items-center gap-2 mb-2">
-                <FileText size={15} style={{ color: 'var(--color-purple-light)' }} />
-                <p className="text-sm font-semibold" style={{ color: 'var(--color-text)' }}>
-                  Venue Proof
+            {selectedEvent.event_mode === 'online' ? (
+              <div className="rounded-lg border p-4"
+                style={{ backgroundColor: 'var(--color-surface-2)', borderColor: 'var(--color-border)' }}>
+                <div className="flex items-center gap-2 mb-2">
+                  <FileText size={15} style={{ color: 'var(--color-purple-light)' }} />
+                  <p className="text-sm font-semibold" style={{ color: 'var(--color-text)' }}>
+                    Meeting Link
+                  </p>
+                </div>
+                <p className="text-sm break-all" style={{ color: 'var(--color-text-muted)' }}>
+                  {selectedEvent.meeting_link || 'Not provided'}
                 </p>
+                {selectedEvent.meeting_passcode && (
+                  <p className="text-sm mt-1" style={{ color: 'var(--color-text-muted)' }}>
+                    Passcode: {selectedEvent.meeting_passcode}
+                  </p>
+                )}
               </div>
-              {selectedEvent.venue_proof_url ? (
-                <a
-                  href={selectedEvent.venue_proof_url}
-                  target="_blank"
-                  rel="noopener noreferrer"
-                  className="inline-flex items-center gap-1.5 text-sm"
-                  style={{ color: 'var(--color-purple-light)' }}
-                >
-                  View uploaded proof <ExternalLink size={13} />
-                </a>
-              ) : (
-                <p className="text-sm" style={{ color: 'var(--color-text-muted)' }}>
-                  No venue proof was uploaded for this event.
-                </p>
-              )}
-            </div>
+            ) : (
+              <div className="rounded-lg border p-4"
+                style={{ backgroundColor: 'var(--color-surface-2)', borderColor: 'var(--color-border)' }}>
+                <div className="flex items-center gap-2 mb-2">
+                  <FileText size={15} style={{ color: 'var(--color-purple-light)' }} />
+                  <p className="text-sm font-semibold" style={{ color: 'var(--color-text)' }}>
+                    Venue Proof
+                  </p>
+                </div>
+                {selectedEvent.venue_proof_url ? (
+                  <a
+                    href={selectedEvent.venue_proof_url}
+                    target="_blank"
+                    rel="noopener noreferrer"
+                    className="inline-flex items-center gap-1.5 text-sm"
+                    style={{ color: 'var(--color-purple-light)' }}
+                  >
+                    View uploaded proof <ExternalLink size={13} />
+                  </a>
+                ) : (
+                  <p className="text-sm" style={{ color: 'var(--color-text-muted)' }}>
+                    No venue proof was uploaded for this event.
+                  </p>
+                )}
+              </div>
+            )}
 
             {statusBadge(selectedEvent.status)}
 
