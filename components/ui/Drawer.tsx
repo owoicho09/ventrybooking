@@ -54,12 +54,14 @@ export function Drawer({ open, onClose, title, children, width = '480px' }: Draw
     <>
       {/* Backdrop */}
       <div
-        className={`fixed inset-0 z-50 bg-black/60 backdrop-blur-sm transition-opacity duration-300 ${open ? 'opacity-100' : 'opacity-0 pointer-events-none'}`}
+        className={`fixed inset-0 z-[60] bg-black/60 backdrop-blur-sm transition-opacity duration-300 ${open ? 'opacity-100' : 'opacity-0 pointer-events-none'}`}
         onClick={onClose}
       />
-      {/* Drawer panel */}
+      {/* Drawer panel — z-[60] beats AdminBottomNav's z-50 fixed bar, which
+          otherwise paints on top of (and intercepts touches on) the bottom
+          of the drawer since it's later in the DOM at the same z-index. */}
       <div
-        className={`fixed top-0 right-0 h-full z-50 border-l flex flex-col shadow-2xl transition-transform duration-300 ${open ? 'translate-x-0' : 'translate-x-full'}`}
+        className={`fixed top-0 right-0 h-full z-[60] border-l flex flex-col shadow-2xl transition-transform duration-300 ${open ? 'translate-x-0' : 'translate-x-full'}`}
         style={{
           width: `min(${width}, 100vw)`,
           maxWidth: '100vw',
