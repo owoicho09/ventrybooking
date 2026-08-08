@@ -43,9 +43,18 @@ export async function createTicketFromPayment(p: PaymentData): Promise<string | 
         .order('purchased_at', { ascending: true })
         .limit(1)
         .maybeSingle();
+      if (!first) {
+        // Reference was claimed by an earlier call that then failed before
+        // inserting a ticket — that attempt is permanently stuck (retries
+        // will hit this same branch forever). Surface it instead of
+        // returning silently.
+        console.error('createTicketFromPayment: reference claimed but no ticket exists', p.reference);
+        await notifyAdminFailure(p, 'Payment claimed but no ticket was created on a prior attempt (stuck claim).');
+      }
       return first?.id ?? null;
     }
     console.error('createTicketFromPayment: purchases insert error', claimErr);
+    await notifyAdminFailure(p, `Failed to claim payment reference: ${claimErr.message}`);
     return null;
   }
 
@@ -63,10 +72,12 @@ export async function createTicketFromPayment(p: PaymentData): Promise<string | 
 
   if (eventErr || tierErr) {
     console.error('createTicketFromPayment: DB error', { eventErr, tierErr });
+    await notifyAdminFailure(p, `Payment claimed but event/tier lookup failed: ${eventErr?.message || tierErr?.message}`);
     return null;
   }
   if (!eventRow || !tierRow) {
     console.error('createTicketFromPayment: event or tier not found', { eventId: p.eventId, tierId: p.tierId });
+    await notifyAdminFailure(p, `Payment claimed but event/tier no longer exists (eventId: ${p.eventId}, tierId: ${p.tierId}).`);
     return null;
   }
 
@@ -105,7 +116,12 @@ export async function createTicketFromPayment(p: PaymentData): Promise<string | 
     marketing_consent:  consent,
   }));
 
-  await db.from('tickets').insert(rows);
+  const { error: insertErr } = await db.from('tickets').insert(rows);
+  if (insertErr) {
+    console.error('createTicketFromPayment: tickets insert error', insertErr);
+    await notifyAdminFailure(p, `Payment claimed but ticket insert failed: ${insertErr.message}`);
+    return null;
+  }
 
   await Promise.all([
     db.rpc('increment_tier_sold', { tier_id: p.tierId, amount: qty }),
@@ -150,6 +166,19 @@ export async function createTicketFromPayment(p: PaymentData): Promise<string | 
   }
 
   return ticketIds[0];
+}
+
+function notifyAdminFailure(p: PaymentData, reason: string): Promise<void> {
+  const email = (p.buyerEmail || p.customerEmail || '').toLowerCase().trim();
+  return notify(
+    { type: 'admin' },
+    {
+      notifType: 'ticket_creation_failed',
+      title:     `Ticket creation failed — ${p.reference}`,
+      body:      `${p.buyerName || email} (${email}) paid but no ticket was created. ${reason}`,
+      link:      `/admin/buyers?search=${encodeURIComponent(email)}`,
+    },
+  ).catch(err => console.error('notifyAdminFailure: notify error', err));
 }
 
 async function upsertPayout(

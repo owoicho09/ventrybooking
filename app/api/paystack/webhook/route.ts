@@ -23,6 +23,15 @@ export async function POST(req: NextRequest) {
 
     if (!eventId || !tierId) {
       console.error('Webhook: missing eventId or tierId in metadata', { reference });
+      notify(
+        { type: 'admin' },
+        {
+          notifType: 'ticket_creation_failed',
+          title:     `Ticket creation failed — ${reference}`,
+          body:      `Payment succeeded but metadata was missing eventId/tierId, so no ticket could be created. Buyer: ${buyerEmail || customer?.email || 'unknown'}.`,
+          link:      `/admin/buyers?search=${encodeURIComponent(buyerEmail || customer?.email || '')}`,
+        },
+      ).catch(err => console.error('Webhook: notify-admin error', err));
       return NextResponse.json({ success: true }); // 200 — retrying won't help
     }
 

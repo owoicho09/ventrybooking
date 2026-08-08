@@ -2,7 +2,7 @@
 
 import { useState, useEffect, useCallback, Suspense } from 'react';
 import { useSearchParams } from 'next/navigation';
-import { Search } from 'lucide-react';
+import { Search, RefreshCw } from 'lucide-react';
 import { Badge } from '@/components/ui/Badge';
 import { Input } from '@/components/ui/Input';
 import { Table, Thead, Tbody, Th, Tr, Td } from '@/components/ui/Table';
@@ -45,6 +45,8 @@ function AdminBuyersPageInner() {
   const [search, setSearch] = useState(searchParams.get('search') || '');
   const [buyers, setBuyers] = useState<BuyerData[]>([]);
   const [loading, setLoading] = useState(true);
+  const [reconciling, setReconciling] = useState(false);
+  const [reconcileMsg, setReconcileMsg] = useState<string | null>(null);
 
   const load = useCallback(() => {
     setLoading(true);
@@ -63,6 +65,24 @@ function AdminBuyersPageInner() {
   useEffect(() => {
     const t = setTimeout(load, 300);
     return () => clearTimeout(t);
+  }, [load]);
+
+  const reconcile = useCallback(() => {
+    setReconciling(true);
+    setReconcileMsg(null);
+    fetch('/api/admin/reconcile-orders', { method: 'POST' })
+      .then(r => r.json())
+      .then(d => {
+        if (!d.success) { setReconcileMsg('Reconcile failed.'); return; }
+        setReconcileMsg(
+          d.recovered.length > 0
+            ? `Recovered ${d.recovered.length} missed ticket${d.recovered.length > 1 ? 's' : ''}.`
+            : `Checked ${d.checked} stale checkout(s) — none missing.`,
+        );
+        if (d.recovered.length > 0) load();
+      })
+      .catch(() => setReconcileMsg('Reconcile failed.'))
+      .finally(() => setReconciling(false));
   }, [load]);
 
   return (
@@ -92,15 +112,33 @@ function AdminBuyersPageInner() {
           ))}
         </div>
 
-        <div className="w-full sm:w-72">
-          <Input
-            icon={<Search size={15} />}
-            placeholder="Search name, email, or ticket ID..."
-            value={search}
-            onChange={(e) => setSearch(e.target.value)}
-          />
+        <div className="flex gap-2 items-center">
+          <button onClick={reconcile} disabled={reconciling}
+            title="Check for paid checkouts that never turned into a ticket (missed webhook)"
+            className="flex items-center gap-1.5 px-3 py-2 rounded-lg text-sm font-medium transition-all disabled:opacity-60"
+            style={{
+              backgroundColor: 'var(--color-surface)',
+              color:           'var(--color-text-muted)',
+              border:          '1px solid var(--color-border)',
+            }}>
+            <RefreshCw size={14} className={reconciling ? 'animate-spin' : ''} />
+            {reconciling ? 'Checking...' : 'Recheck missed payments'}
+          </button>
+
+          <div className="w-full sm:w-72">
+            <Input
+              icon={<Search size={15} />}
+              placeholder="Search name, email, or ticket ID..."
+              value={search}
+              onChange={(e) => setSearch(e.target.value)}
+            />
+          </div>
         </div>
       </div>
+
+      {reconcileMsg && (
+        <p className="text-sm -mt-3" style={{ color: 'var(--color-text-muted)' }}>{reconcileMsg}</p>
+      )}
 
       {loading && <p className="text-sm" style={{ color: 'var(--color-text-muted)' }}>Loading...</p>}
       {!loading && buyers.length === 0 && (
