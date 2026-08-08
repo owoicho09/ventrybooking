@@ -13,12 +13,33 @@ interface DrawerProps {
 
 export function Drawer({ open, onClose, title, children, width = '480px' }: DrawerProps) {
   useEffect(() => {
-    if (open) {
-      document.body.style.overflow = 'hidden';
-    } else {
-      document.body.style.overflow = '';
-    }
-    return () => { document.body.style.overflow = ''; };
+    if (!open) return;
+    // overflow:hidden alone doesn't stop rubber-band scrolling on iOS Safari,
+    // which lets touch drags scroll the page behind the drawer. Pinning the
+    // body via position:fixed blocks that, and we restore the scroll
+    // position on close.
+    const scrollY = window.scrollY;
+    const body = document.body;
+    const prev = {
+      position: body.style.position,
+      top: body.style.top,
+      left: body.style.left,
+      right: body.style.right,
+      overflow: body.style.overflow,
+    };
+    body.style.position = 'fixed';
+    body.style.top = `-${scrollY}px`;
+    body.style.left = '0';
+    body.style.right = '0';
+    body.style.overflow = 'hidden';
+    return () => {
+      body.style.position = prev.position;
+      body.style.top = prev.top;
+      body.style.left = prev.left;
+      body.style.right = prev.right;
+      body.style.overflow = prev.overflow;
+      window.scrollTo(0, scrollY);
+    };
   }, [open]);
 
   useEffect(() => {
@@ -63,7 +84,12 @@ export function Drawer({ open, onClose, title, children, width = '480px' }: Draw
             </button>
           </div>
         )}
-        <div className="flex-1 min-w-0 overflow-y-auto p-4 sm:p-6">{children}</div>
+        <div
+          className="flex-1 min-w-0 overflow-y-auto p-4 sm:p-6"
+          style={{ overscrollBehavior: 'contain', WebkitOverflowScrolling: 'touch' }}
+        >
+          {children}
+        </div>
       </div>
     </>
   );
