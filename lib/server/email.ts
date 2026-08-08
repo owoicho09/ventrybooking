@@ -309,6 +309,46 @@ export async function sendRefundConfirmationEmail(to: string, ticketId: string, 
   });
 }
 
+export async function sendPayoutReleasedEmail(params: {
+  to: string;
+  organizerName: string;
+  eventName: string;
+  gross: number;
+  fee: number;
+  net: number;
+  bankName: string;
+  accountNumber: string;
+  reference: string;
+}) {
+  const fmt = (n: number) =>
+    new Intl.NumberFormat('en-NG', { style: 'currency', currency: 'NGN', minimumFractionDigits: 0 }).format(n);
+  const maskedAccount = params.accountNumber ? `****${params.accountNumber.slice(-4)}` : '';
+
+  await resend.emails.send({
+    from: `Ventry <${FROM}>`,
+    to: params.to,
+    subject: `Payout released — ${params.eventName}`,
+    html: emailShell(`
+      <h1 style="color:#34d399;font-size:22px;margin:0 0 6px;">Payout Released ✓</h1>
+      <p class="label" style="margin:0 0 24px;">Hi ${esc(params.organizerName)}, your payout for <strong style="color:#f1f0ff;">${esc(params.eventName)}</strong> has been sent.</p>
+
+      <table width="100%" cellpadding="0" cellspacing="0"
+        style="background:#12121a;border:1px solid #2d2d3d;border-radius:8px;margin-bottom:24px;">
+        <tr><td style="padding:20px;">
+          <p style="margin:4px 0;color:#9ca3af;font-size:13px;"><strong style="color:#f1f0ff;">Ticket Revenue:</strong> ${fmt(params.gross)}</p>
+          <p style="margin:4px 0;color:#9ca3af;font-size:13px;"><strong style="color:#f1f0ff;">Platform fee (2.5%):</strong> ${fmt(params.fee)}</p>
+          <p style="margin:8px 0 4px;color:#34d399;font-size:17px;font-weight:700;">Amount Paid: ${fmt(params.net)}</p>
+          <p style="margin:12px 0 4px;color:#9ca3af;font-size:13px;"><strong style="color:#f1f0ff;">Sent to:</strong> ${esc(params.bankName)} ${maskedAccount}</p>
+          <p style="margin:4px 0;color:#9ca3af;font-size:13px;"><strong style="color:#f1f0ff;">Reference:</strong> <span class="mono">${esc(params.reference)}</span></p>
+        </td></tr>
+      </table>
+
+      <a href="${APP_URL}/organizer/payouts" class="btn">View Payout History</a>
+      <p class="footer">If tickets for this event are still on sale, any additional revenue will be paid out separately.</p>
+    `),
+  });
+}
+
 export async function sendMissingBankDetailsEmail(to: string, organizerName: string, eventName: string) {
   await resend.emails.send({
     from: `Ventry <${FROM}>`,
