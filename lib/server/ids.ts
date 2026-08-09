@@ -27,3 +27,8 @@ export function generatePayoutRef(): string {
 export function generateStaffCode(): string {
   return `STF-${randomAlphaNum(4)}-${randomAlphaNum(4)}`;
 }
+
+/** Affiliate ref code carried in event link query params: AFF-XXXXXXXX */
+export function generateAffiliateCode(): string {
+  return `AFF-${randomAlphaNum(8)}`;
+}

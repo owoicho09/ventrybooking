@@ -16,6 +16,7 @@ interface CartItem {
   eventName: string;
   eventDate: string;
   tierPrice: number;
+  ref?: string;
 }
 
 export default function CheckoutPage() {
@@ -55,6 +56,7 @@ export default function CheckoutPage() {
             buyerEmail: email.trim().toLowerCase(),
             buyerName: buyerName.trim(),
             marketingConsent,
+            ref: cart.ref,
           }),
         });
         const data = await res.json();
@@ -75,6 +77,7 @@ export default function CheckoutPage() {
             buyerEmail: email.trim().toLowerCase(),
             buyerName: buyerName.trim(),
             marketingConsent,
+            ref: cart.ref,
           }),
         });
         const data = await res.json();

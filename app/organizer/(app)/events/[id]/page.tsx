@@ -5,7 +5,7 @@ import { useParams, useRouter } from 'next/navigation';
 import Link from 'next/link';
 import {
   ArrowLeft, Download, Upload, Plus, Pencil, Check, X,
-  AlertTriangle, Ticket, Copy, Eye, EyeOff,
+  AlertTriangle, Ticket, Copy, Eye, EyeOff, Users,
 } from 'lucide-react';
 import { Badge } from '@/components/ui/Badge';
 import { Button } from '@/components/ui/Button';
@@ -14,6 +14,7 @@ import { useToast } from '@/components/ui/Toast';
 import { formatNGN, formatShortDate } from '@/lib/utils';
 
 interface Tier { id: string; name: string; price: number; available: number; sold: number; }
+interface Affiliate { id: string; name: string; code: string; link: string; clicks: number; buys: number; }
 interface OrgEvent {
   id: string; event_name: string; category: string; description: string;
   date: string; time: string; event_mode: 'physical' | 'online'; venue: string; address: string; city: string;
@@ -128,6 +129,9 @@ export default function OrganizerEventDetailPage() {
   const [addingLoading, setAddingLoading] = useState(false);
   const [downloadLoading, setDownloadLoading] = useState(false);
   const bannerRef = useRef<HTMLInputElement>(null);
+  const [affiliates, setAffiliates] = useState<Affiliate[]>([]);
+  const [newAffiliateName, setNewAffiliateName] = useState('');
+  const [addingAffiliate, setAddingAffiliate] = useState(false);
 
   const load = () => {
     setLoading(true);
@@ -153,7 +157,14 @@ export default function OrganizerEventDetailPage() {
       .finally(() => setLoading(false));
   };
 
-  useEffect(() => { if (id) load(); }, [id]);
+  const loadAffiliates = () => {
+    fetch(`/api/organizer/events/${id}/affiliates`)
+      .then(r => r.json())
+      .then(d => { if (d.success) setAffiliates(d.data); })
+      .catch(() => {});
+  };
+
+  useEffect(() => { if (id) { load(); loadAffiliates(); } }, [id]);
 
   const handleSaveInfo = async () => {
     setSavingInfo(true);
@@ -236,6 +247,34 @@ export default function OrganizerEventDetailPage() {
       setTimeout(() => URL.revokeObjectURL(url), 10000);
     } finally {
       setDownloadLoading(false);
+    }
+  };
+
+  const handleAddAffiliate = async () => {
+    if (!newAffiliateName.trim()) return;
+    setAddingAffiliate(true);
+    try {
+      const res = await fetch(`/api/organizer/events/${id}/affiliates`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ name: newAffiliateName.trim() }),
+      });
+      const data = await res.json();
+      if (!res.ok) { toast(data.error || 'Failed to add affiliate', 'error'); return; }
+      toast('Affiliate added', 'success');
+      setNewAffiliateName('');
+      loadAffiliates();
+    } finally {
+      setAddingAffiliate(false);
+    }
+  };
+
+  const handleCopyAffiliateLink = async (link: string) => {
+    try {
+      await navigator.clipboard.writeText(link);
+      toast('Affiliate link copied', 'success');
+    } catch {
+      toast('Could not copy link', 'error');
     }
   };
 
@@ -489,6 +528,69 @@ export default function OrganizerEventDetailPage() {
           <Download size={13} />
           {downloadLoading ? 'Generating…' : 'Download CSV'}
         </Button>
+      </div>
+
+      {/* Affiliates */}
+      <div className="rounded-xl border p-5 flex flex-col gap-4"
+        style={{ backgroundColor: 'var(--color-surface)', borderColor: 'var(--color-border)' }}>
+        <div>
+          <h2 className="font-semibold flex items-center gap-2" style={{ color: 'var(--color-text)' }}>
+            <Users size={16} />Affiliates
+          </h2>
+          <p className="text-xs mt-0.5" style={{ color: 'var(--color-text-muted)' }}>
+            Give a marketer a named tracking link for this event. You'll see clicks and completed purchases per affiliate — never buyer details.
+          </p>
+        </div>
+
+        <div className="flex flex-col sm:flex-row gap-2">
+          <div className="flex-1">
+            <Input
+              value={newAffiliateName}
+              onChange={e => setNewAffiliateName(e.target.value)}
+              placeholder="e.g. Tunde or ABC Promotions"
+            />
+          </div>
+          <Button size="sm" disabled={addingAffiliate || !newAffiliateName.trim()} onClick={handleAddAffiliate}>
+            <Plus size={13} />Add Affiliate
+          </Button>
+        </div>
+
+        {affiliates.length === 0 ? (
+          <p className="text-sm" style={{ color: 'var(--color-text-muted)' }}>No affiliates yet.</p>
+        ) : (
+          <div className="overflow-x-auto">
+            <table className="w-full text-sm">
+              <thead>
+                <tr className="text-left border-b" style={{ borderColor: 'var(--color-border)' }}>
+                  <th className="py-2 pr-3 font-medium" style={{ color: 'var(--color-text-dim)' }}>Name</th>
+                  <th className="py-2 pr-3 font-medium" style={{ color: 'var(--color-text-dim)' }}>Link</th>
+                  <th className="py-2 pr-3 font-medium text-right" style={{ color: 'var(--color-text-dim)' }}>Clicks</th>
+                  <th className="py-2 pl-3 font-medium text-right" style={{ color: 'var(--color-text-dim)' }}>Purchases</th>
+                </tr>
+              </thead>
+              <tbody>
+                {affiliates.map(a => (
+                  <tr key={a.id} className="border-b last:border-0" style={{ borderColor: 'var(--color-border)' }}>
+                    <td className="py-2.5 pr-3 whitespace-nowrap" style={{ color: 'var(--color-text)' }}>{a.name}</td>
+                    <td className="py-2.5 pr-3">
+                      <button
+                        type="button"
+                        onClick={() => handleCopyAffiliateLink(a.link)}
+                        className="inline-flex items-center gap-1.5 max-w-[220px] sm:max-w-xs"
+                        style={{ color: 'var(--color-purple-light)' }}
+                      >
+                        <Copy size={12} className="flex-shrink-0" />
+                        <span className="truncate">{a.link}</span>
+                      </button>
+                    </td>
+                    <td className="py-2.5 pr-3 text-right" style={{ color: 'var(--color-text)' }}>{a.clicks.toLocaleString()}</td>
+                    <td className="py-2.5 pl-3 text-right font-medium" style={{ color: 'var(--color-text)' }}>{a.buys.toLocaleString()}</td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </div>
+        )}
       </div>
 
       {/* Warning if no sales yet */}

@@ -75,3 +75,31 @@ ALTER TABLE events
     CHECK (event_mode IN ('physical', 'online')),
   ADD COLUMN IF NOT EXISTS meeting_link TEXT,
   ADD COLUMN IF NOT EXISTS meeting_passcode TEXT;
+
+
+-- 9. Affiliate tracking — per-event referral links with click/purchase counters.
+--    No buyer identifiers are ever stored here, by design.
+CREATE TABLE IF NOT EXISTS affiliates (
+  id            UUID        PRIMARY KEY DEFAULT gen_random_uuid(),
+  code          TEXT        NOT NULL UNIQUE,   -- AFF-XXXXXXXX, used as the ?ref= value
+  name          TEXT        NOT NULL,          -- organizer-chosen label, e.g. "Tunde"
+  event_id      UUID        NOT NULL REFERENCES events (id) ON DELETE CASCADE,
+  organizer_id  UUID        NOT NULL REFERENCES users (id) ON DELETE CASCADE,
+  clicks        INTEGER     NOT NULL DEFAULT 0,
+  buys          INTEGER     NOT NULL DEFAULT 0,
+  created_at    TIMESTAMPTZ NOT NULL DEFAULT NOW()
+);
+
+CREATE INDEX IF NOT EXISTS idx_affiliates_event_id     ON affiliates (event_id);
+CREATE INDEX IF NOT EXISTS idx_affiliates_organizer_id ON affiliates (organizer_id);
+CREATE INDEX IF NOT EXISTS idx_affiliates_code         ON affiliates (code);
+
+CREATE OR REPLACE FUNCTION increment_affiliate_clicks(p_code TEXT)
+RETURNS VOID LANGUAGE sql AS $$
+  UPDATE affiliates SET clicks = clicks + 1 WHERE code = p_code;
+$$;
+
+CREATE OR REPLACE FUNCTION increment_affiliate_buys(p_code TEXT, p_amount INTEGER)
+RETURNS VOID LANGUAGE sql AS $$
+  UPDATE affiliates SET buys = buys + p_amount WHERE code = p_code;
+$$;

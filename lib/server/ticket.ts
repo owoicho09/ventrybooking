@@ -14,6 +14,7 @@ export interface PaymentData {
   buyerName?: string;
   customerEmail?: string;
   marketingConsent?: boolean;
+  refCode?: string;
 }
 
 /**
@@ -127,6 +128,20 @@ export async function createTicketFromPayment(p: PaymentData): Promise<string | 
     db.rpc('increment_tier_sold', { tier_id: p.tierId, amount: qty }),
     upsertPayout(db, p.eventId, eventRow, subtotal, fee, net),
   ]);
+
+  if (p.refCode) {
+    // One buy per completed order, not per ticket. This only runs on the real
+    // creation path above (never on the idempotent-duplicate short-circuit),
+    // so a webhook retry can't double-credit the affiliate.
+    (async () => {
+      try {
+        const { error } = await db.rpc('increment_affiliate_buys', { p_code: p.refCode, p_amount: 1 });
+        if (error) console.error('createTicketFromPayment: affiliate credit rpc error', error);
+      } catch (err) {
+        console.error('createTicketFromPayment: affiliate credit error', err);
+      }
+    })();
+  }
 
   notify(
     { type: 'organizer', id: eventRow.organizer_id },

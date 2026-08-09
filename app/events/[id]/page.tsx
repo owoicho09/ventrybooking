@@ -1,7 +1,7 @@
 'use client';
 
-import { useState, useEffect } from 'react';
-import { useRouter, useParams } from 'next/navigation';
+import { useState, useEffect, useRef, Suspense } from 'react';
+import { useRouter, useParams, useSearchParams } from 'next/navigation';
 import Link from 'next/link';
 import Image from 'next/image';
 import { Calendar, MapPin, Clock, ChevronRight, CheckCircle, Shield, Minus, Plus, AlertTriangle, Share2 } from 'lucide-react';
@@ -14,15 +14,17 @@ import type { Event, TicketTier } from '@/types';
 import { EventReviews } from '@/components/events/EventReviews';
 import { useToast } from '@/components/ui/Toast';
 
-export default function EventDetailPage() {
+function EventDetailContent() {
   const { id } = useParams<{ id: string }>();
   const router = useRouter();
+  const searchParams = useSearchParams();
   const { toast } = useToast();
   const [event, setEvent] = useState<Event | null>(null);
   const [loading, setLoading] = useState(true);
   const [quantities, setQuantities] = useState<Record<string, number>>({});
   const [checkingOut, setCheckingOut] = useState(false);
   const [orgReputation, setOrgReputation] = useState<{ avg: number | null; count: number } | null>(null);
+  const refTracked = useRef(false);
 
   useEffect(() => {
     if (!id) return;
@@ -38,6 +40,21 @@ export default function EventDetailPage() {
       .catch(console.error)
       .finally(() => setLoading(false));
   }, [id]);
+
+  // Affiliate link tracking: capture ?ref=, credit one click, and remember it
+  // so it can be attached to the order if this buyer checks out.
+  useEffect(() => {
+    if (!id) return;
+    const ref = searchParams.get('ref');
+    if (!ref || refTracked.current) return;
+    refTracked.current = true;
+    sessionStorage.setItem(`ventry_ref_${id}`, ref);
+    fetch('/api/affiliates/track', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ code: ref }),
+    }).catch(() => {});
+  }, [id, searchParams]);
 
   const updateQty = (tierId: string, delta: number) => {
     if (!event) return;
@@ -81,6 +98,7 @@ export default function EventDetailPage() {
     // Only the first selected tier is sent — multi-tier checkout not yet supported
     const tier = selectedTiers[0];
     const qty  = quantities[tier.id];
+    const ref  = sessionStorage.getItem(`ventry_ref_${event.id}`) || undefined;
     sessionStorage.setItem('ventry_cart', JSON.stringify({
       eventId:   event.id,
       tierId:    tier.id,
@@ -89,6 +107,7 @@ export default function EventDetailPage() {
       eventName: event.name,
       eventDate: event.date,
       tierPrice: tier.price,
+      ref,
     }));
     router.push('/checkout');
   };
@@ -341,5 +360,18 @@ export default function EventDetailPage() {
       </div>
       <Footer />
     </div>
+  );
+}
+
+export default function EventDetailPage() {
+  return (
+    <Suspense fallback={
+      <div style={{ backgroundColor: 'var(--color-bg)', minHeight: '100vh' }}>
+        <PublicNav />
+        <div className="pt-24 flex items-center justify-center"><p style={{ color: 'var(--color-text-muted)' }}>Loading event...</p></div>
+      </div>
+    }>
+      <EventDetailContent />
+    </Suspense>
   );
 }

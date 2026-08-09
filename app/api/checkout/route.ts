@@ -6,7 +6,7 @@ import { v4 as uuidv4 } from 'uuid';
 
 export async function POST(req: NextRequest) {
   try {
-    const { eventId, tierId, quantity, buyerEmail, buyerName, marketingConsent } = await req.json();
+    const { eventId, tierId, quantity, buyerEmail, buyerName, marketingConsent, ref } = await req.json();
 
     if (!eventId || !tierId || !quantity || !buyerEmail) {
       return NextResponse.json({ error: 'Missing required fields' }, { status: 400 });
@@ -58,6 +58,19 @@ export async function POST(req: NextRequest) {
     const reference = `VTR-${uuidv4().replace(/-/g, '').toUpperCase().slice(0, 12)}`;
     const appUrl = process.env.NEXT_PUBLIC_APP_URL!;
 
+    // Only attribute to an affiliate whose code actually belongs to this event.
+    let refCode: string | undefined;
+    if (ref) {
+      const { data: affiliate, error: refErr } = await db
+        .from('affiliates')
+        .select('code')
+        .eq('code', ref)
+        .eq('event_id', eventId)
+        .maybeSingle();
+      if (refErr) console.error('POST /api/checkout: affiliate lookup error', refErr);
+      if (affiliate) refCode = affiliate.code;
+    }
+
     // Initialize Paystack transaction
     const paystackData = await initializeTransaction({
       email: buyerEmail,
@@ -74,6 +87,7 @@ export async function POST(req: NextRequest) {
         subtotal,
         serviceFee,
         total,
+        refCode,
       },
     });
 

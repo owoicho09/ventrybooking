@@ -7,7 +7,7 @@ import { randomBytes } from 'crypto';
 
 export async function POST(req: NextRequest) {
   try {
-    const { eventId, tierId, quantity, buyerEmail, buyerName, marketingConsent } = await req.json();
+    const { eventId, tierId, quantity, buyerEmail, buyerName, marketingConsent, ref } = await req.json();
 
     if (!eventId || !tierId || !quantity || !buyerEmail) {
       return NextResponse.json({ error: 'Missing required fields' }, { status: 400 });
@@ -85,6 +85,33 @@ export async function POST(req: NextRequest) {
     }
 
     await db.rpc('increment_tier_sold', { tier_id: tierId, amount: qty });
+
+    // Free orders never touch Paystack/the webhook, so credit the affiliate here —
+    // one buy per completed order, not per ticket. Only if the ref actually
+    // belongs to this event.
+    if (ref) {
+      try {
+        const { data: affiliate, error: lookupErr } = await db
+          .from('affiliates')
+          .select('code')
+          .eq('code', ref)
+          .eq('event_id', eventId)
+          .maybeSingle();
+        if (lookupErr) console.error('free checkout: affiliate lookup rpc error', lookupErr);
+        if (affiliate) {
+          (async () => {
+            try {
+              const { error } = await db.rpc('increment_affiliate_buys', { p_code: affiliate.code, p_amount: 1 });
+              if (error) console.error('free checkout: affiliate credit rpc error', error);
+            } catch (err) {
+              console.error('free checkout: affiliate credit error', err);
+            }
+          })();
+        }
+      } catch (err) {
+        console.error('free checkout: affiliate lookup error', err);
+      }
+    }
 
     notify(
       { type: 'organizer', id: event.organizer_id },
