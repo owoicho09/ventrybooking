@@ -158,6 +158,22 @@ export async function sendOTPEmail(to: string, name: string, otp: string) {
   });
 }
 
+export async function sendTicketLookupOTPEmail(to: string, otp: string) {
+  await resend.emails.send({
+    from: `Ventry <${FROM}>`,
+    to,
+    subject: `Your Ventry ticket lookup code: ${otp}`,
+    html: emailShell(`
+      <h1 style="color:#a855f7;font-size:22px;margin:0 0 12px;">Confirm it's you</h1>
+      <p style="color:#f1f0ff;margin:0 0 24px;">Someone requested to view the tickets tied to this email address on Ventry. Enter this code to continue:</p>
+      <div style="text-align:center;background:#12121a;border:1px solid #2d2d3d;border-radius:12px;padding:28px;margin-bottom:24px;">
+        <span style="font-size:40px;font-weight:700;letter-spacing:0.3em;color:#a855f7;font-family:monospace;">${otp}</span>
+      </div>
+      <p style="color:#9ca3af;font-size:13px;margin:0;">Expires in <strong style="color:#f1f0ff;">10 minutes</strong>. If this wasn't you, ignore this email — your tickets are safe and no one can view them without this code.</p>
+    `),
+  });
+}
+
 export async function sendKYCApprovedEmail(to: string, name: string) {
   await resend.emails.send({
     from: `Ventry <${FROM}>`,

@@ -103,3 +103,17 @@ CREATE OR REPLACE FUNCTION increment_affiliate_buys(p_code TEXT, p_amount INTEGE
 RETURNS VOID LANGUAGE sql AS $$
   UPDATE affiliates SET buys = buys + p_amount WHERE code = p_code;
 $$;
+
+
+-- 10. Ticket lookup OTP gate — "Find My Tickets" requires proving control of
+--     the email before ticket IDs/QR codes are revealed. One active code per
+--     email; verifying (or requesting a new one) clears prior rows.
+CREATE TABLE IF NOT EXISTS ticket_lookup_otps (
+  id          UUID        PRIMARY KEY DEFAULT gen_random_uuid(),
+  email       TEXT        NOT NULL,
+  otp_hash    TEXT        NOT NULL,
+  expires_at  TIMESTAMPTZ NOT NULL,
+  created_at  TIMESTAMPTZ NOT NULL DEFAULT NOW()
+);
+
+CREATE INDEX IF NOT EXISTS idx_ticket_lookup_otps_email ON ticket_lookup_otps (email);
