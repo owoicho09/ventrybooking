@@ -9,9 +9,12 @@ interface DrawerProps {
   title?: string;
   children: React.ReactNode;
   width?: string;
+  /** 'right' (default) slides in a full-height side panel; 'bottom' slides
+   *  up a sheet anchored to the bottom of the viewport, sized to content. */
+  placement?: 'right' | 'bottom';
 }
 
-export function Drawer({ open, onClose, title, children, width = '480px' }: DrawerProps) {
+export function Drawer({ open, onClose, title, children, width = '480px', placement = 'right' }: DrawerProps) {
   useEffect(() => {
     if (!open) return;
     // overflow:hidden alone doesn't stop rubber-band scrolling on iOS Safari,
@@ -57,17 +60,30 @@ export function Drawer({ open, onClose, title, children, width = '480px' }: Draw
         className={`fixed inset-0 z-[60] bg-black/60 backdrop-blur-sm transition-opacity duration-300 ${open ? 'opacity-100' : 'opacity-0 pointer-events-none'}`}
         onClick={onClose}
       />
-      {/* Drawer panel — z-[60] beats AdminBottomNav's z-50 fixed bar, which
+      {/* Drawer panel — z-[60] beats the bottom nav's z-50 fixed bar, which
           otherwise paints on top of (and intercepts touches on) the bottom
           of the drawer since it's later in the DOM at the same z-index. */}
       <div
-        className={`fixed top-0 right-0 h-full z-[60] border-l flex flex-col shadow-2xl transition-transform duration-300 ${open ? 'translate-x-0' : 'translate-x-full'}`}
-        style={{
-          width: `min(${width}, 100vw)`,
-          maxWidth: '100vw',
-          backgroundColor: 'var(--color-surface)',
-          borderColor: 'var(--color-border)',
-        }}
+        className={
+          placement === 'bottom'
+            ? `fixed bottom-0 left-0 right-0 z-[60] border-t rounded-t-2xl flex flex-col shadow-2xl transition-transform duration-300 ${open ? 'translate-y-0' : 'translate-y-full'}`
+            : `fixed top-0 right-0 h-full z-[60] border-l flex flex-col shadow-2xl transition-transform duration-300 ${open ? 'translate-x-0' : 'translate-x-full'}`
+        }
+        style={
+          placement === 'bottom'
+            ? {
+                maxHeight: '80vh',
+                paddingBottom: 'env(safe-area-inset-bottom)',
+                backgroundColor: 'var(--color-surface)',
+                borderColor: 'var(--color-border)',
+              }
+            : {
+                width: `min(${width}, 100vw)`,
+                maxWidth: '100vw',
+                backgroundColor: 'var(--color-surface)',
+                borderColor: 'var(--color-border)',
+              }
+        }
       >
         {title && (
           <div
