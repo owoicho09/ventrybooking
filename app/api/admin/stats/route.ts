@@ -10,7 +10,7 @@ export async function GET() {
 
   const db = getServerSupabase();
 
-  const [eventsRes, ticketsRes, escrowRes, kycRes, complaintsRes] = await Promise.all([
+  const [eventsRes, ticketsRes, revenueRes, kycRes, complaintsRes] = await Promise.all([
     db.from('events').select('id, status'),
     db.from('tickets').select('quantity').in('status', ['valid', 'used']),
     db.from('tickets').select('total_paid').in('status', ['valid', 'used']),
@@ -20,7 +20,7 @@ export async function GET() {
 
   const events  = eventsRes.data  || [];
   const tickets = ticketsRes.data || [];
-  const escrow  = escrowRes.data  || [];
+  const revenue = revenueRes.data || [];
 
   return NextResponse.json({
     success: true,
@@ -28,7 +28,7 @@ export async function GET() {
       totalEvents:      events.length,
       activeEvents:     events.filter(e => e.status === 'approved').length,
       totalTicketsSold: tickets.reduce((s, t) => s + t.quantity, 0),
-      revenueInEscrow:  escrow.reduce((s, t) => s + t.total_paid, 0),
+      totalRevenue:     revenue.reduce((s, t) => s + t.total_paid, 0),
       pendingKYC:       kycRes.data?.length  || 0,
       openComplaints:   complaintsRes.data?.length || 0,
     },

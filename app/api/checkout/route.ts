@@ -1,7 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { getServerSupabase } from '@/lib/supabase/server';
 import { initializeTransaction } from '@/lib/server/paystack';
-import { SERVICE_FEE } from '@/lib/server/fees';
+import { buyerTotal } from '@/lib/server/fees';
 import { v4 as uuidv4 } from 'uuid';
 
 export async function POST(req: NextRequest) {
@@ -52,9 +52,7 @@ export async function POST(req: NextRequest) {
       return NextResponse.json({ error: `Only ${remaining} tickets remaining` }, { status: 400 });
     }
 
-    const subtotal   = tier.price * quantity;
-    const serviceFee = SERVICE_FEE * quantity;
-    const total      = subtotal + serviceFee;
+    const { subtotal, serviceFee, total } = buyerTotal(tier.price, quantity);
     const reference = `VTR-${uuidv4().replace(/-/g, '').toUpperCase().slice(0, 12)}`;
     const appUrl = process.env.NEXT_PUBLIC_APP_URL!;
 

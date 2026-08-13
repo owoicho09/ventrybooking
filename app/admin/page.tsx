@@ -14,7 +14,7 @@ interface Stats {
   totalEvents: number;
   activeEvents: number;
   totalTicketsSold: number;
-  revenueInEscrow: number;
+  totalRevenue: number;
   pendingKYC: number;
   openComplaints: number;
 }
@@ -49,7 +49,7 @@ export default function AdminDashboardPage() {
         <StatsCard label="Total Events" value={stats?.totalEvents ?? '—'} icon={CalendarDays} trend="All time" />
         <StatsCard label="Active Events" value={stats?.activeEvents ?? '—'} icon={Activity} trend="Currently live" />
         <StatsCard label="Tickets Sold" value={stats ? stats.totalTicketsSold.toLocaleString() : '—'} icon={Ticket} trend="Across all events" />
-        <StatsCard label="Revenue in Escrow" value={stats ? formatNGN(stats.revenueInEscrow) : '—'} icon={Wallet} accent trend="Held for active events" />
+        <StatsCard label="Total Revenue" value={stats ? formatNGN(stats.totalRevenue) : '—'} icon={Wallet} accent trend="All time" />
         <StatsCard label="Pending KYC" value={stats?.pendingKYC ?? '—'} icon={UserCheck} trend="Awaiting review" />
         <StatsCard label="Open Complaints" value={stats?.openComplaints ?? '—'} icon={MessageSquareWarning} trend="Needs attention" />
       </div>

@@ -6,8 +6,8 @@ const LAST_UPDATED   = '31 May 2026';
 const EFFECTIVE      = '31 May 2026';
 const EMAIL          = 'support@ventrybooking.com';
 const DOMAIN         = 'ventrybooking.com';
-const SERVICE_FEE    = '₦100';
-const PLATFORM_FEE   = '2.5%';
+const SERVICE_FEE    = '2%';
+const PLATFORM_FEE   = '3%';
 
 function Section({ id, title, children }: { id: string; title: string; children: React.ReactNode }) {
   return (
@@ -143,7 +143,7 @@ export default function TermsPage() {
                 <><strong>&quot;Ticket&quot;</strong> means a digitally issued, QR-coded proof of entry to an Event.</>,
                 <><strong>&quot;Escrow&quot;</strong> means the holding of Buyer funds by Ventry until the conditions for release to the Organizer are met.</>,
                 <><strong>&quot;KYC&quot;</strong> means Know Your Customer — the identity verification process required of all Organizers.</>,
-                <><strong>&quot;Service Fee&quot;</strong> means the non-refundable {SERVICE_FEE} flat fee charged to Buyers on each ticket.</>,
+                <><strong>&quot;Service Fee&quot;</strong> means the non-refundable {SERVICE_FEE} fee, charged to Buyers on the ticket subtotal of each purchase.</>,
                 <><strong>&quot;Platform Fee&quot;</strong> means the {PLATFORM_FEE} fee deducted from the Organizer&apos;s gross ticket revenue before payout.</>,
               ]} />
             </Section>
@@ -193,9 +193,9 @@ export default function TermsPage() {
               </Sub>
               <Sub title="3.2 Service Fee">
                 <P>
-                  A flat, non-refundable Service Fee of <strong>{SERVICE_FEE}</strong> is charged on every ticket
-                  purchased (e.g. buying 3 tickets in one transaction incurs 3 &times; the Service Fee). This fee
-                  covers the cost of payment processing, QR ticket generation, escrow management, and buyer
+                  A non-refundable Service Fee of <strong>{SERVICE_FEE}</strong> of the ticket subtotal is charged
+                  on every purchase (e.g. buying tickets worth ₦10,000 in one transaction incurs a ₦200 Service Fee).
+                  This fee covers the cost of payment processing, QR ticket generation, escrow management, and buyer
                   protection services. The Service Fee is retained by Ventry even in the event of a refund.
                 </P>
               </Sub>
@@ -251,7 +251,7 @@ export default function TermsPage() {
                   Ventry charges a Platform Fee of <strong>{PLATFORM_FEE}</strong> on the gross ticket revenue
                   of each event (excluding the Buyer Service Fee). This fee is deducted automatically before
                   payout. For example, if your event generates ₦100,000 in ticket sales, your net payout will
-                  be ₦97,500.
+                  be ₦97,000.
                 </P>
               </Sub>
               <Sub title="4.3 Payout Conditions">

@@ -4,7 +4,7 @@ import { getServerSupabase } from '@/lib/supabase/server';
 import { refundTransaction } from '@/lib/server/paystack';
 import { sendRefundConfirmationEmail } from '@/lib/server/email';
 import { notify } from '@/lib/server/notify';
-import { calculateFees, SERVICE_FEE } from '@/lib/server/fees';
+import { calculateFees, basePriceFromTotalPaid } from '@/lib/server/fees';
 
 export async function POST(
   req: NextRequest,
@@ -61,10 +61,10 @@ export async function POST(
     // Tier prices can be edited by the organizer after tickets are sold (e.g. early-bird
     // pricing that steps up over time), so re-reading ticket_tiers.price at refund time
     // refunds the wrong amount for any ticket sold before the price changed.
-    // total_paid is fixed at purchase and already excludes nothing — it's the ticket's
-    // base price plus its own per-ticket service fee, so subtracting SERVICE_FEE recovers
-    // exactly what the buyer paid for the ticket itself.
-    const refundAmount = Math.max(0, ticket.total_paid - SERVICE_FEE);
+    // total_paid is fixed at purchase and is the ticket's base price plus its own 2%
+    // service fee, so reversing the service fee recovers exactly what the buyer paid
+    // for the ticket itself.
+    const refundAmount = basePriceFromTotalPaid(ticket.total_paid);
 
     try {
       await refundTransaction({

@@ -3,7 +3,7 @@ import { getAuthUser } from '@/lib/server/auth';
 import { getServerSupabase } from '@/lib/supabase/server';
 import { refundTransaction } from '@/lib/server/paystack';
 import { notify } from '@/lib/server/notify';
-import { calculateFees, SERVICE_FEE } from '@/lib/server/fees';
+import { calculateFees, basePriceFromTotalPaid } from '@/lib/server/fees';
 
 // GET — preview: count of refundable tickets + total refund amount (no side effects)
 export async function GET(
@@ -38,11 +38,11 @@ export async function GET(
   const ticketCount     = tickets?.length ?? 0;
   const refundableCount = tickets?.filter(t => t.paystack_reference).length ?? 0;
 
-  // Refund basis is what each ticket actually paid (total_paid − SERVICE_FEE), not the
-  // tier's current price — see the note in approve-refund/route.ts on why live tier
-  // prices drift from what was charged at purchase time.
+  // Refund basis is what each ticket actually paid with the service fee reversed out,
+  // not the tier's current price — see the note in approve-refund/route.ts on why live
+  // tier prices drift from what was charged at purchase time.
   const totalRefund = (tickets ?? []).reduce(
-    (sum, t) => sum + Math.max(0, t.total_paid - SERVICE_FEE),
+    (sum, t) => sum + basePriceFromTotalPaid(t.total_paid),
     0,
   );
 
@@ -123,9 +123,9 @@ export async function POST(
   const paidTickets  = tickets.filter(t =>  t.paystack_reference);
 
   for (const ticket of freeTickets) {
-    // Refund basis is what this ticket actually paid (total_paid − SERVICE_FEE), not the
-    // tier's current price — see the note in approve-refund/route.ts for why.
-    const refundAmount = Math.max(0, ticket.total_paid - SERVICE_FEE);
+    // Refund basis is what this ticket actually paid with the service fee reversed out,
+    // not the tier's current price — see the note in approve-refund/route.ts for why.
+    const refundAmount = basePriceFromTotalPaid(ticket.total_paid);
     if (refundAmount > 0) {
       failures.push({ ticketId: ticket.id, email: ticket.buyer_email, reason: 'No payment reference on file — refund manually via Paystack dashboard' });
       continue;
@@ -147,7 +147,7 @@ export async function POST(
   }
 
   for (const [reference, group] of byReference) {
-    const totalRefundAmount = group.reduce((sum, t) => sum + Math.max(0, t.total_paid - SERVICE_FEE), 0);
+    const totalRefundAmount = group.reduce((sum, t) => sum + basePriceFromTotalPaid(t.total_paid), 0);
 
     if (totalRefundAmount === 0) {
       // All tickets in this order were free-tier — mark refunded without Paystack.

@@ -339,7 +339,7 @@ export default function AdminEventsPage() {
                     )}
                   </div>
                   <p className="text-xs mt-3" style={{ color: 'var(--color-text-dim)' }}>
-                    Service fee (₦100 per ticket) is non-refundable. Only the base ticket price is returned.
+                    Service fee (2% per ticket) is non-refundable. Only the base ticket price is returned.
                   </p>
                 </div>
                 <div className="flex flex-col sm:flex-row gap-3">

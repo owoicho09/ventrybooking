@@ -361,7 +361,7 @@ export default async function HomePage() {
             Ready to sell tickets?
           </h2>
           <p className="text-base mb-8 max-w-md mx-auto" style={{ color: 'rgba(255,255,255,0.65)' }}>
-            No upfront costs. 2.5% only after your event. Full sales dashboard included.
+            No upfront costs. 3% only after your event. Full sales dashboard included.
           </p>
           <Link href="/organizer/register">
             <Button size="lg">

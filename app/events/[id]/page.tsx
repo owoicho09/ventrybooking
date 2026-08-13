@@ -69,7 +69,7 @@ function EventDetailContent() {
   const hasSelection     = totalQty > 0;
   const allFree          = hasSelection && selectedTiers.every(t => t.price === 0);
   const subtotal         = selectedTiers.reduce((s, t) => s + t.price * (quantities[t.id] ?? 0), 0);
-  const serviceFee       = subtotal > 0 ? 100 * totalQty : 0;
+  const serviceFee       = subtotal > 0 ? Math.round(subtotal * 0.02) : 0;
   const total            = subtotal + serviceFee;
   const multiTierWarning = selectedTiers.length > 1;
   const isOnline = event?.event_mode === 'online';
@@ -270,7 +270,7 @@ function EventDetailContent() {
             <div className="rounded-xl border p-5" style={{ backgroundColor: 'var(--color-surface)', borderColor: 'var(--color-border)' }}>
               <h3 className="font-semibold mb-3" style={{ color: 'var(--color-text)' }}>Refund Policy</h3>
               <ul className="flex flex-col gap-2">
-                {['Base ticket price refunded if the event is cancelled by the organizer.', 'Base ticket price refunded if the event is flagged as fraudulent by Ventry.', 'No refunds for no-shows or buyer change of mind after ticket purchase.', 'The ₦100 Ventry service fee is non-refundable under any circumstances. Paystack deducts their 1.5% fee on their end — this is not part of what you are charged.', 'Refunds are processed within 3-5 business days to your original payment method.'].map((item) => (
+                {['Base ticket price refunded if the event is cancelled by the organizer.', 'Base ticket price refunded if the event is flagged as fraudulent by Ventry.', 'No refunds for no-shows or buyer change of mind after ticket purchase.', 'The 2% Ventry service fee is non-refundable under any circumstances. Paystack deducts their 1.5% fee on their end — this is not part of what you are charged.', 'Refunds are processed within 3-5 business days to your original payment method.'].map((item) => (
                   <li key={item} className="flex items-start gap-2 text-sm" style={{ color: 'var(--color-text-muted)' }}><CheckCircle size={14} className="flex-shrink-0 mt-0.5" style={{ color: 'var(--color-green)' }} />{item}</li>
                 ))}
               </ul>
@@ -333,7 +333,7 @@ function EventDetailContent() {
                           <span style={{ color: 'var(--color-text)' }}>Total</span><span style={{ color: 'var(--color-text)' }}>{formatNGN(total)}</span>
                         </div>
                         <p className="text-[10px] leading-snug mt-1" style={{ color: 'var(--color-text-dim)' }}>
-                          The ₦100 per-ticket service fee is non-refundable — only the base ticket price is refundable. Paystack deducts their 1.5% processing fee on their end; this is not added to your total.
+                          The 2% service fee is non-refundable — only the base ticket price is refundable. Paystack deducts their 1.5% processing fee on their end; this is not added to your total.
                         </p>
                       </>
                     )}

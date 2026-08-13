@@ -36,7 +36,7 @@ export default function CheckoutPage() {
 
   const isFree     = (cart?.tierPrice ?? -1) === 0;
   const subtotal   = cart ? cart.tierPrice * cart.quantity : 0;
-  const serviceFee = isFree || !cart ? 0 : 100 * cart.quantity;
+  const serviceFee = isFree || !cart ? 0 : Math.round(subtotal * 0.02);
   const total      = subtotal + serviceFee;
 
   const handleSubmit = async (e: React.FormEvent) => {
@@ -150,7 +150,7 @@ export default function CheckoutPage() {
 
             {!isFree && (
               <p className="text-[10px] leading-snug mb-4" style={{ color: 'var(--color-text-dim)' }}>
-                The &#x20A6;100 per-ticket service fee is non-refundable under any circumstances. Only the base ticket price is refunded if an event is cancelled. Paystack deducts their 1.5% processing fee from the payment on their end &#x2014; this is not added to your total.
+                The 2% service fee is non-refundable under any circumstances. Only the base ticket price is refunded if an event is cancelled. Paystack deducts their 1.5% processing fee from the payment on their end &#x2014; this is not added to your total.
               </p>
             )}
 

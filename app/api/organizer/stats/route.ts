@@ -22,7 +22,7 @@ export async function GET() {
   const payouts = payoutsRes.data || [];
 
   const ticketsSold     = tickets.reduce((s, t) => s + t.quantity, 0);
-  // Show only the organizer's net (after 2.5% platform fee), never the gross or service fees
+  // Show only the organizer's net (after 3% platform fee), never the gross or service fees
   const revenueInEscrow = payouts.reduce((s, p) => s + p.net, 0);
   const activeEvents    = events.filter(e => e.status === 'approved').length;
   const payoutDue       = payouts.filter(p => p.status === 'pending').reduce((s, p) => s + p.net, 0);

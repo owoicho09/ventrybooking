@@ -143,7 +143,7 @@ export async function sendTicketEmail(params: {
 }
 
 export async function sendOTPEmail(to: string, name: string, otp: string) {
-  await resend.emails.send({
+  const { error } = await resend.emails.send({
     from: `Ventry <${FROM}>`,
     to,
     subject: `Your Ventry verification code: ${otp}`,
@@ -156,10 +156,11 @@ export async function sendOTPEmail(to: string, name: string, otp: string) {
       <p style="color:#9ca3af;font-size:13px;margin:0;">Expires in <strong style="color:#f1f0ff;">10 minutes</strong>. If you didn't create a Ventry account, ignore this email.</p>
     `),
   });
+  if (error) throw new Error(`Resend error: ${error.message}`);
 }
 
 export async function sendTicketLookupOTPEmail(to: string, otp: string) {
-  await resend.emails.send({
+  const { error } = await resend.emails.send({
     from: `Ventry <${FROM}>`,
     to,
     subject: `Your Ventry ticket lookup code: ${otp}`,
@@ -172,10 +173,11 @@ export async function sendTicketLookupOTPEmail(to: string, otp: string) {
       <p style="color:#9ca3af;font-size:13px;margin:0;">Expires in <strong style="color:#f1f0ff;">10 minutes</strong>. If this wasn't you, ignore this email — your tickets are safe and no one can view them without this code.</p>
     `),
   });
+  if (error) throw new Error(`Resend error: ${error.message}`);
 }
 
 export async function sendKYCApprovedEmail(to: string, name: string) {
-  await resend.emails.send({
+  const { error } = await resend.emails.send({
     from: `Ventry <${FROM}>`,
     to,
     subject: 'KYC Approved — You can now create events',
@@ -186,10 +188,11 @@ export async function sendKYCApprovedEmail(to: string, name: string) {
       <a href="${APP_URL}/organizer/events/create" class="btn">Create Your First Event</a>
     `),
   });
+  if (error) throw new Error(`Resend error: ${error.message}`);
 }
 
 export async function sendKYCRejectedEmail(to: string, name: string, reason: string) {
-  await resend.emails.send({
+  const { error } = await resend.emails.send({
     from: `Ventry <${FROM}>`,
     to,
     subject: 'KYC Review Update',
@@ -200,10 +203,11 @@ export async function sendKYCRejectedEmail(to: string, name: string, reason: str
       <p style="color:#9ca3af;font-size:13px;">Please resubmit with correct documents or contact support.</p>
     `),
   });
+  if (error) throw new Error(`Resend error: ${error.message}`);
 }
 
 export async function sendEventApprovedEmail(to: string, organizerName: string, eventName: string, eventId: string) {
-  await resend.emails.send({
+  const { error } = await resend.emails.send({
     from: `Ventry <${FROM}>`,
     to,
     subject: `Your event "${eventName}" is now live`,
@@ -214,10 +218,11 @@ export async function sendEventApprovedEmail(to: string, organizerName: string, 
       <a href="${APP_URL}/events/${eventId}" class="btn">View Your Event</a>
     `),
   });
+  if (error) throw new Error(`Resend error: ${error.message}`);
 }
 
 export async function sendEventRejectedEmail(to: string, organizerName: string, eventName: string, reason: string) {
-  await resend.emails.send({
+  const { error } = await resend.emails.send({
     from: `Ventry <${FROM}>`,
     to,
     subject: `Event Review: ${eventName}`,
@@ -228,6 +233,7 @@ export async function sendEventRejectedEmail(to: string, organizerName: string, 
       <p style="color:#9ca3af;font-size:13px;">You may edit and resubmit the event from your dashboard.</p>
     `),
   });
+  if (error) throw new Error(`Resend error: ${error.message}`);
 }
 
 export async function sendLocationUpdatedEmail(params: {
@@ -249,7 +255,7 @@ export async function sendLocationUpdatedEmail(params: {
     params.city,
   ].filter(Boolean);
 
-  await resend.emails.send({
+  const { error } = await resend.emails.send({
     from: `Ventry <${FROM}>`,
     to: params.to,
     subject: `Location update for ${params.eventName}`,
@@ -273,6 +279,7 @@ export async function sendLocationUpdatedEmail(params: {
       <p class="footer">You received this because you purchased a ticket for this event.</p>
     `),
   });
+  if (error) throw new Error(`Resend error: ${error.message}`);
 }
 
 export async function sendMeetingLinkUpdatedEmail(params: {
@@ -284,7 +291,7 @@ export async function sendMeetingLinkUpdatedEmail(params: {
   meetingLink: string;
   meetingPasscode?: string;
 }) {
-  await resend.emails.send({
+  const { error } = await resend.emails.send({
     from: `Ventry <${FROM}>`,
     to: params.to,
     subject: `Updated meeting link for ${params.eventName}`,
@@ -308,12 +315,13 @@ export async function sendMeetingLinkUpdatedEmail(params: {
       <p class="footer">This link is personal to your ticket — please don't share it. You received this because you purchased a ticket for this event.</p>
     `),
   });
+  if (error) throw new Error(`Resend error: ${error.message}`);
 }
 
 export async function sendRefundConfirmationEmail(to: string, ticketId: string, amount: number, eventName: string) {
   const fmt = (n: number) =>
     new Intl.NumberFormat('en-NG', { style: 'currency', currency: 'NGN', minimumFractionDigits: 0 }).format(n);
-  await resend.emails.send({
+  const { error } = await resend.emails.send({
     from: `Ventry <${FROM}>`,
     to,
     subject: `Refund processed for ${ticketId}`,
@@ -323,6 +331,7 @@ export async function sendRefundConfirmationEmail(to: string, ticketId: string, 
       <p style="color:#9ca3af;font-size:13px;">It will appear in your account within 3–5 business days.</p>
     `),
   });
+  if (error) throw new Error(`Resend error: ${error.message}`);
 }
 
 export async function sendPayoutReleasedEmail(params: {
@@ -339,8 +348,11 @@ export async function sendPayoutReleasedEmail(params: {
   const fmt = (n: number) =>
     new Intl.NumberFormat('en-NG', { style: 'currency', currency: 'NGN', minimumFractionDigits: 0 }).format(n);
   const maskedAccount = params.accountNumber ? `****${params.accountNumber.slice(-4)}` : '';
+  // Computed from the actual fee/gross rather than hardcoded, so historical payouts
+  // made under a since-changed platform fee rate still display their true percentage.
+  const feePercent = params.gross > 0 ? +((params.fee / params.gross) * 100).toFixed(1) : 0;
 
-  await resend.emails.send({
+  const { error } = await resend.emails.send({
     from: `Ventry <${FROM}>`,
     to: params.to,
     subject: `Payout released — ${params.eventName}`,
@@ -352,7 +364,7 @@ export async function sendPayoutReleasedEmail(params: {
         style="background:#12121a;border:1px solid #2d2d3d;border-radius:8px;margin-bottom:24px;">
         <tr><td style="padding:20px;">
           <p style="margin:4px 0;color:#9ca3af;font-size:13px;"><strong style="color:#f1f0ff;">Ticket Revenue:</strong> ${fmt(params.gross)}</p>
-          <p style="margin:4px 0;color:#9ca3af;font-size:13px;"><strong style="color:#f1f0ff;">Platform fee (2.5%):</strong> ${fmt(params.fee)}</p>
+          <p style="margin:4px 0;color:#9ca3af;font-size:13px;"><strong style="color:#f1f0ff;">Platform fee (${feePercent}%):</strong> ${fmt(params.fee)}</p>
           <p style="margin:8px 0 4px;color:#34d399;font-size:17px;font-weight:700;">Amount Paid: ${fmt(params.net)}</p>
           <p style="margin:12px 0 4px;color:#9ca3af;font-size:13px;"><strong style="color:#f1f0ff;">Sent to:</strong> ${esc(params.bankName)} ${maskedAccount}</p>
           <p style="margin:4px 0;color:#9ca3af;font-size:13px;"><strong style="color:#f1f0ff;">Reference:</strong> <span class="mono">${esc(params.reference)}</span></p>
@@ -363,10 +375,11 @@ export async function sendPayoutReleasedEmail(params: {
       <p class="footer">If tickets for this event are still on sale, any additional revenue will be paid out separately.</p>
     `),
   });
+  if (error) throw new Error(`Resend error: ${error.message}`);
 }
 
 export async function sendMissingBankDetailsEmail(to: string, organizerName: string, eventName: string) {
-  await resend.emails.send({
+  const { error } = await resend.emails.send({
     from: `Ventry <${FROM}>`,
     to,
     subject: `Action needed: add your bank details to receive payout for "${eventName}"`,
@@ -378,11 +391,12 @@ export async function sendMissingBankDetailsEmail(to: string, organizerName: str
       <a href="${APP_URL}/organizer/settings" class="btn">Add Bank Details</a>
     `),
   });
+  if (error) throw new Error(`Resend error: ${error.message}`);
 }
 
 export async function sendPasswordResetEmail(to: string, resetToken: string) {
   const resetUrl = `${APP_URL}/organizer/reset-password?token=${resetToken}`;
-  await resend.emails.send({
+  const { error } = await resend.emails.send({
     from: `Ventry <${FROM}>`,
     to,
     subject: 'Reset your Ventry password',
@@ -394,6 +408,7 @@ export async function sendPasswordResetEmail(to: string, resetToken: string) {
       <p class="footer">If you didn't request this, ignore this email — your password won't change.</p>
     `),
   });
+  if (error) throw new Error(`Resend error: ${error.message}`);
 }
 
 export async function sendReminderEmail(params: {
@@ -454,10 +469,11 @@ export async function sendReminderEmail(params: {
     <p class="footer">You received this reminder because you purchased a ticket on Ventry.</p>
   `);
 
-  await resend.emails.send({
+  const { error } = await resend.emails.send({
     from: `Ventry <${FROM}>`,
     to: params.to,
     subject,
     html,
   });
+  if (error) throw new Error(`Resend error: ${error.message}`);
 }
