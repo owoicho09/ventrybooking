@@ -7,6 +7,7 @@ import { Badge } from '@/components/ui/Badge';
 import { Button } from '@/components/ui/Button';
 import { Table, Thead, Tbody, Th, Tr, Td } from '@/components/ui/Table';
 import { formatNGN, formatShortDate } from '@/lib/utils';
+import { PLATFORM_FEE_RATE } from '@/lib/fees';
 
 interface Tier { id: string; price: number; sold: number; available: number; }
 interface OrgEvent {
@@ -95,7 +96,7 @@ export default function OrganizerEventsPage() {
             <Tbody>
               {events.map((event) => {
                 const gross      = event.tiers?.reduce((s, t) => s + t.price * t.sold, 0) || 0;
-                const netRevenue = Math.round(gross * 0.975);
+                const netRevenue = Math.round(gross * (1 - PLATFORM_FEE_RATE));
                 return (
                   <Tr key={event.id}>
                     <Td>

@@ -5,6 +5,9 @@ export const SERVICE_FEE_RATE      = 0.02;
 export const SERVICE_FEE_THRESHOLD = 150_000;
 export const SERVICE_FEE_FLAT      = 3_000;
 
+/** Organizer-facing platform fee: 2.5% of gross ticket revenue, deducted before payout. */
+export const PLATFORM_FEE_RATE = 0.025;
+
 /** Buyer service fee for a single ticket at this price. */
 export function serviceFeePerTicket(ticketPrice: number) {
   return Math.min(Math.round(ticketPrice * SERVICE_FEE_RATE), SERVICE_FEE_FLAT);
