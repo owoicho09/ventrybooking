@@ -7,7 +7,9 @@ const EFFECTIVE      = '31 May 2026';
 const EMAIL          = 'support@ventrybooking.com';
 const DOMAIN         = 'ventrybooking.com';
 const SERVICE_FEE    = '2%';
-const PLATFORM_FEE   = '3%';
+const SERVICE_FEE_CAP = '₦3,000';
+const SERVICE_FEE_THRESHOLD = '₦150,000';
+const PLATFORM_FEE   = '2.5%';
 
 function Section({ id, title, children }: { id: string; title: string; children: React.ReactNode }) {
   return (
@@ -143,7 +145,7 @@ export default function TermsPage() {
                 <><strong>&quot;Ticket&quot;</strong> means a digitally issued, QR-coded proof of entry to an Event.</>,
                 <><strong>&quot;Escrow&quot;</strong> means the holding of Buyer funds by Ventry until the conditions for release to the Organizer are met.</>,
                 <><strong>&quot;KYC&quot;</strong> means Know Your Customer — the identity verification process required of all Organizers.</>,
-                <><strong>&quot;Service Fee&quot;</strong> means the non-refundable {SERVICE_FEE} fee, charged to Buyers on the ticket subtotal of each purchase.</>,
+                <><strong>&quot;Service Fee&quot;</strong> means the non-refundable per-ticket fee charged to Buyers: {SERVICE_FEE} of the ticket price, capped at a flat {SERVICE_FEE_CAP} for tickets priced above {SERVICE_FEE_THRESHOLD}.</>,
                 <><strong>&quot;Platform Fee&quot;</strong> means the {PLATFORM_FEE} fee deducted from the Organizer&apos;s gross ticket revenue before payout.</>,
               ]} />
             </Section>
@@ -193,10 +195,12 @@ export default function TermsPage() {
               </Sub>
               <Sub title="3.2 Service Fee">
                 <P>
-                  A non-refundable Service Fee of <strong>{SERVICE_FEE}</strong> of the ticket subtotal is charged
-                  on every purchase (e.g. buying tickets worth ₦10,000 in one transaction incurs a ₦200 Service Fee).
-                  This fee covers the cost of payment processing, QR ticket generation, escrow management, and buyer
-                  protection services. The Service Fee is retained by Ventry even in the event of a refund.
+                  A non-refundable Service Fee is charged on every ticket purchased: <strong>{SERVICE_FEE}</strong> of
+                  the individual ticket price, capped at a flat <strong>{SERVICE_FEE_CAP}</strong> per ticket for
+                  tickets priced above <strong>{SERVICE_FEE_THRESHOLD}</strong> (e.g. a ₦10,000 ticket incurs a ₦200
+                  Service Fee, while a ₦200,000 ticket incurs a flat ₦3,000 Service Fee). This fee covers the cost of
+                  payment processing, QR ticket generation, escrow management, and buyer protection services. The
+                  Service Fee is retained by Ventry even in the event of a refund.
                 </P>
               </Sub>
               <Sub title="3.3 Ticket Delivery">
@@ -251,7 +255,7 @@ export default function TermsPage() {
                   Ventry charges a Platform Fee of <strong>{PLATFORM_FEE}</strong> on the gross ticket revenue
                   of each event (excluding the Buyer Service Fee). This fee is deducted automatically before
                   payout. For example, if your event generates ₦100,000 in ticket sales, your net payout will
-                  be ₦97,000.
+                  be ₦97,500.
                 </P>
               </Sub>
               <Sub title="4.3 Payout Conditions">
@@ -336,10 +340,10 @@ export default function TermsPage() {
               </Sub>
               <Sub title="6.3 Service Fee">
                 <P>
-                  The <strong>{SERVICE_FEE}</strong> Service Fee (charged per ticket) is non-refundable in all
-                  circumstances, including cancellations and upheld fraud complaints. This fee is the cost of
-                  the payment and buyer-protection infrastructure, which is incurred regardless of the event
-                  outcome.
+                  The Service Fee ({SERVICE_FEE} of the ticket price per ticket, capped at {SERVICE_FEE_CAP} for
+                  tickets priced above {SERVICE_FEE_THRESHOLD}) is non-refundable in all circumstances, including
+                  cancellations and upheld fraud complaints. This fee is the cost of the payment and
+                  buyer-protection infrastructure, which is incurred regardless of the event outcome.
                 </P>
               </Sub>
               <Sub title="6.4 Refund Process">

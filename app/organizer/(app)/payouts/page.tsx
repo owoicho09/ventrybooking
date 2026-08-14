@@ -73,7 +73,7 @@ export default function PayoutsPage() {
         {payouts.length === 0 && <p className="px-6 py-8 text-sm text-center" style={{ color: 'var(--color-text-muted)' }}>No payouts yet.</p>}
         {payouts.length > 0 && <Table>
           <Thead>
-            <tr><Th>Event</Th><Th>Date</Th><Th>Ticket Revenue</Th><Th>Platform fee (3%)</Th><Th>Your Payout</Th><Th>Status</Th><Th>Reference</Th></tr>
+            <tr><Th>Event</Th><Th>Date</Th><Th>Ticket Revenue</Th><Th>Platform fee (2.5%)</Th><Th>Your Payout</Th><Th>Status</Th><Th>Reference</Th></tr>
           </Thead>
           <Tbody>
             {payouts.map((payout) => (
@@ -96,7 +96,7 @@ export default function PayoutsPage() {
         <AlertTriangle size={16} className="flex-shrink-0 mt-0.5" style={{ color: 'var(--color-amber)' }} />
         <p className="text-sm leading-relaxed" style={{ color: 'var(--color-text-muted)' }}>
           <span className="font-semibold" style={{ color: 'var(--color-text)' }}>Cancellation policy:</span>{' '}
-          If you cancel an event, all buyers are refunded their base ticket price. The 3% platform fee is non-recoverable — Ventry absorbs the refund processing cost but you forfeit any claim to the fee on cancelled sales.
+          If you cancel an event, all buyers are refunded their base ticket price. The 2.5% platform fee is non-recoverable — Ventry absorbs the refund processing cost but you forfeit any claim to the fee on cancelled sales.
         </p>
       </div>
 

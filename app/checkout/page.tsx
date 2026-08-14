@@ -7,6 +7,7 @@ import { PublicNav } from '@/components/layout/PublicNav';
 import { Button } from '@/components/ui/Button';
 import { Input } from '@/components/ui/Input';
 import { formatNGN } from '@/lib/utils';
+import { serviceFeePerTicket } from '@/lib/fees';
 
 interface CartItem {
   eventId: string;
@@ -36,7 +37,7 @@ export default function CheckoutPage() {
 
   const isFree     = (cart?.tierPrice ?? -1) === 0;
   const subtotal   = cart ? cart.tierPrice * cart.quantity : 0;
-  const serviceFee = isFree || !cart ? 0 : Math.round(subtotal * 0.02);
+  const serviceFee = isFree || !cart ? 0 : serviceFeePerTicket(cart.tierPrice) * cart.quantity;
   const total      = subtotal + serviceFee;
 
   const handleSubmit = async (e: React.FormEvent) => {
@@ -150,7 +151,7 @@ export default function CheckoutPage() {
 
             {!isFree && (
               <p className="text-[10px] leading-snug mb-4" style={{ color: 'var(--color-text-dim)' }}>
-                The 2% service fee is non-refundable under any circumstances. Only the base ticket price is refunded if an event is cancelled. Paystack deducts their 1.5% processing fee from the payment on their end &#x2014; this is not added to your total.
+                The service fee (2%, capped at ₦3,000 per ticket for tickets above ₦150,000) is non-refundable under any circumstances. Only the base ticket price is refunded if an event is cancelled. Paystack deducts their 1.5% processing fee from the payment on their end &#x2014; this is not added to your total.
               </p>
             )}
 

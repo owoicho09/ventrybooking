@@ -20,7 +20,7 @@ const faqItems = [
   },
   {
     q: 'Will I get a refund if an event is cancelled?',
-    a: 'Yes. If an organizer cancels an event through Ventry, all buyers receive an automatic refund of the base ticket price within 3-5 business days. The 2% Ventry service fee is non-refundable.',
+    a: 'Yes. If an organizer cancels an event through Ventry, all buyers receive an automatic refund of the base ticket price within 3-5 business days. The Ventry service fee (2%, capped at ₦3,000 per ticket for tickets above ₦150,000) is non-refundable.',
   },
   {
     q: 'How do I report a suspicious or fraudulent event?',

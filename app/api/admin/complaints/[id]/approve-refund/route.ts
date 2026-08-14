@@ -61,7 +61,7 @@ export async function POST(
     // Tier prices can be edited by the organizer after tickets are sold (e.g. early-bird
     // pricing that steps up over time), so re-reading ticket_tiers.price at refund time
     // refunds the wrong amount for any ticket sold before the price changed.
-    // total_paid is fixed at purchase and is the ticket's base price plus its own 2%
+    // total_paid is fixed at purchase and is the ticket's base price plus its own
     // service fee, so reversing the service fee recovers exactly what the buyer paid
     // for the ticket itself.
     const refundAmount = basePriceFromTotalPaid(ticket.total_paid);
