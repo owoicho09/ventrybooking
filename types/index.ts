@@ -119,3 +119,46 @@ export interface ScanLog {
   scannedAt: string;
   result: 'success' | 'already_used' | 'invalid';
 }
+
+// --- Sanity blog content ---
+
+export interface SanityImageRef {
+  asset?: { _ref: string; _type: string };
+  hotspot?: { x: number; y: number; height: number; width: number };
+  alt?: string;
+}
+
+export interface PortableTextBlockLite {
+  _type: string;
+  _key?: string;
+  style?: string;
+  children?: { text?: string }[];
+  [key: string]: unknown;
+}
+
+export interface BlogSlug {
+  current: string;
+}
+
+export interface BlogAuthor {
+  name: string;
+  slug?: BlogSlug;
+  image?: SanityImageRef;
+  bio?: PortableTextBlockLite[];
+}
+
+export interface BlogCategory {
+  title: string;
+  slug?: BlogSlug;
+}
+
+export interface BlogPost {
+  _id: string;
+  title: string;
+  slug: BlogSlug;
+  mainImage?: SanityImageRef;
+  publishedAt: string;
+  author?: BlogAuthor;
+  body?: PortableTextBlockLite[];
+  categories?: BlogCategory[];
+}

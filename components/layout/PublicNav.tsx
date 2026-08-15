@@ -11,6 +11,7 @@ export function PublicNav() {
     { href: '/events', label: 'Events' },
     { href: '/#how-it-works', label: 'How It Works' },
     { href: '/#for-organizers', label: 'For Organizers' },
+    { href: '/blog', label: 'Blog' },
   ];
 
   return (
