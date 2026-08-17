@@ -9,7 +9,7 @@ const DOMAIN         = 'ventrybooking.com';
 const SERVICE_FEE    = '2%';
 const SERVICE_FEE_CAP = '₦3,000';
 const SERVICE_FEE_THRESHOLD = '₦150,000';
-const PLATFORM_FEE   = '2.5%';
+const PLATFORM_FEE   = '3%';
 
 function Section({ id, title, children }: { id: string; title: string; children: React.ReactNode }) {
   return (
@@ -186,8 +186,8 @@ export default function TermsPage() {
             <Section id="buyer-terms" title="3. Buyer Terms">
               <Sub title="3.1 Ticket Purchase">
                 <Ul items={[
-                  'All ticket sales are processed through Paystack. By completing a purchase you agree to Paystack\'s terms of service.',
-                  'A purchase is complete only when payment is confirmed by Paystack and a QR ticket is issued to your email address.',
+                  'All ticket sales are processed through our payment processor. By completing a purchase you agree to our payment processor\'s terms of service.',
+                  'A purchase is complete only when payment is confirmed by our payment processor and a QR ticket is issued to your email address.',
                   'Prices are displayed in Nigerian Naira (NGN). The price you see at checkout is the total price including the non-refundable Service Fee.',
                   'Tickets are issued per transaction. A maximum of 10 tickets of any single tier may be purchased per transaction.',
                   'Ventry does not guarantee event quality, safety, or the actions of event organizers. We facilitate the transaction and hold funds in escrow on your behalf.',
@@ -305,9 +305,9 @@ export default function TermsPage() {
                 This section explains exactly how funds flow through the platform.
               </P>
               <Ul items={[
-                <><strong>Collection:</strong> when a Buyer purchases a ticket, their payment is processed by Paystack and the funds are credited to Ventry&apos;s Paystack balance, held in escrow on behalf of the Organizer.</>,
+                <><strong>Collection:</strong> when a Buyer purchases a ticket, their payment is processed by our payment processor and the funds are credited to Ventry&apos;s account balance, held in escrow on behalf of the Organizer.</>,
                 <><strong>Holding period:</strong> funds remain in escrow until the event date passes and Ventry admin confirms the event took place without significant complaint.</>,
-                <><strong>Release:</strong> once an event is confirmed, Ventry initiates a Paystack transfer to the Organizer&apos;s registered bank account, less the {PLATFORM_FEE} Platform Fee.</>,
+                <><strong>Release:</strong> once an event is confirmed, Ventry initiates a transfer to the Organizer&apos;s registered bank account, less the {PLATFORM_FEE} Platform Fee.</>,
                 <><strong>Withholding:</strong> Ventry may withhold or delay payout if there are open refund complaints, suspected fraud, or a dispute regarding whether the event occurred as advertised.</>,
                 <><strong>Refund priority:</strong> in the event of a confirmed cancellation or upheld fraud complaint, buyer refunds take precedence over organizer payout. Ventry will process all eligible refunds before releasing any remaining funds to the Organizer.</>,
               ]} />
@@ -474,8 +474,8 @@ export default function TermsPage() {
                 'Any acts or omissions of event organizers, including failure to host an event.',
                 'Loss suffered as a result of sharing your QR ticket with a third party.',
                 'Loss of profit, data, revenue, business opportunity, or goodwill, whether direct or indirect.',
-                'Delays in payout processing caused by bank processing times, public holidays, or Paystack outages.',
-                'Any failure or interruption of the Platform caused by factors outside our reasonable control, including third-party service outages (Paystack, Supabase, Resend) or network failures.',
+                'Delays in payout processing caused by bank processing times, public holidays, or payment processor outages.',
+                'Any failure or interruption of the Platform caused by factors outside our reasonable control, including third-party service outages (payment processing, hosting, or email delivery providers) or network failures.',
                 'Indirect, incidental, special, consequential, or punitive damages, even if advised of the possibility.',
               ]} />
               <P>

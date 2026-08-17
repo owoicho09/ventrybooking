@@ -1,10 +1,10 @@
 'use client';
 
-import { useState, useEffect, useRef } from 'react';
+import { useState, useEffect } from 'react';
 import { useParams, useRouter } from 'next/navigation';
 import Link from 'next/link';
 import {
-  ArrowLeft, Download, Upload, Plus, Pencil, Check, X,
+  ArrowLeft, Download, Plus, Pencil, Check, X,
   AlertTriangle, Ticket, Copy, Eye, EyeOff, Users,
 } from 'lucide-react';
 import { Badge } from '@/components/ui/Badge';
@@ -12,15 +12,19 @@ import { Button } from '@/components/ui/Button';
 import { Input, Textarea } from '@/components/ui/Input';
 import { useToast } from '@/components/ui/Toast';
 import { formatNGN, formatShortDate } from '@/lib/utils';
+import { ACCENT_COLOR_PRESETS } from '@/lib/accentColors';
+import { BannerCropInput } from '@/components/organizer/BannerCropInput';
 
 interface Tier { id: string; name: string; price: number; available: number; sold: number; }
 interface Affiliate { id: string; name: string; code: string; link: string; clicks: number; buys: number; }
+interface LineupAct { name: string; role: string; }
 interface OrgEvent {
-  id: string; event_name: string; category: string; description: string;
+  id: string; slug: string; event_name: string; category: string; description: string;
   date: string; time: string; event_mode: 'physical' | 'online'; venue: string; address: string; city: string;
   landmark: string | null; location_hidden: boolean;
   meeting_link: string | null; meeting_passcode: string | null;
   status: string; total_sold: number; banner_url: string | null; banner_color: string;
+  accent_color: string | null; lineup: LineupAct[];
   organizer_id: string; tiers: Tier[];
 }
 
@@ -128,10 +132,12 @@ export default function OrganizerEventDetailPage() {
   const [newTierQty, setNewTierQty]   = useState('');
   const [addingLoading, setAddingLoading] = useState(false);
   const [downloadLoading, setDownloadLoading] = useState(false);
-  const bannerRef = useRef<HTMLInputElement>(null);
   const [affiliates, setAffiliates] = useState<Affiliate[]>([]);
   const [newAffiliateName, setNewAffiliateName] = useState('');
   const [addingAffiliate, setAddingAffiliate] = useState(false);
+  const [accentColor, setAccentColor] = useState<string | null>(null);
+  const [lineup, setLineup] = useState<LineupAct[]>([]);
+  const [savingBranding, setSavingBranding] = useState(false);
 
   const load = () => {
     setLoading(true);
@@ -148,6 +154,8 @@ export default function OrganizerEventDetailPage() {
           setLocationHidden(Boolean(d.data.location_hidden));
           setMeetingLink(d.data.meeting_link ?? '');
           setMeetingPasscode(d.data.meeting_passcode ?? '');
+          setAccentColor(d.data.accent_color ?? null);
+          setLineup(d.data.lineup ?? []);
         } else {
           toast(d.error || 'Event not found', 'error');
           router.push('/organizer/events');
@@ -188,9 +196,29 @@ export default function OrganizerEventDetailPage() {
     }
   };
 
-  const handleBannerChange = async (e: React.ChangeEvent<HTMLInputElement>) => {
-    const file = e.target.files?.[0];
-    if (!file) return;
+  const handleSaveBranding = async () => {
+    setSavingBranding(true);
+    try {
+      const res = await fetch(`/api/organizer/events/${id}`, {
+        method: 'PATCH',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ accent_color: accentColor, lineup: lineup.filter(a => a.name.trim()) }),
+      });
+      const data = await res.json();
+      if (!res.ok) { toast(data.error || 'Update failed', 'error'); return; }
+      toast('Branding updated', 'success');
+      load();
+    } finally {
+      setSavingBranding(false);
+    }
+  };
+
+  const addAct = () => setLineup(p => [...p, { name: '', role: '' }]);
+  const removeAct = (index: number) => setLineup(p => p.filter((_, i) => i !== index));
+  const updateAct = (index: number, field: keyof LineupAct, value: string) =>
+    setLineup(p => p.map((a, i) => (i === index ? { ...a, [field]: value } : a)));
+
+  const handleBannerChange = async (file: File) => {
     const fd = new FormData();
     fd.append('banner', file);
     const res = await fetch(`/api/organizer/events/${id}/banner`, { method: 'POST', body: fd });
@@ -280,7 +308,7 @@ export default function OrganizerEventDetailPage() {
 
   const handleCopyLink = async () => {
     const origin = typeof window !== 'undefined' ? window.location.origin : '';
-    const url = `${origin}/events/${event?.id ?? id}`;
+    const url = `${origin}/${event?.slug ?? `events/${id}`}`;
     try {
       await navigator.clipboard.writeText(url);
       toast('Ticket link copied', 'success');
@@ -499,15 +527,71 @@ export default function OrganizerEventDetailPage() {
       {/* Banner upload */}
       <div className="rounded-xl border p-5 flex flex-col gap-3"
         style={{ backgroundColor: 'var(--color-surface)', borderColor: 'var(--color-border)' }}>
-        <h2 className="font-semibold" style={{ color: 'var(--color-text)' }}>Event Banner</h2>
-        {event.banner_url && (
-          <img src={event.banner_url} alt="Banner" className="w-full h-40 object-cover rounded-lg" />
-        )}
-        <input ref={bannerRef} type="file" accept="image/*" className="sr-only" onChange={handleBannerChange} />
-        <Button size="sm" variant="outline" onClick={() => bannerRef.current?.click()}>
-          <Upload size={13} />{event.banner_url ? 'Replace Banner' : 'Upload Banner'}
+        <BannerCropInput
+          label="Event Banner"
+          currentUrl={event.banner_url}
+          onCropped={handleBannerChange}
+          buttonText={event.banner_url ? 'Click to replace banner' : undefined}
+        />
+      </div>
+
+      {/* Accent colour + lineup */}
+      <div className="rounded-xl border p-5 flex flex-col gap-5"
+        style={{ backgroundColor: 'var(--color-surface)', borderColor: 'var(--color-border)' }}>
+        <h2 className="font-semibold" style={{ color: 'var(--color-text)' }}>Branding</h2>
+
+        <div>
+          <p className="text-sm font-medium mb-1.5" style={{ color: 'var(--color-text)' }}>Accent Colour</p>
+          <p className="text-xs mb-3" style={{ color: 'var(--color-text-dim)' }}>Applied to your ticket panel — tier cards, purchase button, and quantity steppers.</p>
+          <div className="flex flex-wrap gap-2.5">
+            <button
+              type="button"
+              onClick={() => setAccentColor(null)}
+              className="w-9 h-9 rounded-full border-2 flex items-center justify-center text-[9px] font-semibold"
+              style={{
+                borderColor: accentColor === null ? 'var(--color-text)' : 'var(--color-border)',
+                backgroundColor: 'var(--color-surface-2)',
+                color: 'var(--color-text-muted)',
+              }}
+              title="Default (Ventry Purple)"
+            >
+              Default
+            </button>
+            {ACCENT_COLOR_PRESETS.map(preset => (
+              <button
+                key={preset.hex}
+                type="button"
+                onClick={() => setAccentColor(preset.hex)}
+                className="w-9 h-9 rounded-full border-2"
+                style={{ backgroundColor: preset.hex, borderColor: accentColor === preset.hex ? 'var(--color-text)' : 'transparent' }}
+                title={preset.name}
+                aria-label={preset.name}
+              />
+            ))}
+          </div>
+        </div>
+
+        <div>
+          <p className="text-sm font-medium mb-1.5" style={{ color: 'var(--color-text)' }}>Lineup</p>
+          <div className="flex flex-col gap-2 mb-2">
+            {lineup.map((act, i) => (
+              <div key={i} className="rounded-lg border p-3 flex items-center gap-3" style={{ borderColor: 'var(--color-border)', backgroundColor: 'var(--color-surface-2)' }}>
+                <div className="grid grid-cols-2 gap-3 flex-1">
+                  <Input label="Name" value={act.name} onChange={e => updateAct(i, 'name', e.target.value)} placeholder="e.g. Burna Boy" />
+                  <Input label="Role" value={act.role} onChange={e => updateAct(i, 'role', e.target.value)} placeholder="e.g. Headliner" />
+                </div>
+                <button type="button" onClick={() => removeAct(i)} className="mt-5" style={{ color: 'var(--color-red)' }}><X size={16} /></button>
+              </div>
+            ))}
+          </div>
+          <button type="button" onClick={addAct} className="flex items-center gap-2 text-sm font-medium" style={{ color: 'var(--color-purple-light)' }}>
+            <Plus size={16} />Add Lineup Act
+          </button>
+        </div>
+
+        <Button size="sm" disabled={savingBranding} onClick={handleSaveBranding} className="self-start">
+          {savingBranding ? 'Saving…' : 'Save Branding'}
         </Button>
-        <p className="text-xs" style={{ color: 'var(--color-text-dim)' }}>Recommended: 1200x630px, max 5MB</p>
       </div>
 
       {/* Attendee download */}
@@ -606,7 +690,7 @@ export default function OrganizerEventDetailPage() {
       <div className="pb-4">
         <div className="flex flex-wrap items-center gap-3">
           <a
-            href={`/events/${event.id}`}
+            href={`/${event.slug || `events/${event.id}`}`}
             target="_blank"
             rel="noopener noreferrer"
             className="inline-flex items-center gap-1.5 text-sm"

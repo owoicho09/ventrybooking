@@ -18,6 +18,7 @@ import { Footer } from '@/components/layout/Footer';
 import { EventCard } from '@/components/events/EventCard';
 import { Button } from '@/components/ui/Button';
 import { getServerSupabase } from '@/lib/supabase/server';
+import { getEventsHostedCounts } from '@/lib/server/eventsHosted';
 
 const trustBadges = [
   { icon: Shield, label: 'Escrow Protected' },
@@ -72,9 +73,9 @@ export default async function HomePage() {
   const { data: rawEvents } = await db
     .from('events')
     .select(`
-      id, event_name, category, description, date, time, event_mode, venue, address, city, landmark, location_hidden,
+      id, slug, event_name, category, description, date, time, event_mode, venue, address, city, landmark, location_hidden,
       status, total_sold, banner_color, banner_url,
-      organizer:users!events_organizer_id_fkey(id, name, tier, verified, member_since, events_hosted),
+      organizer:users!events_organizer_id_fkey(id, name, tier, verified, member_since, events_hosted, handle),
       tiers:ticket_tiers(id, name, price, available, sold)
     `)
     .eq('status', 'approved')
@@ -86,6 +87,10 @@ export default async function HomePage() {
     if (v == null) return null;
     return Array.isArray(v) ? (v[0] ?? null) : v;
   }
+
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  const organizerIds = (rawEvents ?? []).map((r: any) => one(r.organizer)?.id).filter(Boolean);
+  const eventsHostedCounts = await getEventsHostedCounts(db, organizerIds);
 
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
   const featuredEvents = (rawEvents ?? []).map((row: any) => {
@@ -104,9 +109,13 @@ export default async function HomePage() {
       id: '', name: '', email: '', phone: '', tier: 'Standard',
       verified: false, memberSince: '', eventsHosted: 0, kycStatus: 'pending',
     };
+    if (organizer.id) {
+      organizer.events_hosted = eventsHostedCounts[organizer.id] ?? 0;
+    }
 
     return {
       id:          row.id,
+      slug:        row.slug,
       name:        row.event_name,
       category:    row.category,
       description: row.description,
@@ -361,7 +370,7 @@ export default async function HomePage() {
             Ready to sell tickets?
           </h2>
           <p className="text-base mb-8 max-w-md mx-auto" style={{ color: 'rgba(255,255,255,0.65)' }}>
-            No upfront costs. 2.5% only after your event. Full sales dashboard included.
+            No upfront costs. 3% only after your event. Full sales dashboard included.
           </p>
           <Link href="/organizer/register">
             <Button size="lg">

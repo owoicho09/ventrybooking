@@ -7,8 +7,11 @@ import { Input, Textarea } from '@/components/ui/Input';
 import { Select } from '@/components/ui/Select';
 import { Button } from '@/components/ui/Button';
 import { useToast } from '@/components/ui/Toast';
+import { ACCENT_COLOR_PRESETS } from '@/lib/accentColors';
+import { BannerCropInput } from '@/components/organizer/BannerCropInput';
 
 interface Tier { id: string; name: string; price: string; quantity: string; }
+interface LineupAct { id: string; name: string; role: string; }
 
 const eventTypes = [
   { value: 'Concert', label: 'Concert' },
@@ -41,11 +44,18 @@ export default function CreateEventPage() {
   const [banner, setBanner] = useState<File | null>(null);
   const [venueProof, setVenueProof] = useState<File | null>(null);
   const [tiers, setTiers] = useState<Tier[]>([{ id: '1', name: 'Regular', price: '', quantity: '' }]);
+  const [accentColor, setAccentColor] = useState<string | null>(null);
+  const [lineup, setLineup] = useState<LineupAct[]>([]);
 
   const addTier = () => setTiers(p => [...p, { id: Date.now().toString(), name: '', price: '', quantity: '' }]);
   const removeTier = (id: string) => { if (tiers.length > 1) setTiers(p => p.filter(t => t.id !== id)); };
   const updateTier = (id: string, field: keyof Tier, value: string) =>
     setTiers(p => p.map(t => (t.id === id ? { ...t, [field]: value } : t)));
+
+  const addAct = () => setLineup(p => [...p, { id: Date.now().toString(), name: '', role: '' }]);
+  const removeAct = (id: string) => setLineup(p => p.filter(a => a.id !== id));
+  const updateAct = (id: string, field: keyof LineupAct, value: string) =>
+    setLineup(p => p.map(a => (a.id === id ? { ...a, [field]: value } : a)));
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -70,6 +80,9 @@ export default function CreateEventPage() {
         fd.append('meetingPasscode', meetingPasscode);
       }
       fd.append('tiers', JSON.stringify(tiers.map(t => ({ name: t.name, price: t.price, quantity: t.quantity }))));
+      if (accentColor) fd.append('accentColor', accentColor);
+      const validLineup = lineup.filter(a => a.name.trim());
+      if (validLineup.length) fd.append('lineup', JSON.stringify(validLineup.map(a => ({ name: a.name, role: a.role }))));
       if (banner) fd.append('banner', banner);
 
       const res = await fetch('/api/organizer/events', { method: 'POST', body: fd });
@@ -99,16 +112,43 @@ export default function CreateEventPage() {
         <Input label="Event Name" value={name} onChange={e => setName(e.target.value)} placeholder="e.g. Afrobeat Vibes Festival 2026" required />
         <Select label="Event Type" options={eventTypes} value={category} onChange={e => setCategory(e.target.value)} />
         <Textarea label="Description" value={description} onChange={e => setDescription(e.target.value)} placeholder="Tell attendees what to expect..." rows={4} />
+        <BannerCropInput
+          label="Event Banner"
+          onCropped={setBanner}
+          buttonText={banner ? `${banner.name} — click to replace` : undefined}
+        />
         <div>
-          <label className="text-sm font-medium block mb-1.5" style={{ color: 'var(--color-text)' }}>Event Banner</label>
-          <label className="flex flex-col items-center justify-center gap-3 rounded-xl border-2 border-dashed p-8 cursor-pointer transition-colors hover:border-[var(--color-purple)]" style={{ borderColor: 'var(--color-border)' }}>
-            <input type="file" className="sr-only" accept="image/*" onChange={e => setBanner(e.target.files?.[0] ?? null)} />
-            <div className="w-10 h-10 rounded-lg flex items-center justify-center" style={{ backgroundColor: 'var(--color-surface-2)', color: 'var(--color-text-dim)' }}><Upload size={18} /></div>
-            <div className="text-center">
-              <p className="text-sm" style={{ color: banner ? 'var(--color-green)' : 'var(--color-text-muted)' }}>{banner ? banner.name : 'Click or drag to upload event banner'}</p>
-              <p className="text-xs mt-0.5" style={{ color: 'var(--color-text-dim)' }}>Recommended: 1200x630px, max 5MB</p>
-            </div>
-          </label>
+          <label className="text-sm font-medium block mb-1.5" style={{ color: 'var(--color-text)' }}>Accent Colour</label>
+          <p className="text-xs mb-3" style={{ color: 'var(--color-text-dim)' }}>Applied to your ticket panel — tier cards, purchase button, and quantity steppers. Everything else stays Ventry purple.</p>
+          <div className="flex flex-wrap gap-2.5">
+            <button
+              type="button"
+              onClick={() => setAccentColor(null)}
+              className="w-9 h-9 rounded-full border-2 flex items-center justify-center text-[10px] font-semibold"
+              style={{
+                borderColor: accentColor === null ? 'var(--color-text)' : 'var(--color-border)',
+                backgroundColor: 'var(--color-surface-2)',
+                color: 'var(--color-text-muted)',
+              }}
+              title="Default (Ventry Purple)"
+            >
+              Default
+            </button>
+            {ACCENT_COLOR_PRESETS.map(preset => (
+              <button
+                key={preset.hex}
+                type="button"
+                onClick={() => setAccentColor(preset.hex)}
+                className="w-9 h-9 rounded-full border-2"
+                style={{
+                  backgroundColor: preset.hex,
+                  borderColor: accentColor === preset.hex ? 'var(--color-text)' : 'transparent',
+                }}
+                title={preset.name}
+                aria-label={preset.name}
+              />
+            ))}
+          </div>
         </div>
       </section>
 
@@ -192,7 +232,30 @@ export default function CreateEventPage() {
       </section>
 
       <section className="rounded-xl border p-6 flex flex-col gap-4" style={{ backgroundColor: 'var(--color-surface)', borderColor: 'var(--color-border)' }}>
-        <h2 className="font-semibold text-lg" style={{ color: 'var(--color-text)' }}>3. Ticket Tiers</h2>
+        <div>
+          <h2 className="font-semibold text-lg" style={{ color: 'var(--color-text)' }}>3. Lineup (optional)</h2>
+          <p className="text-xs mt-0.5" style={{ color: 'var(--color-text-dim)' }}>Performers, speakers, or hosts — shown on the event page above ticket selection.</p>
+        </div>
+        <div className="flex flex-col gap-3">
+          {lineup.map(act => (
+            <div key={act.id} className="rounded-lg border p-3 flex items-center gap-3" style={{ borderColor: 'var(--color-border)', backgroundColor: 'var(--color-surface-2)' }}>
+              <div className="grid grid-cols-2 gap-3 flex-1">
+                <Input label="Name" value={act.name} onChange={e => updateAct(act.id, 'name', e.target.value)} placeholder="e.g. Burna Boy" />
+                <Input label="Role" value={act.role} onChange={e => updateAct(act.id, 'role', e.target.value)} placeholder="e.g. Headliner" />
+              </div>
+              <button type="button" onClick={() => removeAct(act.id)} className="mt-5" style={{ color: 'var(--color-red)' }}>
+                <Trash2 size={16} />
+              </button>
+            </div>
+          ))}
+        </div>
+        <button type="button" onClick={addAct} className="flex items-center gap-2 text-sm font-medium" style={{ color: 'var(--color-purple-light)' }}>
+          <Plus size={16} />Add Lineup Act
+        </button>
+      </section>
+
+      <section className="rounded-xl border p-6 flex flex-col gap-4" style={{ backgroundColor: 'var(--color-surface)', borderColor: 'var(--color-border)' }}>
+        <h2 className="font-semibold text-lg" style={{ color: 'var(--color-text)' }}>4. Ticket Tiers</h2>
         <div className="flex flex-col gap-4">
           {tiers.map((tier) => (
             <div key={tier.id} className="rounded-lg border p-4 flex flex-col gap-4" style={{ borderColor: 'var(--color-border)', backgroundColor: 'var(--color-surface-2)' }}>
@@ -218,7 +281,7 @@ export default function CreateEventPage() {
       </section>
 
       <section className="rounded-xl border p-6 flex flex-col gap-5" style={{ backgroundColor: 'var(--color-surface)', borderColor: 'var(--color-border)' }}>
-        <h2 className="font-semibold text-lg" style={{ color: 'var(--color-text)' }}>4. Review & Submit</h2>
+        <h2 className="font-semibold text-lg" style={{ color: 'var(--color-text)' }}>5. Review & Submit</h2>
         <div className="rounded-lg p-4 text-sm" style={{ backgroundColor: 'var(--color-surface-2)', color: 'var(--color-text-muted)' }}>
           <p className="font-medium mb-2" style={{ color: 'var(--color-text)' }}>Summary</p>
           <p>Event: {name || '(not set)'}</p>

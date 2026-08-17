@@ -1,7 +1,7 @@
 import { getServerSupabase } from '@/lib/supabase/server';
 import { generateTicketId, generateRefundCode } from '@/lib/server/ids';
 import { sendTicketEmail } from '@/lib/server/email';
-import { calculateFees } from '@/lib/server/fees';
+import { calculateFees, serviceFeePerTicket } from '@/lib/server/fees';
 import { notify } from '@/lib/server/notify';
 
 export interface PaymentData {
@@ -100,22 +100,34 @@ export async function createTicketFromPayment(p: PaymentData): Promise<string | 
     refundCodes.push(generateRefundCode());
   }
 
-  const rows = ticketIds.map((id, i) => ({
-    id,
-    event_id:           p.eventId,
-    tier_id:            p.tierId,
-    organizer_id:       eventRow.organizer_id,
-    buyer_name:         p.buyerName || email,
-    buyer_email:        email,
-    quantity:           1,
-    total_paid:         (i < qty - 1 ? baseKobo : lastKobo) / 100,
-    status:             'valid',
-    purchased_at:       purchasedAt,
-    refund_code:        refundCodes[i],
-    qr_token:           id,
-    paystack_reference: p.reference,
-    marketing_consent:  consent,
-  }));
+  const perTicketSubtotal   = tierRow.price;
+  const perTicketServiceFee = serviceFeePerTicket(tierRow.price);
+
+  const rows = ticketIds.map((id, i) => {
+    const totalPaid = (i < qty - 1 ? baseKobo : lastKobo) / 100;
+    return {
+      id,
+      event_id:           p.eventId,
+      tier_id:            p.tierId,
+      organizer_id:       eventRow.organizer_id,
+      buyer_name:         p.buyerName || email,
+      buyer_email:        email,
+      quantity:           1,
+      total_paid:         totalPaid,
+      // Exact breakdown, persisted so refunds never need to reverse-engineer
+      // it from total_paid. processing_fee absorbs the per-ticket proration
+      // remainder, so the three columns always sum exactly to total_paid.
+      subtotal:           perTicketSubtotal,
+      service_fee:        perTicketServiceFee,
+      processing_fee:     totalPaid - perTicketSubtotal - perTicketServiceFee,
+      status:             'valid',
+      purchased_at:       purchasedAt,
+      refund_code:        refundCodes[i],
+      qr_token:           id,
+      paystack_reference: p.reference,
+      marketing_consent:  consent,
+    };
+  });
 
   const { error: insertErr } = await db.from('tickets').insert(rows);
   if (insertErr) {
@@ -164,6 +176,9 @@ export async function createTicketFromPayment(p: PaymentData): Promise<string | 
       eventVenue:  eventRow.venue,
       eventMode:   eventRow.event_mode,
       tierName:    tierRow.name,
+      subtotal:      subtotal,
+      serviceFee:    perTicketServiceFee * qty,
+      processingFee: (p.totalPaidKobo / 100) - subtotal - perTicketServiceFee * qty,
       totalPaid:   p.totalPaidKobo / 100,
       bannerUrl:   eventRow.banner_url,
     });

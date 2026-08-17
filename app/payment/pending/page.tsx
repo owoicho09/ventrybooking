@@ -76,7 +76,7 @@ function PendingContent() {
       {showFallback ? (
         <div className="mt-6 flex flex-col items-center gap-4 max-w-sm">
           <p className="text-sm" style={{ color: 'var(--color-text-muted)' }}>
-            Taking longer than expected. Click below to check your payment status directly with Paystack.
+            Taking longer than expected. Click below to check your payment status directly with our payment processor.
           </p>
           <Button onClick={handleVerify} disabled={verifying}>
             <RefreshCw size={15} className={verifying ? 'animate-spin' : ''} />

@@ -34,6 +34,7 @@ export interface Organizer {
   member_since?: string;
   eventsHosted: number;
   events_hosted?: number;
+  handle?: string | null;
   kycStatus: KYCStatus;
   submittedAt?: string;
 }
@@ -48,6 +49,7 @@ export interface TicketTier {
 
 export interface Event {
   id: string;
+  slug: string;
   name: string;
   category: EventCategory;
   description: string;
@@ -67,6 +69,8 @@ export interface Event {
   totalSold: number;
   bannerColor: string;
   banner_url?: string | null;
+  accentColor?: string | null;
+  lineup?: { name: string; role: string }[];
 }
 
 export interface Ticket {

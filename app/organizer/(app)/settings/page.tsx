@@ -18,16 +18,21 @@ function Toggle({ checked, onChange }: { checked: boolean; onChange: () => void 
   );
 }
 
+interface Socials { instagram?: string; twitter?: string; website?: string; }
 interface Me {
   name: string; email: string; phone: string; bio: string;
   bank_name: string; account_number: string; account_name: string;
   email_notifications: boolean; sms_alerts: boolean;
+  handle: string; avatar_url: string | null; socials: Socials;
 }
 
 export default function OrganizerSettingsPage() {
   const router = useRouter();
 
   const [me, setMe]                   = useState<Partial<Me>>({});
+  const [storefrontSaving, setStorefrontSaving] = useState(false);
+  const [storefrontMsg, setStorefrontMsg]       = useState('');
+  const [avatarUploading, setAvatarUploading]   = useState(false);
   const [profileSaving, setProfileSaving] = useState(false);
   const [bankSaving, setBankSaving]   = useState(false);
   const [pwSaving, setPwSaving]       = useState(false);
@@ -60,6 +65,36 @@ export default function OrganizerSettingsPage() {
     setProfileMsg(d.success ? 'Profile saved.' : (d.error ?? 'Failed to save profile'));
     setProfileSaving(false);
   };
+
+  const saveStorefront = async (e: React.FormEvent) => {
+    e.preventDefault();
+    setStorefrontSaving(true); setStorefrontMsg('');
+    const res = await fetch('/api/organizer/settings', {
+      method: 'PATCH',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ handle: me.handle, socials: me.socials || {} }),
+    });
+    const d = await res.json();
+    setStorefrontMsg(d.success ? 'Storefront saved.' : (d.error ?? 'Failed to save'));
+    setStorefrontSaving(false);
+    if (d.success && me.handle) setMe(p => ({ ...p, handle: d.data?.handle ?? p.handle }));
+  };
+
+  const handleAvatarChange = async (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    if (!file) return;
+    setAvatarUploading(true);
+    const fd = new FormData();
+    fd.append('avatar', file);
+    const res = await fetch('/api/organizer/avatar', { method: 'POST', body: fd });
+    const d = await res.json();
+    setAvatarUploading(false);
+    if (!res.ok) { setStorefrontMsg(d.error || 'Avatar upload failed'); return; }
+    setMe(p => ({ ...p, avatar_url: d.data.avatarUrl }));
+  };
+
+  const setSocial = (platform: keyof Socials) => (e: React.ChangeEvent<HTMLInputElement>) =>
+    setMe(p => ({ ...p, socials: { ...p.socials, [platform]: e.target.value } }));
 
   const saveBank = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -120,6 +155,49 @@ export default function OrganizerSettingsPage() {
             </p>
           )}
           <Button type="submit" disabled={profileSaving}>{profileSaving ? 'Saving…' : 'Save Profile'}</Button>
+        </form>
+      </section>
+
+      {/* Storefront */}
+      <section className="rounded-xl border p-6 flex flex-col gap-5"
+        style={{ backgroundColor: 'var(--color-surface)', borderColor: 'var(--color-border)' }}>
+        <div>
+          <h2 className="font-semibold" style={{ color: 'var(--color-text)' }}>Storefront</h2>
+          <p className="text-xs mt-0.5" style={{ color: 'var(--color-text-dim)' }}>
+            Your public page at ventrybooking.com/{me.handle || 'yourhandle'}
+          </p>
+        </div>
+        <form onSubmit={saveStorefront} className="flex flex-col gap-4">
+          <div className="flex items-center gap-4">
+            <div className="w-16 h-16 rounded-full flex items-center justify-center text-xl font-bold text-white flex-shrink-0 overflow-hidden"
+              style={{ backgroundColor: 'var(--color-purple)' }}>
+              {me.avatar_url
+                // eslint-disable-next-line @next/next/no-img-element
+                ? <img src={me.avatar_url} alt="Avatar" className="w-full h-full object-cover" />
+                : (me.name?.[0] || '?')}
+            </div>
+            <label className="text-sm font-medium px-4 py-2 rounded-lg border cursor-pointer"
+              style={{ borderColor: 'var(--color-border)', color: 'var(--color-text)' }}>
+              <input type="file" accept="image/*" className="sr-only" onChange={handleAvatarChange} disabled={avatarUploading} />
+              {avatarUploading ? 'Uploading…' : 'Change Avatar'}
+            </label>
+          </div>
+          <Input
+            label="Handle"
+            value={me.handle || ''}
+            onChange={e => setMe(p => ({ ...p, handle: e.target.value }))}
+            placeholder="yourhandle"
+            helper="Lowercase letters, numbers, and hyphens only."
+          />
+          <Input label="Instagram" value={me.socials?.instagram || ''} onChange={setSocial('instagram')} placeholder="https://instagram.com/yourname" />
+          <Input label="Twitter / X" value={me.socials?.twitter || ''} onChange={setSocial('twitter')} placeholder="https://x.com/yourname" />
+          <Input label="Website" value={me.socials?.website || ''} onChange={setSocial('website')} placeholder="https://yoursite.com" />
+          {storefrontMsg && (
+            <p className="text-xs" style={{ color: storefrontMsg.includes('saved') ? 'var(--color-green)' : 'var(--color-red)' }}>
+              {storefrontMsg}
+            </p>
+          )}
+          <Button type="submit" disabled={storefrontSaving}>{storefrontSaving ? 'Saving…' : 'Save Storefront'}</Button>
         </form>
       </section>
 

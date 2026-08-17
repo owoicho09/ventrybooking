@@ -1,6 +1,7 @@
 import { NextResponse } from 'next/server';
 import { getAuthUser } from '@/lib/server/auth';
 import { getServerSupabase } from '@/lib/supabase/server';
+import { getEventsHostedCounts } from '@/lib/server/eventsHosted';
 
 export async function GET() {
   const user = await getAuthUser();
@@ -18,5 +19,6 @@ export async function GET() {
     .single();
 
   if (error || !data) return NextResponse.json({ error: 'User not found' }, { status: 404 });
-  return NextResponse.json({ success: true, data: { ...data, role: 'organizer' } });
+  const counts = await getEventsHostedCounts(db, [data.id]);
+  return NextResponse.json({ success: true, data: { ...data, events_hosted: counts[data.id] ?? 0, role: 'organizer' } });
 }

@@ -8,6 +8,8 @@ import type { Event } from '@/types';
 
 interface EventCardProps {
   event: Event;
+  /** 'compact' visually de-emphasizes the card — used for past/completed events on the organiser storefront. */
+  variant?: 'default' | 'compact';
 }
 
 const categoryIcon: Record<string, string> = {
@@ -26,7 +28,8 @@ const tierColors: Record<string, string> = {
   Standard: 'var(--color-text-muted)',
 };
 
-export function EventCard({ event }: EventCardProps) {
+export function EventCard({ event, variant = 'default' }: EventCardProps) {
+  const compact = variant === 'compact';
   const minPrice  = event.tiers.length ? Math.min(...event.tiers.map((t) => t.price)) : 0;
   const freeTier  = minPrice === 0 ? (event.tiers.find(t => t.price === 0) ?? null) : null;
   const locationText = event.event_mode === 'online'
@@ -39,7 +42,7 @@ export function EventCard({ event }: EventCardProps) {
 
   return (
     <div
-      className="rounded-xl border overflow-hidden flex flex-col transition-all duration-200 hover:-translate-y-0.5 hover:shadow-lg"
+      className={`rounded-xl border overflow-hidden flex flex-col transition-all duration-200 hover:-translate-y-0.5 hover:shadow-lg ${compact ? 'opacity-70 hover:opacity-100' : ''}`}
       style={{
         backgroundColor: 'var(--color-surface)',
         borderColor: 'var(--color-border)',
@@ -47,7 +50,7 @@ export function EventCard({ event }: EventCardProps) {
       }}
     >
       {/* Banner */}
-      <div className={`relative h-40 bg-gradient-to-br ${event.bannerColor} flex items-center justify-center overflow-hidden`}>
+      <div className={`relative ${compact ? 'h-24' : 'h-40'} bg-gradient-to-br ${event.bannerColor} flex items-center justify-center overflow-hidden`}>
         {event.banner_url ? (
           <Image
             src={event.banner_url}
@@ -60,53 +63,57 @@ export function EventCard({ event }: EventCardProps) {
           <span className="text-4xl opacity-30 select-none">{categoryIcon[event.category] ?? '◆'}</span>
         )}
 
-        {/* Verified badge */}
-        {event.organizer.verified && (
-          <div className="absolute top-3 left-3 z-10">
-            <span
-              className="flex items-center gap-1 px-2 py-1 rounded-full text-xs font-semibold"
-              style={{
-                backgroundColor: '#10b981cc',
-                color: '#fff',
-              }}
-            >
-              <CheckCircle size={11} />
-              Ventry Verified
-            </span>
-          </div>
-        )}
+        {!compact && (
+          <>
+            {/* Verified badge */}
+            {event.organizer.verified && (
+              <div className="absolute top-3 left-3 z-10">
+                <span
+                  className="flex items-center gap-1 px-2 py-1 rounded-full text-xs font-semibold"
+                  style={{
+                    backgroundColor: '#10b981cc',
+                    color: '#fff',
+                  }}
+                >
+                  <CheckCircle size={11} />
+                  Ventry Verified
+                </span>
+              </div>
+            )}
 
-        {/* Status badge */}
-        {event.badge === 'selling_fast' && (
-          <div className="absolute top-3 right-3 z-10">
-            <Badge variant="amber">SELLING FAST</Badge>
-          </div>
-        )}
-        {event.badge === 'limited' && (
-          <div className="absolute top-3 right-3 z-10">
-            <Badge variant="red">
-              {event.tiers.reduce((sum, t) => sum + (t.available - t.sold), 0)} LEFT
-            </Badge>
-          </div>
-        )}
-        {event.badge === 'sold_out' && (
-          <div className="absolute top-3 right-3 z-10">
-            <Badge variant="gray">SOLD OUT</Badge>
-          </div>
-        )}
+            {/* Status badge */}
+            {event.badge === 'selling_fast' && (
+              <div className="absolute top-3 right-3 z-10">
+                <Badge variant="amber">SELLING FAST</Badge>
+              </div>
+            )}
+            {event.badge === 'limited' && (
+              <div className="absolute top-3 right-3 z-10">
+                <Badge variant="red">
+                  {event.tiers.reduce((sum, t) => sum + (t.available - t.sold), 0)} LEFT
+                </Badge>
+              </div>
+            )}
+            {event.badge === 'sold_out' && (
+              <div className="absolute top-3 right-3 z-10">
+                <Badge variant="gray">SOLD OUT</Badge>
+              </div>
+            )}
 
-        {/* Category tag */}
-        <div className="absolute bottom-3 left-3 z-10">
-          <span
-            className="px-2 py-0.5 rounded text-xs font-medium"
-            style={{
-              backgroundColor: 'rgba(0,0,0,0.5)',
-              color: 'rgba(255,255,255,0.8)',
-            }}
-          >
-            {event.category}
-          </span>
-        </div>
+            {/* Category tag */}
+            <div className="absolute bottom-3 left-3 z-10">
+              <span
+                className="px-2 py-0.5 rounded text-xs font-medium"
+                style={{
+                  backgroundColor: 'rgba(0,0,0,0.5)',
+                  color: 'rgba(255,255,255,0.8)',
+                }}
+              >
+                {event.category}
+              </span>
+            </div>
+          </>
+        )}
       </div>
 
       {/* Content */}
@@ -139,9 +146,15 @@ export function EventCard({ event }: EventCardProps) {
           >
             {event.organizer.name[0]}
           </div>
-          <span className="text-xs truncate" style={{ color: 'var(--color-text-muted)' }}>
-            {event.organizer.name}
-          </span>
+          {event.organizer.handle ? (
+            <Link href={`/${event.organizer.handle}`} className="text-xs truncate hover:underline" style={{ color: 'var(--color-text-muted)' }}>
+              {event.organizer.name}
+            </Link>
+          ) : (
+            <span className="text-xs truncate" style={{ color: 'var(--color-text-muted)' }}>
+              {event.organizer.name}
+            </span>
+          )}
           <span
             className="text-[10px] font-semibold px-1.5 py-0.5 rounded ml-auto"
             style={{
@@ -168,7 +181,7 @@ export function EventCard({ event }: EventCardProps) {
               </>
             )}
           </div>
-          <Link href={`/events/${event.id}`}>
+          <Link href={`/${event.slug || event.id}`}>
             <Button size="sm">Get Tickets</Button>
           </Link>
         </div>

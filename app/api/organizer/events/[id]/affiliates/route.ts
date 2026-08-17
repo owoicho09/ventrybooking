@@ -18,7 +18,7 @@ export async function GET(
 
     const { data: event } = await db
       .from('events')
-      .select('id, organizer_id')
+      .select('id, organizer_id, slug')
       .eq('id', id)
       .single();
 
@@ -35,9 +35,10 @@ export async function GET(
     if (error) throw error;
 
     const appUrl = process.env.NEXT_PUBLIC_APP_URL ?? '';
+    const eventPath = event.slug || `events/${id}`;
     const data = (affiliates ?? []).map(a => ({
       ...a,
-      link: `${appUrl}/events/${id}?ref=${a.code}`,
+      link: `${appUrl}/${eventPath}?ref=${a.code}`,
     }));
 
     return NextResponse.json({ success: true, data });
@@ -62,7 +63,7 @@ export async function POST(
 
     const { data: event } = await db
       .from('events')
-      .select('id, organizer_id')
+      .select('id, organizer_id, slug')
       .eq('id', id)
       .single();
 
@@ -92,10 +93,11 @@ export async function POST(
     if (error) throw error;
 
     const appUrl = process.env.NEXT_PUBLIC_APP_URL ?? '';
+    const eventPath = event.slug || `events/${id}`;
 
     return NextResponse.json({
       success: true,
-      data: { ...affiliate, link: `${appUrl}/events/${id}?ref=${affiliate.code}` },
+      data: { ...affiliate, link: `${appUrl}/${eventPath}?ref=${affiliate.code}` },
     }, { status: 201 });
   } catch (err) {
     console.error('POST /api/organizer/events/[id]/affiliates error', err);

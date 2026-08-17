@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { getAuthUser } from '@/lib/server/auth';
 import { getServerSupabase } from '@/lib/supabase/server';
+import { getEventsHostedCounts } from '@/lib/server/eventsHosted';
 
 export async function GET(req: NextRequest) {
   const user = await getAuthUser();
@@ -22,5 +23,11 @@ export async function GET(req: NextRequest) {
   const { data, error } = await qb;
   if (error) return NextResponse.json({ error: 'Failed to fetch organizers' }, { status: 500 });
 
-  return NextResponse.json({ success: true, data: data || [] });
+  const rows = data || [];
+  const counts = await getEventsHostedCounts(db, rows.map(r => r.id));
+  for (const row of rows) {
+    row.events_hosted = counts[row.id] ?? 0;
+  }
+
+  return NextResponse.json({ success: true, data: rows });
 }

@@ -1,7 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { getServerSupabase } from '@/lib/supabase/server';
 import { initializeTransaction } from '@/lib/server/paystack';
-import { buyerTotal } from '@/lib/server/fees';
+import { buyerTotalWithProcessing } from '@/lib/server/fees';
 import { v4 as uuidv4 } from 'uuid';
 
 export async function POST(req: NextRequest) {
@@ -52,7 +52,7 @@ export async function POST(req: NextRequest) {
       return NextResponse.json({ error: `Only ${remaining} tickets remaining` }, { status: 400 });
     }
 
-    const { subtotal, serviceFee, total } = buyerTotal(tier.price, quantity);
+    const { subtotal, serviceFee, processingFee, total } = buyerTotalWithProcessing(tier.price, quantity);
     const reference = `VTR-${uuidv4().replace(/-/g, '').toUpperCase().slice(0, 12)}`;
     const appUrl = process.env.NEXT_PUBLIC_APP_URL!;
 
@@ -84,6 +84,7 @@ export async function POST(req: NextRequest) {
         marketingConsent: marketingConsent === true,
         subtotal,
         serviceFee,
+        processingFee,
         total,
         refCode,
       },
@@ -100,6 +101,7 @@ export async function POST(req: NextRequest) {
         buyer_name:       buyerName || '',
         subtotal,
         service_fee:      serviceFee,
+        processing_fee:   processingFee,
         total,
         organizer_id:     event.organizer_id,
         marketing_consent: marketingConsent === true,

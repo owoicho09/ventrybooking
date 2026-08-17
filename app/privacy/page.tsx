@@ -142,10 +142,10 @@ export default function PrivacyPage() {
               <p className="font-semibold" style={{ color: 'var(--color-text)' }}>1.3 Payment Information</p>
               <P>
                 We do not store full card numbers, PINs, or other sensitive payment credentials on our servers.
-                All payment processing is handled directly by <strong>Paystack</strong>. When you make a purchase,
-                your payment details are transmitted directly to Paystack under their own privacy policy.
+                All payment processing is handled directly by <strong>our payment processor</strong>. When you make a purchase,
+                your payment details are transmitted directly to them under their own privacy policy.
                 We receive and store only the transaction reference number, the amount paid, and the payment status
-                returned by Paystack.
+                returned by our payment processor.
               </P>
             </Section>
 
@@ -156,7 +156,7 @@ export default function PrivacyPage() {
               <p className="font-semibold" style={{ color: 'var(--color-text)' }}>2.1 Delivering Tickets & Processing Payments</p>
               <Ul items={[
                 'Generating your unique QR-coded ticket and delivering it to your email address after a successful purchase.',
-                'Creating a secure payment transaction on Paystack and reconciling the outcome with your order.',
+                'Creating a secure payment transaction with our payment processor and reconciling the outcome with your order.',
                 'Holding funds in escrow and releasing them to the organizer after the event.',
                 'Processing refunds when an event is cancelled or a complaint is upheld.',
               ]} />
@@ -198,13 +198,12 @@ export default function PrivacyPage() {
                 Each provider processes data only as necessary to perform their specific function.
               </P>
 
-              <p className="font-semibold" style={{ color: 'var(--color-text)' }}>3.1 Paystack (Payment Processing)</p>
+              <p className="font-semibold" style={{ color: 'var(--color-text)' }}>3.1 Payment Processing</p>
               <P>
-                Ventry uses <strong>Paystack Inc.</strong> to process all ticket payments and organizer transfers.
-                When you purchase a ticket, you are redirected to Paystack's hosted payment page.
-                Paystack collects, processes, and stores your card details under their own privacy policy,
-                available at paystack.com/privacy. We receive only a transaction reference and payment status.
-                Paystack is PCI-DSS compliant.
+                Ventry uses a licensed, <strong>PCI-DSS compliant</strong> payment processor to process all ticket payments and organizer transfers.
+                When you purchase a ticket, you are redirected to our payment processor&apos;s hosted payment page.
+                Our payment processor collects, processes, and stores your card details under their own privacy policy.
+                We receive only a transaction reference and payment status.
               </P>
 
               <p className="font-semibold" style={{ color: 'var(--color-text)' }}>3.2 Resend (Transactional Email)</p>
@@ -236,7 +235,7 @@ export default function PrivacyPage() {
               <P>We do not sell, rent, or trade your personal information. We may share it only in the following circumstances:</P>
               <Ul items={[
                 <><strong>With event organizers:</strong> when you purchase a ticket, the organizer receives your name and email address so they can manage attendance. They do not receive your payment card details.</>,
-                <><strong>With our service providers:</strong> Paystack, Resend, and Supabase as described in Section 3, solely to provide the services you use.</>,
+                <><strong>With our service providers:</strong> our payment processor, Resend, and Supabase as described in Section 3, solely to provide the services you use.</>,
                 <><strong>For legal compliance:</strong> when required by law, court order, or a lawful request from a Nigerian government authority, regulatory body, or law enforcement agency.</>,
                 <><strong>To protect rights:</strong> when we believe in good faith that disclosure is necessary to prevent fraud, protect the safety of any person, or enforce our Terms of Service.</>,
                 <><strong>In a business transfer:</strong> if Ventry is acquired, merged, or its assets are transferred, your data may be transferred as part of that transaction. We will notify affected users before their data is subject to a different privacy policy.</>,

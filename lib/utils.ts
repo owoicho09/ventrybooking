@@ -28,6 +28,12 @@ export function cn(...classes: (string | undefined | null | false)[]): string {
   return classes.filter(Boolean).join(' ');
 }
 
+export function eventsHostedLabel(count: number): string {
+  if (count === 0) return 'New organiser';
+  if (count === 1) return '1 event hosted';
+  return `${count} events hosted`;
+}
+
 export function generateId(): string {
   return Math.random().toString(36).substring(2, 9).toUpperCase();
 }

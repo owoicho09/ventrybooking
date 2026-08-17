@@ -117,3 +117,134 @@ CREATE TABLE IF NOT EXISTS ticket_lookup_otps (
 );
 
 CREATE INDEX IF NOT EXISTS idx_ticket_lookup_otps_email ON ticket_lookup_otps (email);
+
+
+-- 11. Processing-fee breakdown — buyer-borne gross-up for the payment
+--     processor's own fee. Persisted per ticket so refunds use the exact
+--     amount charged instead of reverse-engineering it from total_paid,
+--     which becomes ambiguous once total_paid includes a third fee
+--     component. NULL on pre-migration tickets marks "use the old
+--     basePriceFromTotalPaid reversal" at refund time.
+ALTER TABLE tickets
+  ADD COLUMN IF NOT EXISTS subtotal        NUMERIC,
+  ADD COLUMN IF NOT EXISTS service_fee     NUMERIC,
+  ADD COLUMN IF NOT EXISTS processing_fee  NUMERIC;
+
+ALTER TABLE pending_orders
+  ADD COLUMN IF NOT EXISTS processing_fee  NUMERIC NOT NULL DEFAULT 0;
+
+
+-- 12. Live-computed "events hosted" count. users.events_hosted is set to 0
+--     at registration and never incremented anywhere — nothing in the app
+--     transitions an event to status='completed', so there's no hook to
+--     increment it from. Rather than build that machinery, compute the
+--     count on read, batched across organizers to avoid N+1 queries.
+CREATE OR REPLACE FUNCTION get_events_hosted_counts(organizer_ids UUID[])
+RETURNS TABLE(organizer_id UUID, hosted_count BIGINT)
+LANGUAGE sql AS $$
+  SELECT organizer_id, COUNT(*) FROM events
+  WHERE organizer_id = ANY(organizer_ids) AND status = 'completed'
+  GROUP BY organizer_id;
+$$;
+
+
+-- 13. Vanity slugs, accent color, lineup, and update tracking for the
+--     redesigned event page (Goal 2). Slugs are generated server-side at
+--     creation (kebab-case from event_name, -2/-3 suffix on collision) and
+--     are immutable afterward. accent_color is a hex value from a fixed
+--     app-side preset list, never a free hex picker. lineup is a simple
+--     [{name, role}] array — no images, per the plan's own scope.
+ALTER TABLE events
+  ADD COLUMN IF NOT EXISTS slug          TEXT,
+  ADD COLUMN IF NOT EXISTS accent_color  TEXT,
+  ADD COLUMN IF NOT EXISTS lineup        JSONB NOT NULL DEFAULT '[]',
+  ADD COLUMN IF NOT EXISTS updated_at    TIMESTAMPTZ NOT NULL DEFAULT NOW();
+
+CREATE UNIQUE INDEX IF NOT EXISTS idx_events_slug ON events (slug) WHERE slug IS NOT NULL;
+
+-- Auto-touch updated_at on every row change, so the OG-image cache-busting
+-- key (Goal 2 share cards) never depends on the app remembering to set it.
+CREATE OR REPLACE FUNCTION touch_events_updated_at()
+RETURNS TRIGGER LANGUAGE plpgsql AS $$
+BEGIN
+  NEW.updated_at = NOW();
+  RETURN NEW;
+END;
+$$;
+
+DROP TRIGGER IF EXISTS trg_events_updated_at ON events;
+CREATE TRIGGER trg_events_updated_at
+  BEFORE UPDATE ON events
+  FOR EACH ROW EXECUTE FUNCTION touch_events_updated_at();
+
+
+-- 14. Organiser storefront profile fields (Goal 3). Handle is stored
+--     without the leading "@" — that's added only at link/render time.
+--     socials is JSONB rather than fixed columns since the plan doesn't
+--     enumerate a fixed platform list.
+ALTER TABLE users
+  ADD COLUMN IF NOT EXISTS handle      TEXT,
+  ADD COLUMN IF NOT EXISTS avatar_url  TEXT,
+  ADD COLUMN IF NOT EXISTS socials     JSONB NOT NULL DEFAULT '{}';
+
+CREATE UNIQUE INDEX IF NOT EXISTS idx_users_handle ON users (handle) WHERE handle IS NOT NULL;
+
+
+-- 15. Notify Me — organiser-scoped subscribers, not tied to any single
+--     event. unsubscribe_token has no expiry (unlike the OTP tables) since
+--     unsubscribe links should keep working indefinitely.
+CREATE TABLE IF NOT EXISTS organizer_subscribers (
+  id                UUID        PRIMARY KEY DEFAULT gen_random_uuid(),
+  organizer_id      UUID        NOT NULL REFERENCES users (id) ON DELETE CASCADE,
+  email             TEXT        NOT NULL,
+  phone             TEXT,
+  unsubscribe_token TEXT        NOT NULL UNIQUE DEFAULT encode(gen_random_bytes(24), 'hex'),
+  subscribed_at     TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+  unsubscribed_at   TIMESTAMPTZ,
+  UNIQUE (organizer_id, email)
+);
+
+CREATE INDEX IF NOT EXISTS idx_organizer_subscribers_organizer_id ON organizer_subscribers (organizer_id);
+CREATE INDEX IF NOT EXISTS idx_organizer_subscribers_token        ON organizer_subscribers (unsubscribe_token);
+
+
+-- 16. Fix get_events_hosted_counts (entry 12): nothing in the codebase ever
+--     sets events.status = 'completed', so the original status-only filter
+--     always returned 0. An event that's approved and whose date has passed
+--     has, in effect, happened — count on that instead of the unreachable
+--     status. Also the definition the organiser storefront (Goal 3) needs
+--     for "N events hosted" and its upcoming/past event split.
+CREATE OR REPLACE FUNCTION get_events_hosted_counts(organizer_ids UUID[])
+RETURNS TABLE(organizer_id UUID, hosted_count BIGINT)
+LANGUAGE sql AS $$
+  SELECT organizer_id, COUNT(*) FROM events
+  WHERE organizer_id = ANY(organizer_ids)
+    AND (status = 'completed' OR (status = 'approved' AND date < CURRENT_DATE))
+  GROUP BY organizer_id;
+$$;
+
+-- One-time backfill: every existing event (including the 3 already live)
+-- needs a slug before the app starts linking to /{slug} instead of
+-- /events/{id}. Same kebab-case + collision-suffix scheme the app uses at
+-- creation time, applied here once for pre-existing rows.
+DO $$
+DECLARE
+  ev RECORD;
+  base_slug TEXT;
+  candidate TEXT;
+  suffix INT;
+BEGIN
+  FOR ev IN SELECT id, event_name FROM events WHERE slug IS NULL ORDER BY created_at LOOP
+    base_slug := trim(both '-' from regexp_replace(lower(ev.event_name), '[^a-z0-9]+', '-', 'g'));
+    IF base_slug = '' THEN
+      base_slug := 'event';
+    END IF;
+    candidate := base_slug;
+    suffix := 2;
+    WHILE EXISTS (SELECT 1 FROM events WHERE slug = candidate) LOOP
+      candidate := base_slug || '-' || suffix;
+      suffix := suffix + 1;
+    END LOOP;
+    UPDATE events SET slug = candidate WHERE id = ev.id;
+  END LOOP;
+END $$;

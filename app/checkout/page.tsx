@@ -7,7 +7,7 @@ import { PublicNav } from '@/components/layout/PublicNav';
 import { Button } from '@/components/ui/Button';
 import { Input } from '@/components/ui/Input';
 import { formatNGN } from '@/lib/utils';
-import { serviceFeePerTicket } from '@/lib/fees';
+import { buyerTotalWithProcessing } from '@/lib/fees';
 
 interface CartItem {
   eventId: string;
@@ -35,10 +35,11 @@ export default function CheckoutPage() {
     }
   }, []);
 
-  const isFree     = (cart?.tierPrice ?? -1) === 0;
-  const subtotal   = cart ? cart.tierPrice * cart.quantity : 0;
-  const serviceFee = isFree || !cart ? 0 : serviceFeePerTicket(cart.tierPrice) * cart.quantity;
-  const total      = subtotal + serviceFee;
+  const isFree = (cart?.tierPrice ?? -1) === 0;
+  const { subtotal, serviceFee, processingFee, total } =
+    isFree || !cart
+      ? { subtotal: 0, serviceFee: 0, processingFee: 0, total: 0 }
+      : buyerTotalWithProcessing(cart.tierPrice, cart.quantity);
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -143,6 +144,12 @@ export default function CheckoutPage() {
                   <span style={{ color: 'var(--color-text)' }}>{formatNGN(serviceFee)}</span>
                 </div>
               )}
+              {!isFree && (
+                <div className="flex justify-between">
+                  <span style={{ color: 'var(--color-text-muted)' }}>Processing fee</span>
+                  <span style={{ color: 'var(--color-text)' }}>{formatNGN(processingFee)}</span>
+                </div>
+              )}
               <div className="flex justify-between font-bold pt-2 border-t" style={{ borderColor: 'var(--color-border)' }}>
                 <span style={{ color: 'var(--color-text)' }}>Total</span>
                 <span style={{ color: 'var(--color-text)' }}>{isFree ? 'Free' : formatNGN(total)}</span>
@@ -151,7 +158,7 @@ export default function CheckoutPage() {
 
             {!isFree && (
               <p className="text-[10px] leading-snug mb-4" style={{ color: 'var(--color-text-dim)' }}>
-                The service fee (2%, capped at ₦3,000 per ticket for tickets above ₦150,000) is non-refundable under any circumstances. Only the base ticket price is refunded if an event is cancelled. Paystack deducts their 1.5% processing fee from the payment on their end &#x2014; this is not added to your total.
+                The service fee (2%, capped at ₦3,000 per ticket for tickets above ₦150,000) and processing fee are non-refundable under any circumstances. Only the base ticket price is refunded if an event is cancelled.
               </p>
             )}
 
@@ -207,7 +214,7 @@ export default function CheckoutPage() {
 
               <Button type="submit" size="lg" fullWidth disabled={loading || !email}>
                 {loading
-                  ? (isFree ? 'Getting your ticket…' : 'Redirecting to Paystack…')
+                  ? (isFree ? 'Getting your ticket…' : 'Redirecting to payment…')
                   : (isFree ? 'Get Free Ticket' : `Pay ${formatNGN(total)}`)}
               </Button>
             </form>
@@ -216,7 +223,7 @@ export default function CheckoutPage() {
               {!isFree && (
                 <p className="text-xs text-center leading-relaxed" style={{ color: 'var(--color-text-dim)' }}>
                   <Lock size={11} className="inline mr-1 -mt-0.5" />
-                  You will be redirected to Paystack to complete payment securely.
+                  You will be redirected to our payment processor to complete payment securely.
                 </p>
               )}
               <p className="text-xs text-center" style={{ color: 'var(--color-text-dim)' }}>

@@ -3,6 +3,8 @@ import { getAuthUser } from '@/lib/server/auth';
 import { getServerSupabase } from '@/lib/supabase/server';
 import { v4 as uuidv4 } from 'uuid';
 import { notify } from '@/lib/server/notify';
+import { generateEventSlug } from '@/lib/server/slug';
+import { ACCENT_COLOR_PRESETS } from '@/lib/accentColors';
 
 export async function GET(req: NextRequest) {
   const user = await getAuthUser();
@@ -77,6 +79,10 @@ export async function POST(req: NextRequest) {
     const tiersJson = formData.get('tiers') as string;
     const bannerFile = formData.get('banner') as File | null;
     const venueProofFile = formData.get('venueProof') as File | null;
+    const accentColorRaw = formData.get('accentColor') as string | null;
+    const accentColor = accentColorRaw && ACCENT_COLOR_PRESETS.some(p => p.hex === accentColorRaw) ? accentColorRaw : null;
+    const lineupJson = formData.get('lineup') as string | null;
+    const lineup = lineupJson ? JSON.parse(lineupJson) : [];
 
     if (!name || !category || !description || !date || !time) {
       return NextResponse.json({ error: 'Missing required fields' }, { status: 400 });
@@ -116,9 +122,11 @@ export async function POST(req: NextRequest) {
     }
 
     const tiers = tiersJson ? JSON.parse(tiersJson) : [];
+    const slug = await generateEventSlug(db, name);
 
     const { data: eventData, error: insertError } = await db.from('events').insert({
       event_name: name,
+      slug,
       category,
       description,
       date,
@@ -137,6 +145,8 @@ export async function POST(req: NextRequest) {
       banner_url: bannerUrl,
       venue_proof_url: venueProofUrl,
       banner_color: 'from-purple-900 to-indigo-900',
+      accent_color: accentColor,
+      lineup,
       created_at: new Date().toISOString(),
     }).select('id').single();
 

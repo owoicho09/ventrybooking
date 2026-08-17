@@ -13,13 +13,13 @@ export async function GET(_req: NextRequest) {
 
     const { data: affiliates, error } = await db
       .from('affiliates')
-      .select('id, name, code, clicks, buys, event_id, created_at, event:events!affiliates_event_id_fkey(event_name)')
+      .select('id, name, code, clicks, buys, event_id, created_at, event:events!affiliates_event_id_fkey(event_name, slug)')
       .eq('organizer_id', user.sub)
       .order('created_at', { ascending: false });
 
     if (error) throw error;
 
-    type EventRow = { event_name: string };
+    type EventRow = { event_name: string; slug: string | null };
     const appUrl = process.env.NEXT_PUBLIC_APP_URL ?? '';
     const data = (affiliates ?? []).map(a => {
       const ev = (Array.isArray(a.event) ? a.event[0] : a.event) as EventRow | null;
@@ -31,7 +31,7 @@ export async function GET(_req: NextRequest) {
         buys: a.buys,
         eventId: a.event_id,
         eventName: ev?.event_name ?? '',
-        link: `${appUrl}/events/${a.event_id}?ref=${a.code}`,
+        link: `${appUrl}/${ev?.slug || `events/${a.event_id}`}?ref=${a.code}`,
       };
     });
 

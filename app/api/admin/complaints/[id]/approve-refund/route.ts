@@ -37,7 +37,7 @@ export async function POST(
 
     const { data: ticket, error: tErr } = await db
       .from('tickets')
-      .select('id, event_id, total_paid, tier_id, paystack_reference, status')
+      .select('id, event_id, total_paid, subtotal, tier_id, paystack_reference, status')
       .eq('id', complaint.ticket_id)
       .maybeSingle();
 
@@ -61,10 +61,11 @@ export async function POST(
     // Tier prices can be edited by the organizer after tickets are sold (e.g. early-bird
     // pricing that steps up over time), so re-reading ticket_tiers.price at refund time
     // refunds the wrong amount for any ticket sold before the price changed.
-    // total_paid is fixed at purchase and is the ticket's base price plus its own
-    // service fee, so reversing the service fee recovers exactly what the buyer paid
-    // for the ticket itself.
-    const refundAmount = basePriceFromTotalPaid(ticket.total_paid);
+    // total_paid is fixed at purchase and includes the buyer's service fee and
+    // processing fee on top of the ticket price. Tickets sold since the
+    // processing-fee migration store the exact base price in `subtotal`;
+    // older tickets fall back to reversing the (service-fee-only) total.
+    const refundAmount = ticket.subtotal ?? basePriceFromTotalPaid(ticket.total_paid);
 
     try {
       await refundTransaction({

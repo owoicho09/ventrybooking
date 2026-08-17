@@ -1,5 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { getServerSupabase } from '@/lib/supabase/server';
+import { getEventsHostedCounts } from '@/lib/server/eventsHosted';
 
 type RawTier = { id: string; name: string; price: number; available: number; sold: number };
 
@@ -19,6 +20,7 @@ function shapeEvent(row: any) {
   const locationHidden = row.location_hidden ?? false;
   return {
     id: row.id,
+    slug: row.slug,
     name: row.event_name,
     category: row.category,
     description: row.description,
@@ -42,9 +44,9 @@ function shapeEvent(row: any) {
 }
 
 const EVENT_SELECT = `
-  id, event_name, category, description, date, time, event_mode, venue, address, city, landmark, location_hidden,
+  id, slug, event_name, category, description, date, time, event_mode, venue, address, city, landmark, location_hidden,
   status, total_sold, banner_color, banner_url,
-  organizer:users!events_organizer_id_fkey(id, name, tier, verified, member_since, events_hosted),
+  organizer:users!events_organizer_id_fkey(id, name, tier, verified, member_since, events_hosted, handle),
   tiers:ticket_tiers(id, name, price, available, sold)
 `;
 
@@ -82,8 +84,17 @@ export async function GET(req: NextRequest) {
     const { data, error } = await qb;
     if (error) throw error;
 
+    const rows = data ?? [];
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    const organizerIds = rows.map((r: any) => r.organizer?.id).filter(Boolean);
+    const counts = await getEventsHostedCounts(db, organizerIds);
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    for (const row of rows as any[]) {
+      if (row.organizer) row.organizer.events_hosted = counts[row.organizer.id] ?? 0;
+    }
+
     return NextResponse.json(
-      { success: true, data: (data ?? []).map(shapeEvent) },
+      { success: true, data: rows.map(shapeEvent) },
       { headers: { 'Cache-Control': 'public, s-maxage=30, stale-while-revalidate=60' } }
     );
   } catch (err) {

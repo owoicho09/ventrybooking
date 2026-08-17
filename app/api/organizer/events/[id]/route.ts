@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from 'next/server';
 import { getAuthUser } from '@/lib/server/auth';
 import { getServerSupabase } from '@/lib/supabase/server';
 import { sendLocationUpdatedEmail, sendMeetingLinkUpdatedEmail } from '@/lib/server/email';
+import { ACCENT_COLOR_PRESETS } from '@/lib/accentColors';
 
 export async function GET(
   _req: NextRequest,
@@ -19,8 +20,8 @@ export async function GET(
     const { data: event, error } = await db
       .from('events')
       .select(`
-        id, event_name, category, description, date, time, event_mode, venue, address, city, landmark,
-        location_hidden, meeting_link, meeting_passcode, status, total_sold, banner_color, banner_url, organizer_id, created_at,
+        id, slug, event_name, category, description, date, time, event_mode, venue, address, city, landmark,
+        location_hidden, meeting_link, meeting_passcode, status, total_sold, banner_color, banner_url, accent_color, lineup, organizer_id, created_at,
         tiers:ticket_tiers(id, name, price, available, sold)
       `)
       .eq('id', id)
@@ -52,7 +53,7 @@ export async function PATCH(
 
     const { data: event } = await db
       .from('events')
-      .select('id, organizer_id, status, event_name, date, time, event_mode, venue, address, city, landmark, location_hidden, meeting_link, meeting_passcode')
+      .select('id, slug, organizer_id, status, event_name, date, time, event_mode, venue, address, city, landmark, location_hidden, meeting_link, meeting_passcode')
       .eq('id', id)
       .single();
 
@@ -65,17 +66,24 @@ export async function PATCH(
     let allowedFields: string[];
     if (event.status === 'approved') {
       // After approval: keep identity/date locked, but allow operational location updates.
-      allowedFields = ['description', 'banner_url', 'venue', 'address', 'city', 'landmark', 'location_hidden', 'meeting_link', 'meeting_passcode'];
+      allowedFields = ['description', 'banner_url', 'venue', 'address', 'city', 'landmark', 'location_hidden', 'meeting_link', 'meeting_passcode', 'accent_color', 'lineup'];
     } else {
       // Before approval: all fields except organizer_id, status and event_mode (mode is locked at creation)
-      allowedFields = ['event_name', 'description', 'date', 'time', 'venue', 'address', 'city', 'landmark', 'location_hidden', 'meeting_link', 'meeting_passcode', 'category', 'banner_url'];
+      allowedFields = ['event_name', 'description', 'date', 'time', 'venue', 'address', 'city', 'landmark', 'location_hidden', 'meeting_link', 'meeting_passcode', 'category', 'banner_url', 'accent_color', 'lineup'];
     }
 
-    const updates: Record<string, string | boolean | null> = {};
+    const updates: Record<string, string | boolean | null | { name: string; role: string }[]> = {};
     for (const key of allowedFields) {
       if (body[key] !== undefined) {
         if (key === 'location_hidden') {
           updates[key] = Boolean(body[key]);
+        } else if (key === 'accent_color') {
+          const value = body[key];
+          updates[key] = value && ACCENT_COLOR_PRESETS.some(p => p.hex === value) ? value : null;
+        } else if (key === 'lineup') {
+          updates[key] = Array.isArray(body[key])
+            ? body[key].map((a: { name?: string; role?: string }) => ({ name: String(a.name ?? '').trim(), role: String(a.role ?? '').trim() })).filter((a: { name: string }) => a.name)
+            : [];
         } else if (key === 'landmark' || key === 'meeting_passcode') {
           updates[key] = String(body[key] ?? '').trim() || null;
         } else {
@@ -125,6 +133,7 @@ export async function PATCH(
 
         notifyTicketBuyersOfLocationChange(db, {
           eventId: id,
+          eventSlug: event.slug,
           eventName: event.event_name,
           eventDate: event.date,
           eventTime: event.time,
@@ -144,6 +153,7 @@ async function notifyTicketBuyersOfLocationChange(
   db: ReturnType<typeof getServerSupabase>,
   event: {
     eventId: string;
+    eventSlug: string;
     eventName: string;
     eventDate: string;
     eventTime: string;
@@ -180,7 +190,7 @@ async function notifyTicketBuyersOfLocationChange(
         address: event.address,
         city: event.city,
         landmark: event.landmark,
-        eventUrl: `${process.env.NEXT_PUBLIC_APP_URL}/events/${event.eventId}`,
+        eventUrl: `${process.env.NEXT_PUBLIC_APP_URL}/${event.eventSlug}`,
       }).catch(err => console.error('sendLocationUpdatedEmail error', { to, err })),
     ),
   );
