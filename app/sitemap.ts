@@ -1,7 +1,8 @@
 import type { MetadataRoute } from 'next';
 import { getAllPosts } from '@/sanity/lib/queries';
 
-const baseUrl = 'https://ventrybooking.com';
+// www, not the apex — the apex 307-redirects to www.
+const baseUrl = 'https://www.ventrybooking.com';
 
 const staticRoutes: { path: string; changeFrequency: MetadataRoute.Sitemap[number]['changeFrequency']; priority: number }[] = [
   { path: '', changeFrequency: 'daily', priority: 1 },

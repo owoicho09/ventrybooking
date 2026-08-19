@@ -17,12 +17,11 @@ export async function POST(req: NextRequest) {
 
   if (event.event === 'charge.success') {
     const { reference, metadata, amount, customer } = event.data;
-    const { eventId, tierId, buyerEmail, buyerName, refCode } = metadata || {};
-    const quantity        = Number(metadata?.quantity) || 1;
+    const { eventId, items, buyerEmail, buyerName, refCode } = metadata || {};
     const marketingConsent = metadata?.marketingConsent === true;
 
-    if (!eventId || !tierId) {
-      console.error('Webhook: missing eventId or tierId in metadata', { reference });
+    if (!eventId || !Array.isArray(items) || items.length === 0) {
+      console.error('Webhook: missing eventId or items in metadata', { reference });
       notify(
         { type: 'admin' },
         {
@@ -51,8 +50,7 @@ export async function POST(req: NextRequest) {
       await createTicketFromPayment({
         reference,
         eventId,
-        tierId,
-        quantity,
+        items,
         totalPaidKobo,
         buyerEmail,
         buyerName,

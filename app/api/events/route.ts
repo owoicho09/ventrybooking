@@ -67,7 +67,21 @@ export async function GET(req: NextRequest) {
       .order('date', { ascending: true });
 
     if (query) {
-      qb = qb.or(`event_name.ilike.%${query}%,city.ilike.%${query}%,venue.ilike.%${query}%`);
+      // Organiser name isn't a column on `events`, so a same-table .ilike()
+      // can't reach it — resolve matching organiser ids first, then fold
+      // them into the .or() as an organizer_id.in.(...) clause alongside
+      // the direct column matches.
+      const { data: matchingOrganizers } = await db
+        .from('users')
+        .select('id')
+        .ilike('name', `%${query}%`);
+      const organizerIds = (matchingOrganizers ?? []).map(o => o.id);
+
+      const orClauses = [`event_name.ilike.%${query}%`, `city.ilike.%${query}%`, `venue.ilike.%${query}%`];
+      if (organizerIds.length > 0) {
+        orClauses.push(`organizer_id.in.(${organizerIds.join(',')})`);
+      }
+      qb = qb.or(orClauses.join(','));
     }
     if (category) {
       qb = qb.eq('category', category);

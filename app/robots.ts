@@ -1,6 +1,7 @@
 import type { MetadataRoute } from 'next';
 
-const baseUrl = 'https://ventrybooking.com';
+// www, not the apex — the apex 307-redirects to www.
+const baseUrl = 'https://www.ventrybooking.com';
 
 export default function robots(): MetadataRoute.Robots {
   return {

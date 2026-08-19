@@ -37,18 +37,23 @@ export async function POST(
     const evRaw   = anchor.event   as EvRow[]   | EvRow   | null | undefined;
     const tierRaw = anchor.tier    as TierRow[] | TierRow | null | undefined;
     const ev   = (Array.isArray(evRaw)   ? evRaw[0]   : evRaw)   ?? null;
-    const tier = (Array.isArray(tierRaw) ? tierRaw[0] : tierRaw) ?? null;
+    const anchorTier = (Array.isArray(tierRaw) ? tierRaw[0] : tierRaw) ?? null;
 
     // Fetch all tickets that belong to the same Paystack transaction so the
-    // resent email contains every QR code the buyer paid for.
+    // resent email contains every QR code the buyer paid for — each with its
+    // own tier name, since one order can now span multiple ticket tiers.
     const { data: siblings } = await db
       .from('tickets')
-      .select('id, refund_code, total_paid')
+      .select('id, refund_code, total_paid, tier:ticket_tiers!tickets_tier_id_fkey(name)')
       .eq('paystack_reference', anchor.paystack_reference)
       .order('purchased_at', { ascending: true });
 
-    const tickets = (siblings || [{ id: anchor.id, refund_code: anchor.id, total_paid: anchor.total_paid }])
-      .map(t => ({ ticketId: t.id, refundCode: t.refund_code }));
+    const tickets = (siblings && siblings.length > 0 ? siblings : [{ id: anchor.id, refund_code: anchor.id, total_paid: anchor.total_paid, tier: anchorTier }])
+      .map(t => {
+        const tRaw = t.tier as TierRow[] | TierRow | null | undefined;
+        const tierName = ((Array.isArray(tRaw) ? tRaw[0] : tRaw) ?? anchorTier)?.name || '';
+        return { ticketId: t.id, refundCode: t.refund_code, tierName };
+      });
 
     const totalPaid = (siblings || []).reduce((s, t) => s + (t.total_paid ?? 0), 0) || anchor.total_paid;
 
@@ -61,7 +66,6 @@ export async function POST(
       eventDate:   ev?.date || '',
       eventVenue:  ev?.venue || '',
       eventMode:   ev?.event_mode,
-      tierName:    tier?.name || '',
       totalPaid,
       bannerUrl:   ev?.banner_url ?? null,
     });

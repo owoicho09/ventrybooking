@@ -1,18 +1,27 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { getServerSupabase } from '@/lib/supabase/server';
 import { initializeTransaction } from '@/lib/server/paystack';
-import { buyerTotalWithProcessing } from '@/lib/server/fees';
+import { buyerTotalForItems } from '@/lib/server/fees';
 import { v4 as uuidv4 } from 'uuid';
+
+interface CartItem { tierId: string; quantity: number }
 
 export async function POST(req: NextRequest) {
   try {
-    const { eventId, tierId, quantity, buyerEmail, buyerName, marketingConsent, ref } = await req.json();
+    const { eventId, items, buyerEmail, buyerName, marketingConsent, ref } = await req.json();
 
-    if (!eventId || !tierId || !quantity || !buyerEmail) {
+    if (!eventId || !Array.isArray(items) || items.length === 0 || !buyerEmail) {
       return NextResponse.json({ error: 'Missing required fields' }, { status: 400 });
     }
-    if (quantity < 1 || quantity > 10) {
-      return NextResponse.json({ error: 'Quantity must be between 1 and 10' }, { status: 400 });
+    const cartItems = items as CartItem[];
+    for (const item of cartItems) {
+      if (!item.tierId || !item.quantity || item.quantity < 1 || item.quantity > 10) {
+        return NextResponse.json({ error: 'Each ticket tier must have a quantity between 1 and 10' }, { status: 400 });
+      }
+    }
+    // A tier can't appear twice — the buyer should have adjusted one quantity instead.
+    if (new Set(cartItems.map(i => i.tierId)).size !== cartItems.length) {
+      return NextResponse.json({ error: 'Duplicate ticket tier in order' }, { status: 400 });
     }
 
     const db = getServerSupabase();
@@ -32,27 +41,33 @@ export async function POST(req: NextRequest) {
       return NextResponse.json({ error: 'Event is not available for purchase' }, { status: 400 });
     }
 
-    // Get tier and check availability
-    const { data: tier } = await db
+    // Get every requested tier and check availability. Fetched in one query
+    // so a single missing/foreign tier can't sneak a wrong price through.
+    const { data: tiers } = await db
       .from('ticket_tiers')
       .select('id, name, price, available, sold')
-      .eq('id', tierId)
-      .eq('event_id', eventId)
-      .single();
+      .in('id', cartItems.map(i => i.tierId))
+      .eq('event_id', eventId);
 
-    if (!tier) {
-      return NextResponse.json({ error: 'Ticket tier not found' }, { status: 404 });
+    const tierById = new Map((tiers ?? []).map(t => [t.id, t]));
+    for (const item of cartItems) {
+      const tier = tierById.get(item.tierId);
+      if (!tier) {
+        return NextResponse.json({ error: 'Ticket tier not found' }, { status: 404 });
+      }
+      const remaining = tier.available - tier.sold;
+      if (remaining < item.quantity) {
+        return NextResponse.json({ error: `Only ${remaining} of "${tier.name}" remaining` }, { status: 400 });
+      }
     }
-    if (tier.price === 0) {
+
+    const { subtotal, serviceFee, processingFee, total } = buyerTotalForItems(
+      cartItems.map(i => ({ price: tierById.get(i.tierId)!.price, quantity: i.quantity })),
+    );
+    if (total === 0) {
       return NextResponse.json({ error: 'Use the free checkout endpoint for free tickets' }, { status: 400 });
     }
 
-    const remaining = tier.available - tier.sold;
-    if (remaining < quantity) {
-      return NextResponse.json({ error: `Only ${remaining} tickets remaining` }, { status: 400 });
-    }
-
-    const { subtotal, serviceFee, processingFee, total } = buyerTotalWithProcessing(tier.price, quantity);
     const reference = `VTR-${uuidv4().replace(/-/g, '').toUpperCase().slice(0, 12)}`;
     const appUrl = process.env.NEXT_PUBLIC_APP_URL!;
 
@@ -77,8 +92,7 @@ export async function POST(req: NextRequest) {
       callback_url: `${appUrl}/api/paystack/callback?ref=${reference}`,
       metadata: {
         eventId,
-        tierId,
-        quantity,
+        items: cartItems.map(i => ({ tierId: i.tierId, quantity: i.quantity })),
         buyerEmail,
         buyerName:        buyerName || '',
         marketingConsent: marketingConsent === true,
@@ -90,22 +104,26 @@ export async function POST(req: NextRequest) {
       },
     });
 
-    // Create a pending order record — non-critical; webhook is source of truth
+    // Create a pending order record — non-critical; webhook is source of truth.
+    // One row per event covers the whole cart via the `items` JSONB column;
+    // tier_id/quantity are kept populated with the first line for any code
+    // that still reads those columns directly.
     try {
       await db.from('pending_orders').insert({
         reference,
-        event_id:         eventId,
-        tier_id:          tierId,
-        quantity,
-        buyer_email:      buyerEmail,
-        buyer_name:       buyerName || '',
+        event_id:          eventId,
+        tier_id:           cartItems[0].tierId,
+        quantity:          cartItems[0].quantity,
+        items:             cartItems.map(i => ({ tier_id: i.tierId, quantity: i.quantity })),
+        buyer_email:       buyerEmail,
+        buyer_name:        buyerName || '',
         subtotal,
-        service_fee:      serviceFee,
-        processing_fee:   processingFee,
+        service_fee:       serviceFee,
+        processing_fee:    processingFee,
         total,
-        organizer_id:     event.organizer_id,
+        organizer_id:      event.organizer_id,
         marketing_consent: marketingConsent === true,
-        created_at:       new Date().toISOString(),
+        created_at:        new Date().toISOString(),
       });
     } catch { /* non-critical */ }
 

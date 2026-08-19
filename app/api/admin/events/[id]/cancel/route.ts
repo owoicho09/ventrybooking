@@ -206,8 +206,13 @@ export async function POST(
       .maybeSingle();
 
     if (payout) {
+      const { data: org } = await db
+        .from('users')
+        .select('platform_fee_rate')
+        .eq('id', event.organizer_id)
+        .maybeSingle();
       const newGross = Math.max(0, payout.gross - totalRefundedAmount);
-      const { fee, net } = calculateFees(newGross);
+      const { fee, net } = calculateFees(newGross, org?.platform_fee_rate);
       await db.from('payouts').update({ gross: newGross, fee, net }).eq('id', payout.id);
     }
   }

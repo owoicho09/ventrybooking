@@ -5,6 +5,7 @@ import { v4 as uuidv4 } from 'uuid';
 import { notify } from '@/lib/server/notify';
 import { generateEventSlug } from '@/lib/server/slug';
 import { ACCENT_COLOR_PRESETS } from '@/lib/accentColors';
+import { PLATFORM_FEE_RATE } from '@/lib/fees';
 
 export async function GET(req: NextRequest) {
   const user = await getAuthUser();
@@ -15,6 +16,8 @@ export async function GET(req: NextRequest) {
   const db = getServerSupabase();
   const { searchParams } = req.nextUrl;
   const status = searchParams.get('status');
+
+  const { data: org } = await db.from('users').select('platform_fee_rate').eq('id', user.sub).maybeSingle();
 
   let qb = db
     .from('events')
@@ -39,7 +42,7 @@ export async function GET(req: NextRequest) {
     totalSold: ((ev.tiers as RawTier[]) ?? []).reduce((sum, t) => sum + (t.sold ?? 0), 0),
   }));
 
-  return NextResponse.json({ success: true, data: mapped });
+  return NextResponse.json({ success: true, data: mapped, platformFeeRate: org?.platform_fee_rate ?? PLATFORM_FEE_RATE });
 }
 
 export async function POST(req: NextRequest) {

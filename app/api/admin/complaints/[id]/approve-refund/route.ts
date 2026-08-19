@@ -37,7 +37,7 @@ export async function POST(
 
     const { data: ticket, error: tErr } = await db
       .from('tickets')
-      .select('id, event_id, total_paid, subtotal, tier_id, paystack_reference, status')
+      .select('id, event_id, organizer_id, total_paid, subtotal, tier_id, paystack_reference, status')
       .eq('id', complaint.ticket_id)
       .maybeSingle();
 
@@ -125,8 +125,13 @@ export async function POST(
       .maybeSingle();
 
     if (payout) {
+      const { data: org } = await db
+        .from('users')
+        .select('platform_fee_rate')
+        .eq('id', ticket.organizer_id)
+        .maybeSingle();
       const newGross = Math.max(0, payout.gross - refundAmount);
-      const { fee, net } = calculateFees(newGross);
+      const { fee, net } = calculateFees(newGross, org?.platform_fee_rate);
       const { error: payoutErr } = await db.from('payouts').update({ gross: newGross, fee, net }).eq('id', payout.id);
       if (payoutErr) {
         console.error('approve-refund: payout adjustment failed', { ticketId: ticket.id, payoutId: payout.id, payoutErr });

@@ -4,7 +4,7 @@ import { useState, useEffect, useRef } from 'react';
 import { useRouter, useSearchParams } from 'next/navigation';
 import Link from 'next/link';
 import Image from 'next/image';
-import { Calendar, MapPin, Clock, ChevronRight, CheckCircle, Shield, Minus, Plus, AlertTriangle, Share2, Mic2 } from 'lucide-react';
+import { Calendar, MapPin, Clock, ChevronRight, CheckCircle, Shield, Minus, Plus, Share2, Mic2 } from 'lucide-react';
 import { Footer } from '@/components/layout/Footer';
 import { Button } from '@/components/ui/Button';
 import { Badge } from '@/components/ui/Badge';
@@ -13,6 +13,12 @@ import { serviceFeePerTicket, processingFee as computeProcessingFee } from '@/li
 import type { Event, TicketTier } from '@/types';
 import { EventReviews } from '@/components/events/EventReviews';
 import { useToast } from '@/components/ui/Toast';
+
+// Most organiser banners are portrait flyers, not wide landscape photos —
+// at 25vh/220px a cover-crop only ever revealed roughly the top 12% of a
+// typical portrait flyer's height, i.e. one line of text and nothing else
+// useful, no matter how it was cropped. This taller strip fixes that.
+const BANNER_HEIGHT = 'max(46vh, 380px)';
 
 interface EventDetailContentProps {
   /** The event's slug (or, for the legacy /events/[id] shim, its UUID) — whatever was fetched to resolve this page. */
@@ -77,7 +83,6 @@ export function EventDetailContent({ identifier }: EventDetailContentProps) {
   const preProcessingAmount = subtotal + serviceFee;
   const total               = allFree ? preProcessingAmount : Math.round(preProcessingAmount + computeProcessingFee(preProcessingAmount));
   const processingFee       = total - preProcessingAmount;
-  const multiTierWarning = selectedTiers.length > 1;
   const isOnline = event?.event_mode === 'online';
   const exactLocationVisible = event ? !event.location_hidden : false;
   const locationSummary = event
@@ -101,18 +106,17 @@ export function EventDetailContent({ identifier }: EventDetailContentProps) {
   const handlePurchase = async () => {
     if (!event || !hasSelection) return;
     if (selectedTiers.length === 0) return;
-    // Only the first selected tier is sent — multi-tier checkout not yet supported
-    const tier = selectedTiers[0];
-    const qty  = quantities[tier.id];
-    const ref  = sessionStorage.getItem(`ventry_ref_${event.id}`) || undefined;
+    const ref = sessionStorage.getItem(`ventry_ref_${event.id}`) || undefined;
     sessionStorage.setItem('ventry_cart', JSON.stringify({
       eventId:   event.id,
-      tierId:    tier.id,
-      quantity:  qty,
-      tierName:  tier.name,
       eventName: event.name,
       eventDate: event.date,
-      tierPrice: tier.price,
+      items: selectedTiers.map(tier => ({
+        tierId:    tier.id,
+        tierName:  tier.name,
+        tierPrice: tier.price,
+        quantity:  quantities[tier.id],
+      })),
       ref,
     }));
     router.push('/checkout');
@@ -231,13 +235,6 @@ export function EventDetailContent({ identifier }: EventDetailContentProps) {
           </div>
         )}
 
-        {multiTierWarning && (
-          <div className="flex items-start gap-2 rounded-lg p-3 text-xs"
-            style={{ backgroundColor: '#f59e0b15', color: 'var(--color-amber)' }}>
-            <AlertTriangle size={13} className="flex-shrink-0 mt-0.5" />
-            Only one ticket type can be purchased per order. Only the first selected tier will be checked out.
-          </div>
-        )}
         <Button fullWidth size="lg" disabled={!hasSelection || checkingOut} onClick={handlePurchase}>
           {checkingOut ? 'Loading…' : allFree ? 'Get Free Tickets' : 'Purchase Tickets'}
         </Button>
@@ -253,21 +250,30 @@ export function EventDetailContent({ identifier }: EventDetailContentProps) {
       <div
         className="relative"
         style={{
-          height: '25vh',
-          minHeight: '220px',
-          position: 'fixed',
-          top: 0,
-          left: 0,
-          right: 0,
-          zIndex: 0,
+          // Normal, static top banner — it scrolls away with the rest of
+          // the page like any other content. An earlier version pinned this
+          // with position:fixed so it stayed put while content scrolled
+          // over it, but that made the banner read as a page background:
+          // once you scrolled past the actual page content, the still-fixed
+          // image kept showing through the gap at the bottom/edges. A plain
+          // in-flow block avoids that entirely.
+          height: BANNER_HEIGHT,
         }}
       >
         {event.banner_url ? (
+          // object-contain looked "off" in practice: most organiser banners
+          // are portrait flyers, and letterboxing a tall image inside this
+          // short, full-bleed, wide strip leaves it a tiny sliver surrounded
+          // by dead space on anything wider than a phone. object-cover with
+          // a top-biased crop instead fills the strip cleanly on every
+          // screen size and keeps the part of the flyer that actually
+          // carries the title (almost always near the top).
           <Image
             src={event.banner_url}
             alt={event.name}
             fill
             className="object-cover"
+            style={{ objectPosition: 'center top' }}
             sizes="100vw"
             priority
           />
@@ -289,8 +295,8 @@ export function EventDetailContent({ identifier }: EventDetailContentProps) {
       </div>
 
       <div
-        className="relative z-10 max-w-7xl mx-auto px-6 py-8"
-        style={{ marginTop: 'calc(25vh + 16px)', backgroundColor: 'var(--color-bg)', minHeight: 'calc(75vh - 16px)' }}
+        className="max-w-7xl mx-auto px-6 py-8"
+        style={{ backgroundColor: 'var(--color-bg)' }}
       >
         <nav className="flex items-center gap-1.5 text-sm mb-8" style={{ color: 'var(--color-text-muted)' }}>
           <Link href="/" className="hover:text-[var(--color-text)] transition-colors">Home</Link>

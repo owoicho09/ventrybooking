@@ -54,13 +54,12 @@ async function sendEmail(opts: { to: string; subject: string; html: string; from
 export async function sendTicketEmail(params: {
   to: string;
   buyerName: string;
-  tickets: Array<{ ticketId: string; refundCode: string }>;
+  tickets: Array<{ ticketId: string; refundCode: string; tierName: string }>;
   paystackRef: string;
   eventName: string;
   eventDate: string;
   eventVenue: string;
   eventMode?: 'physical' | 'online';
-  tierName: string;
   subtotal?: number;
   serviceFee?: number;
   processingFee?: number;
@@ -74,12 +73,18 @@ export async function sendTicketEmail(params: {
   const { tickets } = params;
   const count = tickets.length;
 
-  const ticketBlocks = tickets.map(({ ticketId, refundCode }, i) => `
+  // Mixed-tier orders (e.g. 2 Regular + 1 VIP in one purchase) show a
+  // per-tier breakdown instead of a single "Tier × count" line.
+  const tierCounts = new Map<string, number>();
+  for (const t of tickets) tierCounts.set(t.tierName, (tierCounts.get(t.tierName) ?? 0) + 1);
+  const tierSummary = Array.from(tierCounts.entries()).map(([name, n]) => `${name} &times; ${n}`).join(', ');
+
+  const ticketBlocks = tickets.map(({ ticketId, refundCode, tierName }, i) => `
     <table width="100%" cellpadding="0" cellspacing="0"
       style="background:#12121a;border:1px solid #2d2d3d;border-radius:8px;margin-bottom:20px;">
       <tr><td style="padding:20px;">
         <p style="font-size:13px;font-weight:700;color:#a855f7;margin:0 0 12px;text-transform:uppercase;letter-spacing:0.05em;">
-          Ticket ${i + 1} of ${count} &mdash; ${params.tierName}
+          Ticket ${i + 1} of ${count} &mdash; ${tierName}
         </p>
         <div style="text-align:center;margin-bottom:16px;">
           <img src="${APP_URL}/api/tickets/${ticketId}/qr"
@@ -140,7 +145,7 @@ export async function sendTicketEmail(params: {
         <p class="label" style="margin:0 0 12px;">${esc(params.eventDate)}${isOnline ? ' &bull; Online Event' : ` &bull; ${esc(params.eventVenue)}`}</p>
         ${isOnline ? `<p style="margin:0 0 12px;color:#9ca3af;font-size:12px;">Your Zoom link will be emailed to you before the event, along with your reminders.</p>` : ''}
         <p style="margin:4px 0;color:#f1f0ff;font-size:13px;">
-          <strong>Ticket&nbsp;Type:</strong> ${params.tierName} &times; ${count}
+          <strong>Ticket&nbsp;Type:</strong> ${tierSummary}
         </p>
         ${params.totalPaid > 0 && params.subtotal != null && params.serviceFee != null && params.processingFee != null
           ? `<table width="100%" cellpadding="0" cellspacing="0" style="margin:10px 0 4px;">

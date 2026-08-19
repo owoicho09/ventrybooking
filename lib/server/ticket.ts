@@ -4,11 +4,15 @@ import { sendTicketEmail } from '@/lib/server/email';
 import { calculateFees, serviceFeePerTicket } from '@/lib/server/fees';
 import { notify } from '@/lib/server/notify';
 
+export interface CartItem {
+  tierId: string;
+  quantity: number;
+}
+
 export interface PaymentData {
   reference: string;
   eventId: string;
-  tierId: string;
-  quantity: number;
+  items: CartItem[];
   totalPaidKobo: number;
   buyerEmail?: string;
   buyerName?: string;
@@ -19,8 +23,9 @@ export interface PaymentData {
 
 /**
  * Idempotently creates individual ticket records from a verified Paystack payment.
- * One row is inserted per ticket — quantity=2 creates two rows with separate IDs,
- * QR codes, and refund codes. Returns the first ticket ID or null on failure.
+ * One row is inserted per ticket — an order of 2 Regular + 1 VIP creates three rows
+ * with separate IDs, QR codes, and refund codes across their respective tiers.
+ * Returns the first ticket ID or null on failure.
  *
  * Idempotency is enforced atomically via the `purchases` table: the first call
  * claims the paystack_reference with a PRIMARY KEY INSERT. Any concurrent or
@@ -59,16 +64,22 @@ export async function createTicketFromPayment(p: PaymentData): Promise<string | 
     return null;
   }
 
-  // ── Fetch event and tier in parallel ────────────────────────────
-  const [{ data: eventRow, error: eventErr }, { data: tierRow, error: tierErr }] = await Promise.all([
+  const items = (p.items ?? []).filter(i => i.tierId && i.quantity > 0);
+  if (items.length === 0) {
+    console.error('createTicketFromPayment: no items in payment', p.reference);
+    await notifyAdminFailure(p, 'Payment claimed but carried no ticket line items.');
+    return null;
+  }
+
+  // ── Fetch event and every requested tier in parallel ────────────
+  const [{ data: eventRow, error: eventErr }, { data: tierRows, error: tierErr }] = await Promise.all([
     db.from('events')
       .select('event_name, date, time, event_mode, venue, organizer_id, banner_url')
       .eq('id', p.eventId)
       .maybeSingle(),
     db.from('ticket_tiers')
-      .select('name, price')
-      .eq('id', p.tierId)
-      .maybeSingle(),
+      .select('id, name, price')
+      .in('id', items.map(i => i.tierId)),
   ]);
 
   if (eventErr || tierErr) {
@@ -76,56 +87,84 @@ export async function createTicketFromPayment(p: PaymentData): Promise<string | 
     await notifyAdminFailure(p, `Payment claimed but event/tier lookup failed: ${eventErr?.message || tierErr?.message}`);
     return null;
   }
-  if (!eventRow || !tierRow) {
-    console.error('createTicketFromPayment: event or tier not found', { eventId: p.eventId, tierId: p.tierId });
-    await notifyAdminFailure(p, `Payment claimed but event/tier no longer exists (eventId: ${p.eventId}, tierId: ${p.tierId}).`);
+  const tierById = new Map((tierRows ?? []).map(t => [t.id, t]));
+  const missingTier = items.find(i => !tierById.has(i.tierId));
+  if (!eventRow || missingTier) {
+    console.error('createTicketFromPayment: event or tier not found', { eventId: p.eventId, items });
+    await notifyAdminFailure(p, `Payment claimed but event/tier no longer exists (eventId: ${p.eventId}).`);
     return null;
   }
 
-  const qty = Math.max(1, p.quantity);
+  const { data: orgRow } = await db
+    .from('users')
+    .select('name, platform_fee_rate')
+    .eq('id', eventRow.organizer_id)
+    .maybeSingle();
 
-  const baseKobo = Math.floor(p.totalPaidKobo / qty);
-  const lastKobo = p.totalPaidKobo - baseKobo * (qty - 1);
-
-  const subtotal    = tierRow.price * qty;
-  const { fee, net } = calculateFees(subtotal);
   const email       = (p.buyerEmail || p.customerEmail || '').toLowerCase().trim();
   const purchasedAt = new Date().toISOString();
   const consent     = p.marketingConsent === true;
 
+  // Flatten items into one row per individual ticket, each carrying its own
+  // tier's subtotal/service fee. The processing fee is order-level (Paystack's
+  // rate/threshold/cap apply to the single amount actually charged, not per
+  // tier), so it's prorated across every ticket by its share of the combined
+  // pre-processing amount, with the very last ticket absorbing whatever
+  // rounding remainder is left — same pattern the single-tier code used
+  // within one tier, just generalized across tiers of differing price.
+  type TicketUnit = { tierId: string; tierName: string; subtotal: number; serviceFee: number };
+  const units: TicketUnit[] = [];
+  for (const item of items) {
+    const tier = tierById.get(item.tierId)!;
+    const serviceFee = serviceFeePerTicket(tier.price);
+    for (let i = 0; i < item.quantity; i++) {
+      units.push({ tierId: item.tierId, tierName: tier.name, subtotal: tier.price, serviceFee });
+    }
+  }
+
+  const subtotal        = units.reduce((s, u) => s + u.subtotal, 0);
+  const totalServiceFee = units.reduce((s, u) => s + u.serviceFee, 0);
+  const preProcessingTotal = subtotal + totalServiceFee;
+  const { fee, net } = calculateFees(subtotal, orgRow?.platform_fee_rate);
+
   const ticketIds: string[]   = [];
   const refundCodes: string[] = [];
-  for (let i = 0; i < qty; i++) {
+  for (let i = 0; i < units.length; i++) {
     ticketIds.push(generateTicketId());
     refundCodes.push(generateRefundCode());
   }
 
-  const perTicketSubtotal   = tierRow.price;
-  const perTicketServiceFee = serviceFeePerTicket(tierRow.price);
+  let allocatedKobo = 0;
+  const rows = units.map((unit, i) => {
+    const unitPreProcessing = unit.subtotal + unit.serviceFee;
+    const isLast = i === units.length - 1;
+    const totalPaidKobo = isLast
+      ? p.totalPaidKobo - allocatedKobo
+      : Math.floor(p.totalPaidKobo * (preProcessingTotal > 0 ? unitPreProcessing / preProcessingTotal : 1 / units.length));
+    if (!isLast) allocatedKobo += totalPaidKobo;
+    const totalPaid = totalPaidKobo / 100;
 
-  const rows = ticketIds.map((id, i) => {
-    const totalPaid = (i < qty - 1 ? baseKobo : lastKobo) / 100;
     return {
-      id,
-      event_id:           p.eventId,
-      tier_id:            p.tierId,
-      organizer_id:       eventRow.organizer_id,
-      buyer_name:         p.buyerName || email,
-      buyer_email:        email,
-      quantity:           1,
-      total_paid:         totalPaid,
+      id:                  ticketIds[i],
+      event_id:            p.eventId,
+      tier_id:             unit.tierId,
+      organizer_id:        eventRow.organizer_id,
+      buyer_name:          p.buyerName || email,
+      buyer_email:         email,
+      quantity:            1,
+      total_paid:          totalPaid,
       // Exact breakdown, persisted so refunds never need to reverse-engineer
       // it from total_paid. processing_fee absorbs the per-ticket proration
       // remainder, so the three columns always sum exactly to total_paid.
-      subtotal:           perTicketSubtotal,
-      service_fee:        perTicketServiceFee,
-      processing_fee:     totalPaid - perTicketSubtotal - perTicketServiceFee,
-      status:             'valid',
-      purchased_at:       purchasedAt,
-      refund_code:        refundCodes[i],
-      qr_token:           id,
-      paystack_reference: p.reference,
-      marketing_consent:  consent,
+      subtotal:            unit.subtotal,
+      service_fee:         unit.serviceFee,
+      processing_fee:      totalPaid - unit.subtotal - unit.serviceFee,
+      status:              'valid',
+      purchased_at:        purchasedAt,
+      refund_code:         refundCodes[i],
+      qr_token:            ticketIds[i],
+      paystack_reference:  p.reference,
+      marketing_consent:   consent,
     };
   });
 
@@ -137,8 +176,8 @@ export async function createTicketFromPayment(p: PaymentData): Promise<string | 
   }
 
   await Promise.all([
-    db.rpc('increment_tier_sold', { tier_id: p.tierId, amount: qty }),
-    upsertPayout(db, p.eventId, eventRow, subtotal, fee, net),
+    ...items.map(item => db.rpc('increment_tier_sold', { tier_id: item.tierId, amount: item.quantity })),
+    upsertPayout(db, p.eventId, eventRow, orgRow?.name ?? '', subtotal, fee, net),
   ]);
 
   if (p.refCode) {
@@ -155,12 +194,17 @@ export async function createTicketFromPayment(p: PaymentData): Promise<string | 
     })();
   }
 
+  const totalQty = units.length;
+  const tierCounts = new Map<string, number>();
+  for (const u of units) tierCounts.set(u.tierName, (tierCounts.get(u.tierName) ?? 0) + 1);
+  const tierSummary = Array.from(tierCounts.entries()).map(([name, n]) => `${n} × ${name}`).join(', ');
+
   notify(
     { type: 'organizer', id: eventRow.organizer_id },
     {
       notifType: 'purchase',
-      title:     `${qty} ticket${qty > 1 ? 's' : ''} sold — ${eventRow.event_name}`,
-      body:      `${p.buyerName || email} purchased ${qty} × ${tierRow.name}`,
+      title:     `${totalQty} ticket${totalQty > 1 ? 's' : ''} sold — ${eventRow.event_name}`,
+      body:      `${p.buyerName || email} purchased ${tierSummary}`,
       link:      '/organizer/dashboard',
     },
   ).catch(err => console.error('createTicketFromPayment: notify error', err));
@@ -169,16 +213,15 @@ export async function createTicketFromPayment(p: PaymentData): Promise<string | 
     await sendTicketEmail({
       to:          email,
       buyerName:   p.buyerName || '',
-      tickets:     ticketIds.map((id, i) => ({ ticketId: id, refundCode: refundCodes[i] })),
+      tickets:     rows.map((r, i) => ({ ticketId: r.id, refundCode: refundCodes[i], tierName: units[i].tierName })),
       paystackRef: p.reference,
       eventName:   eventRow.event_name,
       eventDate:   eventRow.date,
       eventVenue:  eventRow.venue,
       eventMode:   eventRow.event_mode,
-      tierName:    tierRow.name,
       subtotal:      subtotal,
-      serviceFee:    perTicketServiceFee * qty,
-      processingFee: (p.totalPaidKobo / 100) - subtotal - perTicketServiceFee * qty,
+      serviceFee:    totalServiceFee,
+      processingFee: (p.totalPaidKobo / 100) - subtotal - totalServiceFee,
       totalPaid:   p.totalPaidKobo / 100,
       bannerUrl:   eventRow.banner_url,
     });
@@ -189,7 +232,7 @@ export async function createTicketFromPayment(p: PaymentData): Promise<string | 
       {
         notifType: 'email_failed',
         title:     `Ticket email failed — ${eventRow.event_name}`,
-        body:      `${p.buyerName || email} (${email}) bought ${qty} ticket(s) but the confirmation email failed to send. Ticket: ${ticketIds[0]}. Resend it from the ticket's admin page.`,
+        body:      `${p.buyerName || email} (${email}) bought ${totalQty} ticket(s) but the confirmation email failed to send. Ticket: ${ticketIds[0]}. Resend it from the ticket's admin page.`,
         link:      `/admin/buyers?search=${encodeURIComponent(email)}`,
       },
     ).catch(notifyErr => console.error('createTicketFromPayment: notify-admin error', notifyErr));
@@ -215,20 +258,15 @@ async function upsertPayout(
   db: ReturnType<typeof getServerSupabase>,
   eventId: string,
   eventRow: { event_name: string; date: string; organizer_id: string },
+  organizerName: string,
   subtotal: number,
   fee: number,
   net: number,
 ) {
-  const { data: org } = await db
-    .from('users')
-    .select('name')
-    .eq('id', eventRow.organizer_id)
-    .maybeSingle();
-
   await db.rpc('upsert_payout', {
     p_event_id:       eventId,
     p_organizer_id:   eventRow.organizer_id,
-    p_organizer_name: org?.name ?? '',
+    p_organizer_name: organizerName,
     p_event_name:     eventRow.event_name,
     p_date:           eventRow.date,
     p_gross:          subtotal,

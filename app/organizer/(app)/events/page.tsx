@@ -67,11 +67,17 @@ function TierBar({ tiers }: { tiers: Tier[] }) {
 export default function OrganizerEventsPage() {
   const [events, setEvents] = useState<OrgEvent[]>([]);
   const [loading, setLoading] = useState(true);
+  const [platformFeeRate, setPlatformFeeRate] = useState(PLATFORM_FEE_RATE);
 
   useEffect(() => {
     fetch('/api/organizer/events')
       .then(r => r.json())
-      .then(d => { if (d.success) setEvents(d.data); })
+      .then(d => {
+        if (d.success) {
+          setEvents(d.data);
+          if (typeof d.platformFeeRate === 'number') setPlatformFeeRate(d.platformFeeRate);
+        }
+      })
       .catch(console.error)
       .finally(() => setLoading(false));
   }, []);
@@ -96,7 +102,7 @@ export default function OrganizerEventsPage() {
             <Tbody>
               {events.map((event) => {
                 const gross      = event.tiers?.reduce((s, t) => s + t.price * t.sold, 0) || 0;
-                const netRevenue = Math.round(gross * (1 - PLATFORM_FEE_RATE));
+                const netRevenue = Math.round(gross * (1 - platformFeeRate));
                 return (
                   <Tr key={event.id}>
                     <Td>

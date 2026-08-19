@@ -12,12 +12,18 @@ export {
   serviceFeePerTicket,
   processingFee,
   buyerTotalWithProcessing,
+  buyerTotalForItems,
   basePriceFromTotalPaid,
 } from '@/lib/fees';
 
-/** Platform fee deducted from organizer gross payout (3%). */
-export function calculateFees(grossAmount: number) {
-  const fee = Math.round(grossAmount * PLATFORM_FEE_RATE);
+/**
+ * Platform fee deducted from organizer gross payout. Defaults to the 3%
+ * standard rate for new organizers; pass an organizer's own
+ * `platform_fee_rate` (e.g. 0.025 for accounts grandfathered before the
+ * 3% rate took effect) to charge their actual rate instead.
+ */
+export function calculateFees(grossAmount: number, rate: number = PLATFORM_FEE_RATE) {
+  const fee = Math.round(grossAmount * rate);
   const net = grossAmount - fee;
   return { gross: grossAmount, fee, net };
 }

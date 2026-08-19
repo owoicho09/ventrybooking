@@ -248,3 +248,23 @@ BEGIN
     UPDATE events SET slug = candidate WHERE id = ev.id;
   END LOOP;
 END $$;
+
+
+-- 17. Per-organiser platform fee rate. The 3% platform fee used to be a
+--     single hardcoded constant applied to every organiser. New organisers
+--     are onboarded at 3% (the column default), but every organiser account
+--     that existed before this migration is grandfathered at the 2.5% rate
+--     they originally signed up under.
+ALTER TABLE users ADD COLUMN IF NOT EXISTS platform_fee_rate NUMERIC NOT NULL DEFAULT 0.03;
+
+UPDATE users SET platform_fee_rate = 0.025 WHERE created_at < '2026-08-17';
+
+
+-- 18. Multi-tier checkout. A single order can now contain more than one
+--     ticket tier (e.g. 2 Regular + 1 VIP together) instead of being
+--     restricted to one tier per purchase. `items` carries the full list of
+--     {tier_id, quantity} lines for the pending_orders reconciliation safety
+--     net (see lib/server/reconcile.ts); tier_id/quantity are still populated
+--     with the order's first line for any older code path that reads them
+--     directly.
+ALTER TABLE pending_orders ADD COLUMN IF NOT EXISTS items JSONB NOT NULL DEFAULT '[]';

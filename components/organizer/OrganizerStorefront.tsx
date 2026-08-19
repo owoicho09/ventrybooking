@@ -130,8 +130,30 @@ export function OrganizerStorefront({ handle }: { handle: string }) {
           </div>
         </div>
 
+        {/* Upcoming events */}
+        <div className="mb-12">
+          <h2 className="text-lg font-semibold mb-4" style={{ color: 'var(--color-text)' }}>Upcoming Events</h2>
+          {upcoming.length === 0 ? (
+            <p className="text-sm" style={{ color: 'var(--color-text-muted)' }}>No upcoming events right now.</p>
+          ) : (
+            <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-5">
+              {upcoming.map(event => <EventCard key={event.id} event={event} />)}
+            </div>
+          )}
+        </div>
+
+        {/* Past events */}
+        {past.length > 0 && (
+          <div className="mb-12">
+            <h2 className="text-lg font-semibold mb-4" style={{ color: 'var(--color-text)' }}>Past Events</h2>
+            <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-5">
+              {past.map(event => <EventCard key={event.id} event={event} variant="compact" />)}
+            </div>
+          </div>
+        )}
+
         {/* Notify Me */}
-        <div className="rounded-xl border p-5 mb-12" style={{ backgroundColor: 'var(--color-surface)', borderColor: 'var(--color-border)' }}>
+        <div className="rounded-xl border p-5" style={{ backgroundColor: 'var(--color-surface)', borderColor: 'var(--color-border)' }}>
           {subscribed ? (
             <p className="text-sm flex items-center gap-2" style={{ color: 'var(--color-green)' }}>
               <CheckCircle size={16} />You&apos;ll get an email when {organizer.name} announces a new event.
@@ -147,32 +169,10 @@ export function OrganizerStorefront({ handle }: { handle: string }) {
                   <Input value={phone} onChange={e => setPhone(e.target.value)} type="tel" placeholder="Phone (optional)" />
                 </div>
               </div>
-              <Button type="submit" disabled={subscribing || !email}>{subscribing ? 'Saving…' : 'Notify Me'}</Button>
+              <Button type="submit" disabled={subscribing || !email}>{subscribing ? 'Subscribing…' : 'Notify Me'}</Button>
             </form>
           )}
         </div>
-
-        {/* Upcoming events */}
-        <div className="mb-12">
-          <h2 className="text-lg font-semibold mb-4" style={{ color: 'var(--color-text)' }}>Upcoming Events</h2>
-          {upcoming.length === 0 ? (
-            <p className="text-sm" style={{ color: 'var(--color-text-muted)' }}>No upcoming events right now.</p>
-          ) : (
-            <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-5">
-              {upcoming.map(event => <EventCard key={event.id} event={event} />)}
-            </div>
-          )}
-        </div>
-
-        {/* Past events */}
-        {past.length > 0 && (
-          <div>
-            <h2 className="text-lg font-semibold mb-4" style={{ color: 'var(--color-text)' }}>Past Events</h2>
-            <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-5">
-              {past.map(event => <EventCard key={event.id} event={event} variant="compact" />)}
-            </div>
-          </div>
-        )}
       </div>
       <Footer />
     </div>

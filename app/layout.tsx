@@ -27,7 +27,11 @@ const jetbrainsMono = JetBrains_Mono({
 });
 
 export const metadata: Metadata = {
-  metadataBase: new URL('https://ventrybooking.com'),
+  // www, not the bare apex — the apex 307-redirects to www, and link-preview
+  // crawlers (WhatsApp, etc.) generally don't follow redirects when fetching
+  // og:image, so an apex-based metadataBase silently breaks every share
+  // preview's image in favor of a generic fallback.
+  metadataBase: new URL('https://www.ventrybooking.com'),
 
   title: 'Ventry — Your Ticket to Every Experience',
   description:

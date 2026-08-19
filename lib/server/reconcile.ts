@@ -50,11 +50,16 @@ export async function reconcilePendingOrders() {
         ? Math.round(declaredTotal * 100)
         : result.amount;
 
+      // `items` covers multi-tier orders; older rows written before that
+      // column existed fall back to their single tier_id/quantity pair.
+      const items = Array.isArray(order.items) && order.items.length > 0
+        ? order.items.map((i: { tier_id: string; quantity: number }) => ({ tierId: i.tier_id, quantity: i.quantity }))
+        : [{ tierId: order.tier_id, quantity: order.quantity }];
+
       const ticketId = await createTicketFromPayment({
         reference:         order.reference,
         eventId:           order.event_id,
-        tierId:            order.tier_id,
-        quantity:          order.quantity,
+        items,
         totalPaidKobo,
         buyerEmail:        order.buyer_email,
         buyerName:         order.buyer_name,

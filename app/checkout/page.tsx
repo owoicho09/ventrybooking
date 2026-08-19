@@ -7,16 +7,20 @@ import { PublicNav } from '@/components/layout/PublicNav';
 import { Button } from '@/components/ui/Button';
 import { Input } from '@/components/ui/Input';
 import { formatNGN } from '@/lib/utils';
-import { buyerTotalWithProcessing } from '@/lib/fees';
+import { buyerTotalForItems } from '@/lib/fees';
 
-interface CartItem {
-  eventId: string;
+interface CartLine {
   tierId: string;
-  quantity: number;
   tierName: string;
+  tierPrice: number;
+  quantity: number;
+}
+
+interface Cart {
+  eventId: string;
   eventName: string;
   eventDate: string;
-  tierPrice: number;
+  items: CartLine[];
   ref?: string;
 }
 
@@ -26,7 +30,7 @@ export default function CheckoutPage() {
   const [marketingConsent, setMarketingConsent] = useState(false);
   const [loading, setLoading]                 = useState(false);
   const [error, setError]                     = useState('');
-  const [cart, setCart]                       = useState<CartItem | null>(null);
+  const [cart, setCart]                       = useState<Cart | null>(null);
 
   useEffect(() => {
     const raw = sessionStorage.getItem('ventry_cart');
@@ -35,11 +39,10 @@ export default function CheckoutPage() {
     }
   }, []);
 
-  const isFree = (cart?.tierPrice ?? -1) === 0;
-  const { subtotal, serviceFee, processingFee, total } =
-    isFree || !cart
-      ? { subtotal: 0, serviceFee: 0, processingFee: 0, total: 0 }
-      : buyerTotalWithProcessing(cart.tierPrice, cart.quantity);
+  const { subtotal, serviceFee, processingFee, total } = cart
+    ? buyerTotalForItems(cart.items.map(i => ({ price: i.tierPrice, quantity: i.quantity })))
+    : { subtotal: 0, serviceFee: 0, processingFee: 0, total: 0 };
+  const isFree = total === 0;
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -53,8 +56,7 @@ export default function CheckoutPage() {
           headers: { 'Content-Type': 'application/json' },
           body: JSON.stringify({
             eventId: cart.eventId,
-            tierId: cart.tierId,
-            quantity: cart.quantity,
+            items: cart.items.map(i => ({ tierId: i.tierId, quantity: i.quantity })),
             buyerEmail: email.trim().toLowerCase(),
             buyerName: buyerName.trim(),
             marketingConsent,
@@ -74,8 +76,7 @@ export default function CheckoutPage() {
           headers: { 'Content-Type': 'application/json' },
           body: JSON.stringify({
             eventId: cart.eventId,
-            tierId: cart.tierId,
-            quantity: cart.quantity,
+            items: cart.items.map(i => ({ tierId: i.tierId, quantity: i.quantity })),
             buyerEmail: email.trim().toLowerCase(),
             buyerName: buyerName.trim(),
             marketingConsent,
@@ -128,9 +129,13 @@ export default function CheckoutPage() {
               <p className="text-sm mt-0.5" style={{ color: 'var(--color-text-muted)' }}>
                 {new Date(cart.eventDate).toLocaleDateString('en-NG', { day: 'numeric', month: 'long', year: 'numeric' })}
               </p>
-              <p className="text-sm" style={{ color: 'var(--color-text-muted)' }}>
-                {cart.tierName} &times; {cart.quantity}
-              </p>
+              <div className="flex flex-col gap-0.5">
+                {cart.items.map(item => (
+                  <p key={item.tierId} className="text-sm" style={{ color: 'var(--color-text-muted)' }}>
+                    {item.tierName} &times; {item.quantity}
+                  </p>
+                ))}
+              </div>
             </div>
 
             <div className="flex flex-col gap-1.5 text-sm mb-4 pt-3 border-t" style={{ borderColor: 'var(--color-border)' }}>

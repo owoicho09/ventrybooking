@@ -36,18 +36,26 @@ export function processingFee(preProcessingAmount: number): number {
 }
 
 /**
- * Full buyer-facing total: ticket subtotal + service fee + processing fee.
- * The total is rounded to the nearest Naira (money is displayed whole-Naira
- * throughout the app); the displayed processing fee is derived as the
- * remainder so the four displayed lines always sum exactly to the total,
- * and the amount sent to the payment processor is always a clean integer.
+ * Full buyer-facing total for a cart of one or more ticket tiers in a single
+ * order. The service fee is still per-ticket (each line's own price), but
+ * the processing fee is computed once on the combined pre-processing
+ * amount — Paystack's rate/threshold/cap apply to the one amount actually
+ * charged, not to each tier independently. The total is rounded to the
+ * nearest Naira; the displayed processing fee is derived as the remainder
+ * so the four displayed lines always sum exactly to the total, and the
+ * amount sent to the payment processor is always a clean integer.
  */
-export function buyerTotalWithProcessing(ticketPrice: number, quantity: number) {
-  const subtotal            = ticketPrice * quantity;
-  const serviceFee          = serviceFeePerTicket(ticketPrice) * quantity;
+export function buyerTotalForItems(items: { price: number; quantity: number }[]) {
+  const subtotal            = items.reduce((s, i) => s + i.price * i.quantity, 0);
+  const serviceFee          = items.reduce((s, i) => s + serviceFeePerTicket(i.price) * i.quantity, 0);
   const preProcessingAmount = subtotal + serviceFee;
   const total               = Math.round(preProcessingAmount + processingFee(preProcessingAmount));
   return { subtotal, serviceFee, processingFee: total - preProcessingAmount, total };
+}
+
+/** Single-tier convenience wrapper around {@link buyerTotalForItems}. */
+export function buyerTotalWithProcessing(ticketPrice: number, quantity: number) {
+  return buyerTotalForItems([{ price: ticketPrice, quantity }]);
 }
 
 /**
