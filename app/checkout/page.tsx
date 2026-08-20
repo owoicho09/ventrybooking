@@ -217,6 +217,12 @@ export default function CheckoutPage() {
                 </span>
               </label>
 
+              <p className="text-[11px] leading-relaxed" style={{ color: 'var(--color-text-dim)' }}>
+                By {isFree ? 'getting this ticket' : 'purchasing'} you agree to Ventry&apos;s{' '}
+                <Link href="/terms/buyers" className="underline" style={{ color: 'var(--color-text-muted)' }}>Buyer Terms of Use</Link>{' '}
+                and <Link href="/refund-policy" className="underline" style={{ color: 'var(--color-text-muted)' }}>Refund Policy</Link>.
+              </p>
+
               <Button type="submit" size="lg" fullWidth disabled={loading || !email}>
                 {loading
                   ? (isFree ? 'Getting your ticket…' : 'Redirecting to payment…')

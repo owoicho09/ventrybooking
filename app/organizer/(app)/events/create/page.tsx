@@ -2,6 +2,7 @@
 
 import { useState } from 'react';
 import { useRouter } from 'next/navigation';
+import Link from 'next/link';
 import { Plus, Trash2, Upload } from 'lucide-react';
 import { Input, Textarea } from '@/components/ui/Input';
 import { Select } from '@/components/ui/Select';
@@ -293,6 +294,10 @@ export default function CreateEventPage() {
             Your event will be reviewed within <strong style={{ color: 'var(--color-text)' }}>2-4 business days</strong> before going live.
           </p>
         </div>
+        <p className="text-xs leading-relaxed" style={{ color: 'var(--color-text-dim)' }}>
+          By listing this event you agree to Ventry&apos;s{' '}
+          <Link href="/terms/organisers" className="underline" style={{ color: 'var(--color-text-muted)' }}>Organiser Terms of Use</Link>.
+        </p>
         <Button type="submit" size="lg" fullWidth disabled={loading}>
           {loading ? 'Submitting...' : 'Submit for Review'}
         </Button>

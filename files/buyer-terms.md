@@ -1,6 +1,6 @@
 # Ventry Buyer Terms of Use
 
-Ventry Solutions | ventrybooking.com | Version 1.0 | Effective 16 August 2026
+Ventry Solutions | ventrybooking.com | Version 1.1 | Effective 19 August 2026
 
 These terms govern your use of Ventry as a ticket buyer. By purchasing a ticket through ventrybooking.com you agree to them. Please read section 4 and section 6 carefully, as they set out exactly what you pay and when you are entitled to a refund.
 
@@ -108,6 +108,7 @@ These rules exist because a buyer who bought a ticket for an event in Enugu cann
 ## 8. Your ticket
 
 - Each ticket carries a unique QR code and admits the number of people stated on it, once.
+- You may buy tickets of different types in a single order. Each ticket is issued and priced separately, and the service fee is calculated on each ticket individually.
 - Scanning and admission are carried out by the organiser and the organiser's staff at the venue. Ventry provides the QR infrastructure but does not staff or control entry.
 - Do not share images of your QR code publicly. A ticket that has already been scanned cannot be scanned again, and Ventry is not responsible if someone else uses a code you have shared.
 - Tickets may not be resold at a markup or offered for commercial resale through any third party.
@@ -164,9 +165,24 @@ Nothing in these terms excludes any liability that cannot be excluded under Nige
 
 ## 12. Communications
 
-By purchasing a ticket you agree to receive transactional messages from Ventry relating to your purchase, including your ticket confirmation, event reminders, and notifications of any change to the event. These are not marketing messages and cannot be opted out of while you hold a valid ticket.
+### 12.1 Transactional messages
 
-You may separately choose to be notified about an organiser's future events. That is optional and you can unsubscribe at any time.
+By purchasing a ticket you agree to receive messages from Ventry relating to your purchase, including your ticket confirmation, event reminders, and notifications of any change to the event. These are not marketing messages and cannot be opted out of while you hold a valid ticket.
+
+### 12.2 Optional marketing
+
+At checkout you are offered two separate and optional choices. Ticking neither has no effect on your ticket.
+
+| You may choose to receive | What that means |
+| --- | --- |
+| Updates from the organiser | News of that organiser's future events. Written by them, reviewed and sent by Ventry. The organiser never receives your email address. |
+| Updates from Ventry | Events coming up across the platform, new features, and platform news, sent by Ventry. |
+
+These are independent. Agreeing to hear from an organiser does not subscribe you to Ventry, and agreeing to hear from Ventry does not subscribe you to any organiser. Each carries its own unsubscribe link and you may withdraw either at any time without affecting the other.
+
+Mail from an organiser arrives in that organiser's name but is sent by Ventry, and every such message is reviewed by Ventry before it is sent. Replies go to support@ventrybooking.com, not to the organiser.
+
+Your email address is never given to an organiser. Organisers see only the name used to purchase. Where an organiser mails their audience, Ventry reviews the message and sends it on their behalf.
 
 ## 13. Changes to these terms
 

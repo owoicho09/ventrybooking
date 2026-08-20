@@ -1,6 +1,6 @@
 # Ventry Refund Policy
 
-Ventry Solutions | ventrybooking.com | Version 2.0 | Effective 16 August 2026
+Ventry Solutions | ventrybooking.com | Version 2.1 | Effective 19 August 2026
 
 This policy explains when a Ventry ticket is refunded, what portion of your payment is returned, and how to request a refund. It applies to every ticket sold on ventrybooking.com and forms part of the Ventry Buyer Terms of Use and the Ventry Organiser Terms of Use.
 
@@ -34,6 +34,10 @@ The Ventry service fee and the processing fee are non-refundable under all circu
 | Processing fee | No |
 
 Example: a ₦16,500 ticket bought for ₦17,187.82 in total is refunded at ₦16,500.
+
+### 2.1 Orders containing more than one ticket
+
+Where an order contains several tickets, refunds are calculated per ticket. If a refund applies to the whole event, every ticket in the order is refunded at its own ticket price. Where you request a refund under a change window and hold tickets of more than one type, you may request a refund of some or all of them; any ticket refunded is invalidated immediately, and any ticket you keep remains valid.
 
 ## 3. Escrow: why refunds are possible
 

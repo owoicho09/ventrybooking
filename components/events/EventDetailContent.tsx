@@ -397,12 +397,18 @@ export function EventDetailContent({ identifier }: EventDetailContentProps) {
             </div>
 
             <div className="rounded-xl border p-5" style={{ backgroundColor: 'var(--color-surface)', borderColor: 'var(--color-border)' }}>
-              <h3 className="font-semibold mb-3" style={{ color: 'var(--color-text)' }}>Refund Policy</h3>
-              <ul className="flex flex-col gap-2">
-                {['Base ticket price refunded if the event is cancelled by the organizer.', 'Base ticket price refunded if the event is flagged as fraudulent by Ventry.', 'No refunds for no-shows or buyer change of mind after ticket purchase.', 'The Ventry service fee (2%, capped at ₦3,000 per ticket for tickets above ₦150,000) and processing fee are non-refundable under any circumstances.', 'Refunds are processed within 3-5 business days to your original payment method.'].map((item) => (
-                  <li key={item} className="flex items-start gap-2 text-sm" style={{ color: 'var(--color-text-muted)' }}><CheckCircle size={14} className="flex-shrink-0 mt-0.5" style={{ color: 'var(--color-green)' }} />{item}</li>
-                ))}
-              </ul>
+              <h3 className="font-semibold mb-2" style={{ color: 'var(--color-text)' }}>Refund Policy</h3>
+              <p className="text-sm leading-relaxed" style={{ color: 'var(--color-text-muted)' }}>
+                Your ticket price is protected in escrow and refunded automatically if this event is cancelled or flagged
+                as fraudulent. The Ventry service fee and processing fee are non-refundable in all cases.
+              </p>
+              <Link
+                href="/refund-policy"
+                className="inline-flex items-center gap-1 text-sm font-medium mt-2 hover:underline"
+                style={{ color: 'var(--color-purple-light)' }}
+              >
+                Read the full Refund Policy <ChevronRight size={14} />
+              </Link>
             </div>
 
             {(() => {

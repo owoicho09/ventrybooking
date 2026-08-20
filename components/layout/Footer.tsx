@@ -7,8 +7,10 @@ export function Footer() {
     { href: '/#how-it-works', label: 'How It Works' },
     { href: '/#for-organizers', label: 'For Organizers' },
     { href: '/help', label: 'Help & Refunds' },
+    { href: '/terms/buyers', label: 'Buyer Terms' },
+    { href: '/terms/organisers', label: 'Organiser Terms' },
+    { href: '/refund-policy', label: 'Refund Policy' },
     { href: '/privacy', label: 'Privacy Policy' },
-    { href: '/terms', label: 'Terms' },
   ];
 
   return (

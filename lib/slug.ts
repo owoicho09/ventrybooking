@@ -3,8 +3,8 @@
 // silently shadow an already-issued vanity URL.
 export const RESERVED_SLUGS = new Set([
   'admin', 'api', 'blog', 'checkout', 'events', 'help', 'organizer',
-  'payment', 'privacy', 'retrieve', 'scan', 'staff-scan', 'studio',
-  'terms', 'ticket', 'tickets', 'sitemap.xml', 'robots.txt',
+  'payment', 'privacy', 'refund-policy', 'retrieve', 'scan', 'staff-scan',
+  'studio', 'terms', 'ticket', 'tickets', 'sitemap.xml', 'robots.txt',
   'favicon.ico', 'icon', 'opengraph-image',
 ]);
 
