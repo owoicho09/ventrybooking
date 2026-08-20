@@ -206,7 +206,6 @@ export function EventDetailContent({ identifier }: EventDetailContentProps) {
                     </div>
                   )}
                 </div>
-                <p className="text-xs" style={{ color: 'var(--color-text-dim)' }}>{remaining} remaining</p>
               </div>
             );
           })}
