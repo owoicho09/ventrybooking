@@ -52,11 +52,12 @@ export async function createTicketFromPayment(p: PaymentData): Promise<string | 
         .maybeSingle();
       if (!first) {
         // Reference was claimed by an earlier call that then failed before
-        // inserting a ticket — that attempt is permanently stuck (retries
-        // will hit this same branch forever). Surface it instead of
-        // returning silently.
+        // inserting a ticket. reconcilePendingOrders() retries these
+        // "stuck claim" references directly via createTicketFromClaimedPayment
+        // (bypassing this claim step, since it's already taken), so this is
+        // surfaced but not permanently stuck.
         console.error('createTicketFromPayment: reference claimed but no ticket exists', p.reference);
-        await notifyAdminFailure(p, 'Payment claimed but no ticket was created on a prior attempt (stuck claim).');
+        await notifyAdminFailure(p, 'Payment claimed but no ticket was created on a prior attempt (stuck claim). Will be retried automatically.');
       }
       return first?.id ?? null;
     }
@@ -64,6 +65,20 @@ export async function createTicketFromPayment(p: PaymentData): Promise<string | 
     await notifyAdminFailure(p, `Failed to claim payment reference: ${claimErr.message}`);
     return null;
   }
+
+  return createTicketFromClaimedPayment(p);
+}
+
+/**
+ * Builds and inserts ticket rows for a payment whose `purchases` idempotency
+ * claim already exists — either because createTicketFromPayment just made it,
+ * or because reconcilePendingOrders() is retrying a "stuck claim" (a prior
+ * attempt claimed the reference then failed before any ticket was inserted).
+ * Callers retrying a stuck claim must first confirm no ticket already exists
+ * for the reference, since this function performs no idempotency check itself.
+ */
+export async function createTicketFromClaimedPayment(p: PaymentData): Promise<string | null> {
+  const db = getServerSupabase();
 
   const items = (p.items ?? []).filter(i => i.tierId && i.quantity > 0);
   if (items.length === 0) {

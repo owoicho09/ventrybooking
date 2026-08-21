@@ -58,6 +58,18 @@ function PendingContent() {
 
   const showFallback = attempts > 8; // ~16 seconds
 
+  // Polling only catches a ticket the webhook already created. If nothing
+  // shows up by the time the fallback UI appears, the webhook likely missed
+  // this payment entirely — auto-navigate to the same direct Paystack verify
+  // the manual button below triggers, instead of making the buyer notice and
+  // click it. Navigating away makes local setState pointless, so this skips
+  // handleVerify's setVerifying and just redirects directly.
+  useEffect(() => {
+    if (showFallback && ref) {
+      window.location.href = `/api/paystack/callback?reference=${ref}`;
+    }
+  }, [showFallback, ref]);
+
   return (
     <div className="pt-24 flex flex-col items-center justify-center px-4 text-center">
       <div className="w-20 h-20 rounded-full flex items-center justify-center mb-6"

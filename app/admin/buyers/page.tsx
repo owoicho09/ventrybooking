@@ -51,6 +51,9 @@ function AdminBuyersPageInner() {
   const [loading, setLoading] = useState(true);
   const [reconciling, setReconciling] = useState(false);
   const [reconcileMsg, setReconcileMsg] = useState<string | null>(null);
+  const [regenRef, setRegenRef] = useState('');
+  const [regenerating, setRegenerating] = useState(false);
+  const [regenMsg, setRegenMsg] = useState<string | null>(null);
 
   const load = useCallback(() => {
     setLoading(true);
@@ -88,6 +91,27 @@ function AdminBuyersPageInner() {
       .catch(() => setReconcileMsg('Reconcile failed.'))
       .finally(() => setReconciling(false));
   }, [load]);
+
+  const regenerate = useCallback(() => {
+    const reference = regenRef.trim();
+    if (!reference) return;
+    setRegenerating(true);
+    setRegenMsg(null);
+    fetch('/api/admin/regenerate-ticket', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ reference }),
+    })
+      .then(async (r) => {
+        const d = await r.json();
+        if (!r.ok || !d.success) { setRegenMsg(d.error || 'Regenerate failed.'); return; }
+        setRegenMsg(`Ticket ${d.ticketId} created.`);
+        setRegenRef('');
+        load();
+      })
+      .catch(() => setRegenMsg('Regenerate failed.'))
+      .finally(() => setRegenerating(false));
+  }, [regenRef, load]);
 
   return (
     <div className="flex flex-col gap-6">
@@ -140,8 +164,32 @@ function AdminBuyersPageInner() {
         </div>
       </div>
 
+      <div className="flex flex-col sm:flex-row gap-2 sm:items-center">
+        <div className="w-full sm:w-72">
+          <Input
+            placeholder="Paystack reference (e.g. VTR-XXXXXXXXXXXX)"
+            value={regenRef}
+            onChange={(e) => setRegenRef(e.target.value)}
+          />
+        </div>
+        <button onClick={regenerate} disabled={regenerating || !regenRef.trim()}
+          title="Regenerate a ticket for one specific payment reference"
+          className="flex items-center gap-1.5 px-3 py-2 rounded-lg text-sm font-medium transition-all disabled:opacity-60"
+          style={{
+            backgroundColor: 'var(--color-surface)',
+            color:           'var(--color-text-muted)',
+            border:          '1px solid var(--color-border)',
+          }}>
+          <RefreshCw size={14} className={regenerating ? 'animate-spin' : ''} />
+          {regenerating ? 'Regenerating...' : 'Regenerate ticket'}
+        </button>
+      </div>
+
       {reconcileMsg && (
         <p className="text-sm -mt-3" style={{ color: 'var(--color-text-muted)' }}>{reconcileMsg}</p>
+      )}
+      {regenMsg && (
+        <p className="text-sm -mt-3" style={{ color: 'var(--color-text-muted)' }}>{regenMsg}</p>
       )}
 
       {loading && <p className="text-sm" style={{ color: 'var(--color-text-muted)' }}>Loading...</p>}

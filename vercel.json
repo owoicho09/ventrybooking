@@ -6,7 +6,7 @@
     },
     {
       "path": "/api/cron/reconcile-orders",
-      "schedule": "30 12 * * *"
+      "schedule": "*/5 * * * *"
     }
   ]
 }
