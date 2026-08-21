@@ -17,18 +17,50 @@ export async function POST(req: NextRequest) {
 
   if (event.event === 'charge.success') {
     const { reference, metadata, amount, customer } = event.data;
-    const { eventId, items, buyerEmail, buyerName, refCode } = metadata || {};
-    const marketingConsent = metadata?.marketingConsent === true;
-    const ventryMarketingConsent = metadata?.ventryMarketingConsent === true;
+    let { eventId, items, buyerEmail, buyerName } = metadata || {};
+    // Not recoverable from pending_orders (that table doesn't persist the
+    // affiliate ref), so a metadata-less webhook just loses affiliate credit
+    // for this one order — the ticket itself still gets created below.
+    const { refCode } = metadata || {};
+    let marketingConsent = metadata?.marketingConsent === true;
+    let ventryMarketingConsent = metadata?.ventryMarketingConsent === true;
+    let declaredTotal = Number(metadata?.total);
+
+    // Paystack occasionally echoes charge.success back without our custom
+    // metadata (empirically, not something we control) — before giving up,
+    // fall back to the checkout-time record we saved ourselves in
+    // pending_orders, keyed by the same reference. Same fallback
+    // reconcilePendingOrders() uses for its daily sweep; doing it here means
+    // most of these never need to wait on that sweep at all.
+    if (!eventId || !Array.isArray(items) || items.length === 0) {
+      const db = getServerSupabase();
+      const { data: order } = await db
+        .from('pending_orders')
+        .select('*')
+        .eq('reference', reference)
+        .maybeSingle();
+
+      if (order) {
+        eventId = order.event_id;
+        items = Array.isArray(order.items) && order.items.length > 0
+          ? order.items.map((i: { tier_id: string; quantity: number }) => ({ tierId: i.tier_id, quantity: i.quantity }))
+          : [{ tierId: order.tier_id, quantity: order.quantity }];
+        buyerEmail = buyerEmail || order.buyer_email;
+        buyerName  = buyerName  || order.buyer_name;
+        marketingConsent = marketingConsent || order.marketing_consent;
+        ventryMarketingConsent = ventryMarketingConsent || order.ventry_marketing_consent;
+        if (!Number.isFinite(declaredTotal) || declaredTotal <= 0) declaredTotal = Number(order.total);
+      }
+    }
 
     if (!eventId || !Array.isArray(items) || items.length === 0) {
-      console.error('Webhook: missing eventId or items in metadata', { reference });
+      console.error('Webhook: missing eventId or items in metadata and no pending_orders match', { reference });
       notify(
         { type: 'admin' },
         {
           notifType: 'ticket_creation_failed',
           title:     `Ticket creation failed — ${reference}`,
-          body:      `Payment succeeded but metadata was missing eventId/tierId, so no ticket could be created. Buyer: ${buyerEmail || customer?.email || 'unknown'}.`,
+          body:      `Payment succeeded but metadata was missing eventId/tierId, and no matching checkout record was found either, so no ticket could be created. Buyer: ${buyerEmail || customer?.email || 'unknown'}.`,
           link:      `/admin/buyers?search=${encodeURIComponent(buyerEmail || customer?.email || '')}`,
         },
       ).catch(err => console.error('Webhook: notify-admin error', err));
@@ -39,10 +71,10 @@ export async function POST(req: NextRequest) {
     // which can run 1.5–3%+ higher than what we charged them for — Paystack adds its
     // own processing fee on top when the fee bearer is the customer. Recording that
     // inflated figure as total_paid corrupts every downstream use of it (the "Total
-    // Paid" shown in the ticket email, and refund amounts). `metadata.total` is the
-    // exact subtotal+serviceFee we requested at checkout, so prefer that and only
-    // fall back to `amount` if metadata is somehow missing it.
-    const declaredTotal = Number(metadata?.total);
+    // Paid" shown in the ticket email, and refund amounts). `metadata.total` (or,
+    // failing that, pending_orders.total above) is the exact subtotal+serviceFee we
+    // requested at checkout, so prefer that and only fall back to `amount` if both
+    // are somehow missing it.
     const totalPaidKobo = Number.isFinite(declaredTotal) && declaredTotal > 0
       ? Math.round(declaredTotal * 100)
       : amount;
