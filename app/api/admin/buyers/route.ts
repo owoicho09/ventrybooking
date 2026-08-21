@@ -15,7 +15,7 @@ export async function GET(req: NextRequest) {
   const db = getServerSupabase();
   let qb = db
     .from('tickets')
-    .select('id, buyer_name, buyer_email, total_paid, status, purchased_at, paystack_reference, event:events(event_name, date)')
+    .select('id, buyer_name, buyer_email, total_paid, status, purchased_at, paystack_reference, event_id, organizer_id, event:events(event_name, date), organizer:users!tickets_organizer_id_fkey(name)')
     .order('purchased_at', { ascending: false })
     .limit(500);
 
@@ -30,6 +30,7 @@ export async function GET(req: NextRequest) {
 
   const rows = (data || []).map((t) => {
     const eventRaw = Array.isArray(t.event) ? t.event[0] : t.event;
+    const organizerRaw = Array.isArray(t.organizer) ? t.organizer[0] : t.organizer;
     return {
       id:                 t.id,
       buyer_name:         t.buyer_name,
@@ -38,8 +39,11 @@ export async function GET(req: NextRequest) {
       status:             t.status,
       purchased_at:       t.purchased_at,
       paystack_reference: t.paystack_reference,
+      event_id:           t.event_id,
+      organizer_id:       t.organizer_id,
       event_name:         (eventRaw as { event_name: string } | null)?.event_name || 'Unknown Event',
       event_date:         (eventRaw as { date: string } | null)?.date || null,
+      organizer_name:     (organizerRaw as { name: string } | null)?.name || 'Unknown',
     };
   });
 

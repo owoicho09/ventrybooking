@@ -30,7 +30,9 @@ interface TicketRow {
 interface EventDetail {
   id: string; event_name: string; slug: string | null; category: string; date: string; time: string;
   status: string; event_mode: 'physical' | 'online'; venue: string; city: string;
-  organizer_name: string; tiers: Tier[]; totalSold: number; totalRevenue: number;
+  organizer_id: string | null; organizer_name: string;
+  organizerTotalSold: number; organizerTotalEvents: number;
+  tiers: Tier[]; totalSold: number; totalRevenue: number;
   payoutReleased: boolean; tickets: TicketRow[];
 }
 
@@ -142,6 +144,14 @@ export default function AdminEventDetailPage() {
             <p className="text-sm mt-0.5" style={{ color: 'var(--color-text-muted)' }}>
               {formatShortDate(event.date)} &bull; {event.event_mode === 'online' ? 'Online' : `${event.venue}, ${event.city}`} &bull; {event.organizer_name}
             </p>
+            {event.organizer_id && (
+              <p className="text-xs mt-1" style={{ color: 'var(--color-text-dim)' }}>
+                This organiser has released <strong style={{ color: 'var(--color-text)' }}>{event.organizerTotalSold.toLocaleString()}</strong> ticket{event.organizerTotalSold !== 1 ? 's' : ''} across <strong style={{ color: 'var(--color-text)' }}>{event.organizerTotalEvents}</strong> event{event.organizerTotalEvents !== 1 ? 's' : ''} &mdash;{' '}
+                <Link href={`/admin/organizers/${event.organizer_id}`} className="hover:underline" style={{ color: 'var(--color-purple-light)' }}>
+                  view full profile
+                </Link>
+              </p>
+            )}
           </div>
           <div className="flex items-center gap-2">
             {event.slug && (

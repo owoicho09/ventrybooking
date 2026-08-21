@@ -2,6 +2,7 @@
 
 import { useState, useEffect, useCallback, Suspense } from 'react';
 import { useSearchParams } from 'next/navigation';
+import Link from 'next/link';
 import { Search, RefreshCw } from 'lucide-react';
 import { Badge } from '@/components/ui/Badge';
 import { Input } from '@/components/ui/Input';
@@ -34,8 +35,11 @@ interface BuyerData {
   status: string;
   purchased_at: string;
   paystack_reference: string;
+  event_id: string;
+  organizer_id: string;
   event_name: string;
   event_date: string | null;
+  organizer_name: string;
 }
 
 function AdminBuyersPageInner() {
@@ -151,7 +155,7 @@ function AdminBuyersPageInner() {
           <Table>
             <Thead>
               <tr>
-                <Th>Buyer</Th><Th>Event</Th><Th>Event Date</Th>
+                <Th>Buyer</Th><Th>Event</Th><Th>Organizer</Th><Th>Event Date</Th>
                 <Th>Price</Th><Th>Purchased</Th><Th>Status</Th><Th>Ticket ID</Th>
               </tr>
             </Thead>
@@ -164,7 +168,16 @@ function AdminBuyersPageInner() {
                       <p className="text-xs" style={{ color: 'var(--color-text-dim)' }}>{buyer.buyer_email}</p>
                     </div>
                   </Td>
-                  <Td><p className="text-sm max-w-[160px] truncate" style={{ color: 'var(--color-text-muted)' }}>{buyer.event_name}</p></Td>
+                  <Td>
+                    <Link href={`/admin/events/${buyer.event_id}`} className="text-sm max-w-[160px] truncate block hover:underline" style={{ color: 'var(--color-purple-light)' }}>
+                      {buyer.event_name}
+                    </Link>
+                  </Td>
+                  <Td>
+                    <Link href={`/admin/organizers/${buyer.organizer_id}`} className="text-sm max-w-[140px] truncate block hover:underline" style={{ color: 'var(--color-purple-light)' }}>
+                      {buyer.organizer_name}
+                    </Link>
+                  </Td>
                   <Td>
                     <span style={{ color: 'var(--color-text-muted)' }}>
                       {buyer.event_date ? formatShortDate(buyer.event_date) : '—'}

@@ -40,9 +40,27 @@ export async function GET(
   if (!event) return NextResponse.json({ error: 'Event not found' }, { status: 404 });
 
   const organizerRaw = Array.isArray(event.organizer) ? event.organizer[0] : event.organizer;
+  const organizer = organizerRaw as { id: string; name: string } | null;
   type TierRow = { id: string; name: string; price: number; available: number; sold: number };
   const tiers = (event.tiers as TierRow[]) ?? [];
   const tierById = new Map(tiers.map(t => [t.id, t.name]));
+
+  // This organiser's all-time totals across every event they've run, not just
+  // this one — surfaced here so admin doesn't need to jump to the full
+  // organiser profile just to see the bigger picture.
+  let organizerTotalSold = 0;
+  let organizerTotalEvents = 0;
+  if (organizer) {
+    const { data: orgEvents } = await db
+      .from('events')
+      .select('id, tiers:ticket_tiers(sold)')
+      .eq('organizer_id', organizer.id);
+    organizerTotalEvents = orgEvents?.length ?? 0;
+    organizerTotalSold = (orgEvents ?? []).reduce(
+      (sum, ev) => sum + ((ev.tiers as { sold: number }[] ?? []).reduce((s, t) => s + (t.sold ?? 0), 0)),
+      0,
+    );
+  }
 
   const totalSold    = tiers.reduce((s, t) => s + (t.sold ?? 0), 0);
   const totalRevenue = (tickets ?? [])
@@ -82,7 +100,10 @@ export async function GET(
       event_mode:     event.event_mode,
       venue:          event.venue,
       city:           event.city,
-      organizer_name: (organizerRaw as { name: string } | null)?.name ?? 'Unknown',
+      organizer_id:   organizer?.id ?? null,
+      organizer_name: organizer?.name ?? 'Unknown',
+      organizerTotalSold,
+      organizerTotalEvents,
       tiers,
       totalSold,
       totalRevenue,

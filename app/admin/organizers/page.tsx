@@ -1,6 +1,7 @@
 'use client';
 
 import { useState, useEffect } from 'react';
+import Link from 'next/link';
 import { Button } from '@/components/ui/Button';
 import { Badge } from '@/components/ui/Badge';
 import { Drawer } from '@/components/ui/Drawer';
@@ -130,9 +131,14 @@ export default function AdminOrganizersPage() {
                 <Td><span style={{ color: 'var(--color-text)' }}>{org.events_hosted ?? 0}</span></Td>
                 <Td>{kycBadge(org.kyc_status)}</Td>
                 <Td>
-                  <Button size="sm" variant="outline" onClick={() => { setSelectedOrg(org); setRejecting(false); setReason(''); }}>
-                    Review
-                  </Button>
+                  <div className="flex items-center gap-2">
+                    <Button size="sm" variant="outline" onClick={() => { setSelectedOrg(org); setRejecting(false); setReason(''); }}>
+                      Review
+                    </Button>
+                    <Link href={`/admin/organizers/${org.id}`} className="text-xs font-medium" style={{ color: 'var(--color-purple-light)' }}>
+                      Full Profile
+                    </Link>
+                  </div>
                 </Td>
               </Tr>
             ))}
