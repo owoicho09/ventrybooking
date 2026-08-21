@@ -189,6 +189,16 @@ export function EventDetailContent({ identifier }: EventDetailContentProps) {
             const qty = quantities[tier.id] ?? 0;
             const remaining = tier.available - tier.sold;
             const isSoldOut = remaining <= 0;
+            // Urgency copy only kicks in once a tier is genuinely running out —
+            // both mostly-sold (70%+) AND down to a low absolute count, so a
+            // huge tier that's 70% sold but still has hundreds left doesn't
+            // cry wolf.
+            const percentSold = tier.available > 0 ? tier.sold / tier.available : 0;
+            const urgency = isSoldOut || percentSold < 0.7 ? null
+              : remaining <= 10 ? { text: 'Almost gone',   variant: 'red' as const }
+              : remaining <= 30 ? { text: 'Very few left', variant: 'amber' as const }
+              : remaining <= 50 ? { text: 'Few left',      variant: 'amber' as const }
+              : null;
             return (
               <div key={tier.id} className="rounded-lg border p-4" style={{ borderColor: qty > 0 ? 'var(--color-purple)' : 'var(--color-border)', backgroundColor: qty > 0 ? 'var(--color-purple-dim)' : 'var(--color-surface-2)' }}>
                 <div className="flex items-center justify-between mb-2">
@@ -197,6 +207,9 @@ export function EventDetailContent({ identifier }: EventDetailContentProps) {
                     <p className="text-base font-bold" style={{ color: tier.price === 0 ? 'var(--color-green)' : 'var(--color-text)' }}>
                       {tier.price === 0 ? 'Free' : formatNGN(tier.price)}
                     </p>
+                    {urgency && (
+                      <Badge variant={urgency.variant} className="mt-1">{urgency.text}</Badge>
+                    )}
                   </div>
                   {isSoldOut ? <Badge variant="gray">Sold Out</Badge> : (
                     <div className="flex items-center gap-2">
