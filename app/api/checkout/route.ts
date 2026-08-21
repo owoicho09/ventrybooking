@@ -8,7 +8,7 @@ interface CartItem { tierId: string; quantity: number }
 
 export async function POST(req: NextRequest) {
   try {
-    const { eventId, items, buyerEmail, buyerName, marketingConsent, ref } = await req.json();
+    const { eventId, items, buyerEmail, buyerName, marketingConsent, ventryMarketingConsent, ref } = await req.json();
 
     if (!eventId || !Array.isArray(items) || items.length === 0 || !buyerEmail) {
       return NextResponse.json({ error: 'Missing required fields' }, { status: 400 });
@@ -96,6 +96,7 @@ export async function POST(req: NextRequest) {
         buyerEmail,
         buyerName:        buyerName || '',
         marketingConsent: marketingConsent === true,
+        ventryMarketingConsent: ventryMarketingConsent === true,
         subtotal,
         serviceFee,
         processingFee,
@@ -123,6 +124,7 @@ export async function POST(req: NextRequest) {
         total,
         organizer_id:      event.organizer_id,
         marketing_consent: marketingConsent === true,
+        ventry_marketing_consent: ventryMarketingConsent === true,
         created_at:        new Date().toISOString(),
       });
     } catch { /* non-critical */ }

@@ -7,7 +7,7 @@ export async function POST(
 ) {
   try {
     const { handle } = await params;
-    const { email, phone } = await req.json();
+    const { email, phone, name } = await req.json();
 
     if (!email || typeof email !== 'string' || !email.includes('@')) {
       return NextResponse.json({ error: 'A valid email is required' }, { status: 400 });
@@ -26,19 +26,17 @@ export async function POST(
 
     const normalizedEmail = email.trim().toLowerCase();
 
-    // Upsert on (organizer_id, email): a returning subscriber who had
-    // unsubscribed gets cleared back to active rather than erroring.
-    const { error } = await db
-      .from('organizer_subscribers')
-      .upsert(
-        {
-          organizer_id: organizer.id,
-          email: normalizedEmail,
-          phone: typeof phone === 'string' && phone.trim() ? phone.trim() : null,
-          unsubscribed_at: null,
-        },
-        { onConflict: 'organizer_id,email' },
-      );
+    // Reactivating upsert on (organizer_id, email): a returning subscriber
+    // who had unsubscribed gets cleared back to active rather than erroring.
+    // Shared with the ticket-purchase consent path so both membership
+    // sources land in the same Audience table under one unsubscribe token.
+    const { error } = await db.rpc('upsert_audience_member', {
+      p_organizer_id: organizer.id,
+      p_email:        normalizedEmail,
+      p_name:         typeof name === 'string' && name.trim() ? name.trim() : null,
+      p_phone:        typeof phone === 'string' && phone.trim() ? phone.trim() : null,
+      p_source:       'notify_me',
+    });
 
     if (error) throw error;
 

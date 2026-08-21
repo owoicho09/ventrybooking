@@ -1,0 +1,32 @@
+Explore the codebase first, especially the existing Notify Me subscriber flow, checkout, and how ticket emails attach the flyer via Resend. Flag contradictions instead of guessing.
+
+Core principle, non-negotiable: organisers never see buyer email addresses. Anywhere. On their dashboard, in exports, in the audience list — names only. The email relationship belongs to Ventry. This is a product decision, not an oversight.
+
+Goal 1 — Checkout consent.
+Two optional, unticked checkboxes at checkout, exact copy:
+
+Box 1 (organiser): "I agree to receive updates and offers from the event organiser, sent through Ventry. You can unsubscribe at any time."
+Box 2 (Ventry): "I agree to receive emails from Ventry about upcoming events, new features, and platform updates. You can unsubscribe at any time."
+Consents stored per buyer with timestamps. Organiser consent is scoped to that organiser.
+
+Goal 2 — Audience tab.
+Problem: organisers have no view of who has opted into hearing from them.
+Outcome: a new "Audience" section on the organiser dashboard (people-style icon) listing everyone who ticked Box 1 at checkout plus everyone who tapped Notify Me on their organiser page. Show the name the person used and where they came from (ticket purchase vs Notify Me), and a total count. No email addresses, no export containing emails.
+
+Goal 3 — Contact Audience composer.
+Problem: organisers need to reach that audience but only through Ventry.
+Outcome: a "Contact Audience" area where the organiser composes an email — subject, body, images attached the same way flyers attach to ticket emails. Submitting does NOT send; it enters a review queue. Organiser sees the status of each mail: pending review, approved/sent, rejected (with reason).
+
+Goal 4 — Admin review queue.
+Problem: one bad mail from one organiser damages the sending domain for everyone.
+Outcome: in admin, a queue of submitted newsletters with full preview. Admin approves (triggers send) or rejects with a reason sent back to the organiser. Nothing sends without approval.
+
+Goal 5 — Sending.
+On approval, the mail goes via Resend to the organiser's full audience (consented buyers + Notify Me subscribers), from the organiser's display name, reply-to support@ventrybooking.com. Every mail carries a working unsubscribe link that removes that person from that organiser's audience (Box 1/Notify Me) without touching their Ventry-level consent, and vice versa for Ventry mails. After the send completes, the organiser receives a confirmation email from Ventry that their mail reached their audience.
+
+Goal 6 — Billing-ready architecture.
+Free now, but later this becomes a yearly subscription or pay-per-mail. Structure it so metering/gating is a policy check, not a rewrite: an entitlement or send-credit check at the submission point that currently always passes. Record sends per organiser so usage-based pricing has data from day one.
+
+Done when: a test buyer ticks Box 1 → appears in the organiser's Audience by name only → organiser composes a mail with an image → it lands in the admin queue → admin approves → mail arrives from the organiser's display name with reply-to support@ and a working unsubscribe → organiser receives the confirmation email → the send is logged against the organiser. And a rejected mail shows the rejection reason on the organiser dashboard.
+
+Run Batch A first — it's smaller and unblocks the client immediately. One thing to flag back to the client at some point: the proposal promises the Verified badge, lineup system, and date-change flow, none of which exist yet — worth a conversation before Thirstyclub says yes.

@@ -9,7 +9,7 @@ interface CartItem { tierId: string; quantity: number }
 
 export async function POST(req: NextRequest) {
   try {
-    const { eventId, items, buyerEmail, buyerName, marketingConsent, ref } = await req.json();
+    const { eventId, items, buyerEmail, buyerName, marketingConsent, ventryMarketingConsent, ref } = await req.json();
 
     if (!eventId || !Array.isArray(items) || items.length === 0 || !buyerEmail) {
       return NextResponse.json({ error: 'Missing required fields' }, { status: 400 });
@@ -57,9 +57,10 @@ export async function POST(req: NextRequest) {
       }
     }
 
-    const email       = buyerEmail.toLowerCase().trim();
-    const purchasedAt = new Date().toISOString();
-    const consent     = marketingConsent === true;
+    const email        = buyerEmail.toLowerCase().trim();
+    const purchasedAt  = new Date().toISOString();
+    const consent      = marketingConsent === true;
+    const ventryConsent = ventryMarketingConsent === true;
     // Pseudo-reference for free orders (no Paystack transaction)
     const reference   = `FREE-${randomBytes(6).toString('hex').toUpperCase()}`;
 
@@ -87,6 +88,7 @@ export async function POST(req: NextRequest) {
           qr_token:           id,
           paystack_reference: reference,
           marketing_consent:  consent,
+          ventry_marketing_consent: ventryConsent,
         });
       }
     }
@@ -100,6 +102,25 @@ export async function POST(req: NextRequest) {
     await Promise.all(
       cartItems.map(item => db.rpc('increment_tier_sold', { tier_id: item.tierId, amount: item.quantity })),
     );
+
+    // Box 1 consent (organiser mailing list) — free checkout bypasses
+    // createTicketFromPayment, so the audience upsert happens here instead.
+    if (consent) {
+      (async () => {
+        try {
+          const { error } = await db.rpc('upsert_audience_member', {
+            p_organizer_id: event.organizer_id,
+            p_email:        email,
+            p_name:         buyerName?.trim() || null,
+            p_phone:        null,
+            p_source:       'ticket_consent',
+          });
+          if (error) console.error('free checkout: audience upsert error', error);
+        } catch (err) {
+          console.error('free checkout: audience upsert error', err);
+        }
+      })();
+    }
 
     // Free orders never touch Paystack/the webhook, so credit the affiliate here —
     // one buy per completed order, not per ticket. Only if the ref actually

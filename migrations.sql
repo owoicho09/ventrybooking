@@ -268,3 +268,110 @@ UPDATE users SET platform_fee_rate = 0.025 WHERE created_at < '2026-08-17';
 --     with the order's first line for any older code path that reads them
 --     directly.
 ALTER TABLE pending_orders ADD COLUMN IF NOT EXISTS items JSONB NOT NULL DEFAULT '[]';
+
+
+-- 19. Admin self-serve single/selected-ticket refunds (admin event
+--     drill-down). Distinct from the existing bulk cancel-and-refund-all
+--     flow: this refunds specific tickets without cancelling the event.
+--     Audit trail is kept on the ticket row itself, matching the codebase's
+--     existing minimal-columns convention (e.g. payouts.released_at) rather
+--     than a separate log table.
+ALTER TABLE tickets
+  ADD COLUMN IF NOT EXISTS refunded_at    TIMESTAMPTZ,
+  ADD COLUMN IF NOT EXISTS refunded_by    TEXT,
+  ADD COLUMN IF NOT EXISTS refund_reason  TEXT;
+
+
+-- 20. Organiser Audience + newsletter system (organiser mailing, admin-moderated).
+--     Core rule: organisers never see buyer email addresses, anywhere — not on
+--     their dashboard, not in exports. `organizer_subscribers` becomes the single
+--     source of truth for "people an organiser may email": both existing Notify
+--     Me subscribers and buyers who tick the new Box 1 consent checkbox at
+--     checkout upsert into this same table, keyed on (organizer_id, email), so
+--     one unsubscribe token covers both membership sources.
+ALTER TABLE organizer_subscribers
+  ADD COLUMN IF NOT EXISTS name   TEXT,
+  ADD COLUMN IF NOT EXISTS source TEXT NOT NULL DEFAULT 'notify_me'
+    CHECK (source IN ('notify_me', 'ticket_consent'));
+
+-- Reactivating upsert shared by the Notify Me subscribe route and ticket
+-- creation (on Box 1 consent). Preserves the original name/source on repeat
+-- upserts (first-touch attribution) and always clears unsubscribed_at, since
+-- a fresh subscribe or a fresh purchase-time consent supersedes an earlier
+-- unsubscribe.
+CREATE OR REPLACE FUNCTION upsert_audience_member(
+  p_organizer_id UUID,
+  p_email        TEXT,
+  p_name         TEXT,
+  p_phone        TEXT,
+  p_source       TEXT
+) RETURNS VOID LANGUAGE sql AS $$
+  INSERT INTO organizer_subscribers (organizer_id, email, name, phone, source, unsubscribed_at)
+  VALUES (p_organizer_id, p_email, p_name, p_phone, p_source, NULL)
+  ON CONFLICT (organizer_id, email) DO UPDATE SET
+    name            = COALESCE(organizer_subscribers.name, EXCLUDED.name),
+    phone           = COALESCE(organizer_subscribers.phone, EXCLUDED.phone),
+    unsubscribed_at = NULL;
+$$;
+
+-- Batched audience-size lookup for the admin newsletter queue (same pattern
+-- as get_events_hosted_counts) — avoids one count query per row in a list.
+CREATE OR REPLACE FUNCTION get_audience_counts(organizer_ids UUID[])
+RETURNS TABLE(organizer_id UUID, member_count BIGINT)
+LANGUAGE sql AS $$
+  SELECT organizer_id, COUNT(*) FROM organizer_subscribers
+  WHERE organizer_id = ANY(organizer_ids) AND unsubscribed_at IS NULL
+  GROUP BY organizer_id;
+$$;
+
+-- Box 2 (Ventry-level marketing consent) — separate from Box 1 (organiser
+-- consent: the existing tickets.marketing_consent / pending_orders.marketing_consent).
+-- No Ventry-side sending pipeline exists yet; this only captures consent.
+-- Both boxes are ticked at the same checkout moment, so the ticket's own
+-- purchased_at already serves as "when consent was given" — no separate
+-- per-box timestamp column.
+ALTER TABLE tickets
+  ADD COLUMN IF NOT EXISTS ventry_marketing_consent BOOLEAN NOT NULL DEFAULT FALSE;
+
+ALTER TABLE pending_orders
+  ADD COLUMN IF NOT EXISTS ventry_marketing_consent BOOLEAN NOT NULL DEFAULT FALSE;
+
+-- Newsletters: organiser-composed mail to their Audience, held for admin
+-- review before anything sends — one bad mail from one organiser must never
+-- reach a real inbox unapproved, since it damages the sending domain for
+-- everyone. 'approved' doubles as "approved and sent": sending happens
+-- synchronously in the approve action, so there's no separate 'sent' status —
+-- see sent_at for whether/when it actually went out.
+CREATE TABLE IF NOT EXISTS newsletters (
+  id               UUID        PRIMARY KEY DEFAULT gen_random_uuid(),
+  organizer_id     UUID        NOT NULL REFERENCES users (id) ON DELETE CASCADE,
+  subject          TEXT        NOT NULL,
+  body             TEXT        NOT NULL,
+  image_urls       JSONB       NOT NULL DEFAULT '[]',
+  status           TEXT        NOT NULL DEFAULT 'pending'
+    CHECK (status IN ('pending', 'approved', 'rejected')),
+  rejection_reason TEXT,
+  recipient_count  INTEGER,
+  submitted_at     TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+  reviewed_at      TIMESTAMPTZ,
+  sent_at          TIMESTAMPTZ
+);
+
+CREATE INDEX IF NOT EXISTS idx_newsletters_organizer_id ON newsletters (organizer_id);
+CREATE INDEX IF NOT EXISTS idx_newsletters_status        ON newsletters (status);
+
+-- Per-recipient send log — the usage data trail Goal 6 needs for future
+-- billing (yearly subscription or pay-per-mail), without building any
+-- billing logic now. recipient_email is written here only, never returned
+-- from any organizer-facing API.
+CREATE TABLE IF NOT EXISTS newsletter_sends (
+  id              UUID        PRIMARY KEY DEFAULT gen_random_uuid(),
+  newsletter_id   UUID        NOT NULL REFERENCES newsletters (id) ON DELETE CASCADE,
+  organizer_id    UUID        NOT NULL REFERENCES users (id) ON DELETE CASCADE,
+  recipient_email TEXT        NOT NULL,
+  status          TEXT        NOT NULL DEFAULT 'sent' CHECK (status IN ('sent', 'failed')),
+  sent_at         TIMESTAMPTZ NOT NULL DEFAULT NOW()
+);
+
+CREATE INDEX IF NOT EXISTS idx_newsletter_sends_newsletter_id ON newsletter_sends (newsletter_id);
+CREATE INDEX IF NOT EXISTS idx_newsletter_sends_organizer_id  ON newsletter_sends (organizer_id);

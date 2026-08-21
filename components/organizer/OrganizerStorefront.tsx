@@ -33,6 +33,7 @@ export function OrganizerStorefront({ handle }: { handle: string }) {
   const [data, setData] = useState<StorefrontData | null>(null);
   const [loading, setLoading] = useState(true);
   const [notFound, setNotFound] = useState(false);
+  const [name, setName] = useState('');
   const [email, setEmail] = useState('');
   const [phone, setPhone] = useState('');
   const [subscribing, setSubscribing] = useState(false);
@@ -56,7 +57,11 @@ export function OrganizerStorefront({ handle }: { handle: string }) {
       const res = await fetch(`/api/organizers/${handle}/subscribe`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ email: email.trim().toLowerCase(), phone: phone.trim() || undefined }),
+        body: JSON.stringify({
+          name: name.trim(),
+          email: email.trim().toLowerCase(),
+          phone: phone.trim() || undefined,
+        }),
       });
       if (!res.ok) {
         const d = await res.json().catch(() => ({}));
@@ -165,11 +170,12 @@ export function OrganizerStorefront({ handle }: { handle: string }) {
                   <Bell size={14} />Get notified about {organizer.name}&apos;s next event
                 </p>
                 <div className="flex flex-col sm:flex-row gap-2">
+                  <Input value={name} onChange={e => setName(e.target.value)} type="text" placeholder="Your name" required />
                   <Input value={email} onChange={e => setEmail(e.target.value)} type="email" placeholder="you@example.com" required />
                   <Input value={phone} onChange={e => setPhone(e.target.value)} type="tel" placeholder="Phone (optional)" />
                 </div>
               </div>
-              <Button type="submit" disabled={subscribing || !email}>{subscribing ? 'Subscribing…' : 'Notify Me'}</Button>
+              <Button type="submit" disabled={subscribing || !email || !name}>{subscribing ? 'Subscribing…' : 'Notify Me'}</Button>
             </form>
           )}
         </div>

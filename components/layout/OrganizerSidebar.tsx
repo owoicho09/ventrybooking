@@ -12,6 +12,7 @@ import {
   LogOut,
   KeyRound,
   Share2,
+  Users,
 } from 'lucide-react';
 import { ThemeToggle } from './ThemeToggle';
 import { NotificationBell } from '@/components/ui/NotificationBell';
@@ -19,6 +20,7 @@ import { NotificationBell } from '@/components/ui/NotificationBell';
 const navItems = [
   { href: '/organizer/dashboard',      label: 'Overview',    icon: LayoutDashboard },
   { href: '/organizer/events',         label: 'My Events',   icon: CalendarDays },
+  { href: '/organizer/audience',       label: 'Audience',    icon: Users },
   { href: '/organizer/affiliates',     label: 'Affiliates',  icon: Share2 },
   { href: '/organizer/events/create',  label: 'Create Event',icon: PlusCircle },
   { href: '/organizer/scan',           label: 'Scanner',     icon: ScanLine },

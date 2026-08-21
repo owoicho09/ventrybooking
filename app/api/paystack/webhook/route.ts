@@ -19,6 +19,7 @@ export async function POST(req: NextRequest) {
     const { reference, metadata, amount, customer } = event.data;
     const { eventId, items, buyerEmail, buyerName, refCode } = metadata || {};
     const marketingConsent = metadata?.marketingConsent === true;
+    const ventryMarketingConsent = metadata?.ventryMarketingConsent === true;
 
     if (!eventId || !Array.isArray(items) || items.length === 0) {
       console.error('Webhook: missing eventId or items in metadata', { reference });
@@ -56,6 +57,7 @@ export async function POST(req: NextRequest) {
         buyerName,
         customerEmail: customer?.email,
         marketingConsent,
+        ventryMarketingConsent,
         refCode,
       });
     } catch (err) {

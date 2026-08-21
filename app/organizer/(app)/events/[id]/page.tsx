@@ -14,6 +14,7 @@ import { useToast } from '@/components/ui/Toast';
 import { formatNGN, formatShortDate } from '@/lib/utils';
 import { ACCENT_COLOR_PRESETS } from '@/lib/accentColors';
 import { BannerCropInput } from '@/components/organizer/BannerCropInput';
+import { EventQRCode } from '@/components/organizer/EventQRCode';
 
 interface Tier { id: string; name: string; price: number; available: number; sold: number; }
 interface Affiliate { id: string; name: string; code: string; link: string; clicks: number; buys: number; }
@@ -592,6 +593,16 @@ export default function OrganizerEventDetailPage() {
         <Button size="sm" disabled={savingBranding} onClick={handleSaveBranding} className="self-start">
           {savingBranding ? 'Saving…' : 'Save Branding'}
         </Button>
+      </div>
+
+      {/* QR code */}
+      <div className="rounded-xl border p-5 flex flex-col gap-3"
+        style={{ backgroundColor: 'var(--color-surface)', borderColor: 'var(--color-border)' }}>
+        <h2 className="font-semibold" style={{ color: 'var(--color-text)' }}>Event QR Code</h2>
+        <EventQRCode
+          url={`${typeof window !== 'undefined' ? window.location.origin : ''}/${event.slug || `events/${event.id}`}`}
+          eventName={event.event_name}
+        />
       </div>
 
       {/* Attendee download */}

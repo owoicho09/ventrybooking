@@ -10,6 +10,7 @@ import {
   Wallet,
   ShieldAlert,
   MessageSquareWarning,
+  Mail,
   Settings,
 } from 'lucide-react';
 import { ThemeToggle } from './ThemeToggle';
@@ -22,6 +23,7 @@ const navItems = [
   { href: '/admin/buyers', label: 'Buyers', icon: Users },
   { href: '/admin/payouts', label: 'Payouts', icon: Wallet },
   { href: '/admin/complaints', label: 'Complaints', icon: MessageSquareWarning },
+  { href: '/admin/newsletters', label: 'Newsletter Queue', icon: Mail },
   { href: '/admin/fraud', label: 'Fraud Monitor', icon: ShieldAlert },
   { href: '/admin/settings', label: 'Settings', icon: Settings },
 ];

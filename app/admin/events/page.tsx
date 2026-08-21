@@ -1,7 +1,8 @@
 'use client';
 
 import { useState, useEffect } from 'react';
-import { CheckCircle, XCircle, AlertTriangle, ExternalLink, FileText } from 'lucide-react';
+import Link from 'next/link';
+import { CheckCircle, XCircle, AlertTriangle, ExternalLink, FileText, Users } from 'lucide-react';
 import { Badge } from '@/components/ui/Badge';
 import { Button } from '@/components/ui/Button';
 import { Drawer } from '@/components/ui/Drawer';
@@ -198,10 +199,19 @@ export default function AdminEventsPage() {
                   <Td><span style={{ color: 'var(--color-text-muted)' }}>{event.event_mode === 'online' ? 'Online' : event.city}</span></Td>
                   <Td>{statusBadge(event.status)}</Td>
                   <Td>
-                    <Button size="sm" variant="outline"
-                      onClick={() => { setSelectedEvent(event); setRejecting(false); setReason(''); setCancelStep(null); }}>
-                      Review
-                    </Button>
+                    <div className="flex items-center gap-2">
+                      <Button size="sm" variant="outline"
+                        onClick={() => { setSelectedEvent(event); setRejecting(false); setReason(''); setCancelStep(null); }}>
+                        Review
+                      </Button>
+                      {(event.status === 'approved' || event.status === 'completed') && (
+                        <Link href={`/admin/events/${event.id}`} title="View buyers & refunds"
+                          className="inline-flex items-center justify-center w-8 h-8 rounded-lg border transition-colors"
+                          style={{ borderColor: 'var(--color-border)', color: 'var(--color-text-muted)' }}>
+                          <Users size={14} />
+                        </Link>
+                      )}
+                    </div>
                   </Td>
                 </Tr>
               ))}

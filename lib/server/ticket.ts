@@ -18,6 +18,7 @@ export interface PaymentData {
   buyerName?: string;
   customerEmail?: string;
   marketingConsent?: boolean;
+  ventryMarketingConsent?: boolean;
   refCode?: string;
 }
 
@@ -101,9 +102,10 @@ export async function createTicketFromPayment(p: PaymentData): Promise<string | 
     .eq('id', eventRow.organizer_id)
     .maybeSingle();
 
-  const email       = (p.buyerEmail || p.customerEmail || '').toLowerCase().trim();
-  const purchasedAt = new Date().toISOString();
-  const consent     = p.marketingConsent === true;
+  const email        = (p.buyerEmail || p.customerEmail || '').toLowerCase().trim();
+  const purchasedAt  = new Date().toISOString();
+  const consent      = p.marketingConsent === true;
+  const ventryConsent = p.ventryMarketingConsent === true;
 
   // Flatten items into one row per individual ticket, each carrying its own
   // tier's subtotal/service fee. The processing fee is order-level (Paystack's
@@ -165,6 +167,7 @@ export async function createTicketFromPayment(p: PaymentData): Promise<string | 
       qr_token:            ticketIds[i],
       paystack_reference:  p.reference,
       marketing_consent:   consent,
+      ventry_marketing_consent: ventryConsent,
     };
   });
 
@@ -179,6 +182,25 @@ export async function createTicketFromPayment(p: PaymentData): Promise<string | 
     ...items.map(item => db.rpc('increment_tier_sold', { tier_id: item.tierId, amount: item.quantity })),
     upsertPayout(db, p.eventId, eventRow, orgRow?.name ?? '', subtotal, fee, net),
   ]);
+
+  // Box 1 consent (organiser mailing list) — adds/reactivates this buyer in
+  // the organiser's Audience. Never touches anything if consent wasn't given.
+  if (consent && email) {
+    (async () => {
+      try {
+        const { error } = await db.rpc('upsert_audience_member', {
+          p_organizer_id: eventRow.organizer_id,
+          p_email:        email,
+          p_name:         p.buyerName || null,
+          p_phone:        null,
+          p_source:       'ticket_consent',
+        });
+        if (error) console.error('createTicketFromPayment: audience upsert error', error);
+      } catch (err) {
+        console.error('createTicketFromPayment: audience upsert error', err);
+      }
+    })();
+  }
 
   if (p.refCode) {
     // One buy per completed order, not per ticket. This only runs on the real

@@ -3,6 +3,7 @@ import { getAuthUser } from '@/lib/server/auth';
 import { getServerSupabase } from '@/lib/supabase/server';
 import { v4 as uuidv4 } from 'uuid';
 import { notify } from '@/lib/server/notify';
+import { sendAdminNewEventEmail } from '@/lib/server/email';
 import { generateEventSlug } from '@/lib/server/slug';
 import { ACCENT_COLOR_PRESETS } from '@/lib/accentColors';
 import { PLATFORM_FEE_RATE } from '@/lib/fees';
@@ -56,7 +57,7 @@ export async function POST(req: NextRequest) {
     const organizerId = user.sub;
 
     // Verify KYC approved
-    const { data: org, error: orgError } = await db.from('users').select('verified').eq('id', organizerId).maybeSingle();
+    const { data: org, error: orgError } = await db.from('users').select('verified, name').eq('id', organizerId).maybeSingle();
     if (orgError) {
       console.error('POST /api/organizer/events kyc check db error:', orgError.message);
       return NextResponse.json({ error: orgError.message }, { status: 500 });
@@ -173,6 +174,14 @@ export async function POST(req: NextRequest) {
       { type: 'admin' },
       { notifType: 'event', title: 'New Event Submitted', body: `"${name}" has been submitted for review.`, link: '/admin/events' },
     ).catch(console.error);
+
+    sendAdminNewEventEmail({
+      eventName:     name,
+      organizerName: org.name || 'An organiser',
+      eventDate:     date,
+      city:          eventMode === 'online' ? 'Online' : (city || 'Not specified'),
+      eventId,
+    }).catch(err => console.error('POST /api/organizer/events: admin email error', err));
 
     return NextResponse.json({ success: true, data: { eventId } }, { status: 201 });
   } catch (err) {

@@ -478,6 +478,101 @@ export async function sendReminderEmail(params: {
   await sendEmail({ to: params.to, subject, html, fromName: params.eventName });
 }
 
+export async function sendAdminNewEventEmail(params: {
+  eventName: string;
+  organizerName: string;
+  eventDate: string;
+  city: string;
+  eventId: string;
+}) {
+  const adminEmail = process.env.ADMIN_EMAIL;
+  if (!adminEmail) return;
+  await sendEmail({
+    to: adminEmail,
+    subject: `New event submitted: ${params.eventName}`,
+    html: emailShell(`
+      <h1 style="color:#a855f7;font-size:22px;margin:0 0 12px;">New Event Submitted</h1>
+      <p style="color:#f1f0ff;margin:0 0 20px;"><strong>${esc(params.organizerName)}</strong> submitted a new event for review.</p>
+      <table width="100%" cellpadding="0" cellspacing="0"
+        style="background:#12121a;border:1px solid #2d2d3d;border-radius:8px;margin-bottom:24px;">
+        <tr><td style="padding:20px;">
+          <p style="font-size:17px;font-weight:700;margin:0 0 4px;color:#f1f0ff;">${esc(params.eventName)}</p>
+          <p class="label" style="margin:0;">${esc(params.eventDate)} &bull; ${esc(params.city)}</p>
+        </td></tr>
+      </table>
+      <a href="${APP_URL}/admin/events" class="btn">Review Event</a>
+    `),
+  });
+}
+
+export async function sendNewsletterEmail(params: {
+  to: string;
+  organizerName: string;
+  subject: string;
+  body: string;
+  imageUrls: string[];
+  unsubscribeUrl: string;
+}) {
+  const paragraphs = params.body
+    .split(/\n{2,}/)
+    .map(p => `<p style="color:#f1f0ff;margin:0 0 14px;line-height:1.6;font-size:14px;">${esc(p).replace(/\n/g, '<br/>')}</p>`)
+    .join('');
+
+  const images = params.imageUrls
+    .map(url => `<div style="margin:0 0 16px;line-height:0;"><img src="${esc(url)}" alt="" style="display:block;width:100%;border-radius:8px;" /></div>`)
+    .join('');
+
+  await sendEmail({
+    to: params.to,
+    fromName: params.organizerName,
+    subject: params.subject,
+    html: emailShell(`
+      <h1 style="color:#a855f7;font-size:20px;margin:0 0 16px;">${esc(params.subject)}</h1>
+      ${images}
+      ${paragraphs}
+      <p class="footer" style="margin-top:24px;">
+        Sent by ${esc(params.organizerName)} via Ventry.
+        <a href="${params.unsubscribeUrl}" style="color:#6b7280;">Unsubscribe from this organiser</a>
+      </p>
+    `),
+  });
+}
+
+export async function sendNewsletterSentConfirmationEmail(params: {
+  to: string;
+  organizerName: string;
+  subject: string;
+  recipientCount: number;
+}) {
+  await sendEmail({
+    to: params.to,
+    subject: `Your mail "${params.subject}" has been sent`,
+    html: emailShell(`
+      <h1 style="color:#34d399;font-size:22px;margin:0 0 12px;">Mail Sent &#10003;</h1>
+      <p style="color:#f1f0ff;">Hi ${esc(params.organizerName)}, your mail <strong>&ldquo;${esc(params.subject)}&rdquo;</strong> was approved and sent to your audience.</p>
+      <p style="color:#9ca3af;font-size:13px;">Delivered to <strong style="color:#f1f0ff;">${params.recipientCount}</strong> recipient${params.recipientCount !== 1 ? 's' : ''}.</p>
+    `),
+  });
+}
+
+export async function sendNewsletterRejectedEmail(params: {
+  to: string;
+  organizerName: string;
+  subject: string;
+  reason: string;
+}) {
+  await sendEmail({
+    to: params.to,
+    subject: `Your mail "${params.subject}" was not approved`,
+    html: emailShell(`
+      <h1 style="color:#f87171;font-size:22px;margin:0 0 12px;">Mail Not Approved</h1>
+      <p style="color:#f1f0ff;">Hi ${esc(params.organizerName)}, your mail <strong>&ldquo;${esc(params.subject)}&rdquo;</strong> was not approved for sending.</p>
+      <p style="color:#f1f0ff;"><strong>Reason:</strong> ${esc(params.reason)}</p>
+      <p style="color:#9ca3af;font-size:13px;">You can revise and resubmit it from your Ventry dashboard.</p>
+    `),
+  });
+}
+
 export async function sendNewEventTeaserEmail(params: {
   to: string;
   organizerName: string;

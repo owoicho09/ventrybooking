@@ -12,6 +12,7 @@ import {
   Settings,
   Wallet,
   Share2,
+  Users,
   MoreHorizontal,
 } from 'lucide-react';
 import { NotificationBell } from '@/components/ui/NotificationBell';
@@ -26,6 +27,7 @@ const navItems = [
 
 // Secondary items that don't fit directly on the bar — reachable via "More".
 const moreItems = [
+  { href: '/organizer/audience', label: 'Audience',  icon: Users },
   { href: '/organizer/staff',    label: 'Staff IDs', icon: KeyRound },
   { href: '/organizer/payouts',  label: 'Payouts',   icon: Wallet },
   { href: '/organizer/scan',     label: 'Scanner',   icon: ScanLine },
