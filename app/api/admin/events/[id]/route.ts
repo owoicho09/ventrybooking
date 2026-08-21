@@ -27,10 +27,10 @@ export async function GET(
       .maybeSingle(),
     db
       .from('tickets')
-      .select('id, buyer_name, buyer_email, tier_id, total_paid, subtotal, status, purchased_at, paystack_reference, refunded_at, refunded_by, refund_reason')
+      .select('id, buyer_name, buyer_email, tier_id, total_paid, subtotal, service_fee, status, purchased_at, paystack_reference, refunded_at, refunded_by, refund_reason')
       .eq('event_id', id)
       .order('purchased_at', { ascending: false }),
-    db.from('payouts').select('status, released_at').eq('event_id', id).maybeSingle(),
+    db.from('payouts').select('fee, status, released_at').eq('event_id', id).maybeSingle(),
   ]);
 
   if (eventErr || ticketsErr) {
@@ -62,15 +62,22 @@ export async function GET(
     );
   }
 
-  const totalSold    = tiers.reduce((s, t) => s + (t.sold ?? 0), 0);
-  const totalRevenue = (tickets ?? [])
-    .filter(t => t.status !== 'refunded')
-    .reduce((s, t) => s + (t.total_paid ?? 0), 0);
+  const totalSold = tiers.reduce((s, t) => s + (t.sold ?? 0), 0);
 
   // Released/otp_pending means Paystack funds have already left escrow for this event —
   // refunds can no longer be issued against it (see the refund endpoint's own check,
   // this flag just lets the UI explain why up front).
   const payoutReleased = payout?.status === 'completed' || payout?.status === 'otp_pending';
+
+  // Revenue = what Ventry has actually earned on this event, not what passed
+  // through us. Service fee is ours the moment a (non-refunded) ticket sells;
+  // the platform's cut of ticket price isn't ours until this event's payout
+  // has actually released — see /api/admin/stats for the platform-wide version
+  // of this same split.
+  const serviceFeeRevenue = (tickets ?? [])
+    .filter(t => t.status !== 'refunded')
+    .reduce((s, t) => s + (t.service_fee ?? 0), 0);
+  const totalRevenue = serviceFeeRevenue + (payoutReleased ? (payout?.fee ?? 0) : 0);
 
   const rows = (tickets ?? []).map(t => ({
     id:                 t.id,
