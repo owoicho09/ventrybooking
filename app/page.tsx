@@ -19,6 +19,7 @@ import { EventCard } from '@/components/events/EventCard';
 import { Button } from '@/components/ui/Button';
 import { getServerSupabase } from '@/lib/supabase/server';
 import { getEventsHostedCounts } from '@/lib/server/eventsHosted';
+import { ticketUrgency } from '@/lib/ticketUrgency';
 
 const trustBadges = [
   { icon: Shield, label: 'Escrow Protected' },
@@ -98,12 +99,7 @@ export default async function HomePage() {
       (Array.isArray(row.tiers) ? row.tiers : []) ?? [];
     const totalAvailable = tiers.reduce((s, t) => s + t.available, 0);
     const totalSold      = tiers.reduce((s, t) => s + t.sold, 0);
-    const remaining      = totalAvailable - totalSold;
-    const badge =
-      remaining === 0                                             ? ('sold_out'     as const)
-      : totalAvailable > 0 && remaining / totalAvailable <= 0.2  ? ('limited'      as const)
-      : totalAvailable > 0 && totalSold  / totalAvailable >= 0.5 ? ('selling_fast' as const)
-      : undefined;
+    const badge = ticketUrgency(totalAvailable, totalSold);
 
     const organizer = one(row.organizer) ?? {
       id: '', name: '', email: '', phone: '', tier: 'Standard',

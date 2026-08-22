@@ -65,7 +65,7 @@ export interface Event {
   organizer: Organizer;
   tiers: TicketTier[];
   status: EventStatus;
-  badge?: 'selling_fast' | 'limited' | 'sold_out';
+  badge?: 'few_left' | 'very_few_left' | 'almost_gone' | 'sold_out';
   totalSold: number;
   bannerColor: string;
   banner_url?: string | null;

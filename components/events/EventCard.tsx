@@ -4,6 +4,7 @@ import { Calendar, MapPin, CheckCircle } from 'lucide-react';
 import { Badge } from '@/components/ui/Badge';
 import { Button } from '@/components/ui/Button';
 import { formatNGN, formatShortDate } from '@/lib/utils';
+import { URGENCY_LABEL } from '@/lib/ticketUrgency';
 import type { Event } from '@/types';
 
 interface EventCardProps {
@@ -82,21 +83,24 @@ export function EventCard({ event, variant = 'default' }: EventCardProps) {
             )}
 
             {/* Status badge */}
-            {event.badge === 'selling_fast' && (
+            {event.badge === 'few_left' && (
               <div className="absolute top-3 right-3 z-10">
-                <Badge variant="amber">SELLING FAST</Badge>
+                <Badge variant="amber">{URGENCY_LABEL.few_left}</Badge>
               </div>
             )}
-            {event.badge === 'limited' && (
+            {event.badge === 'very_few_left' && (
               <div className="absolute top-3 right-3 z-10">
-                <Badge variant="red">
-                  {event.tiers.reduce((sum, t) => sum + (t.available - t.sold), 0)} LEFT
-                </Badge>
+                <Badge variant="amber">{URGENCY_LABEL.very_few_left}</Badge>
+              </div>
+            )}
+            {event.badge === 'almost_gone' && (
+              <div className="absolute top-3 right-3 z-10">
+                <Badge variant="red">{URGENCY_LABEL.almost_gone}</Badge>
               </div>
             )}
             {event.badge === 'sold_out' && (
               <div className="absolute top-3 right-3 z-10">
-                <Badge variant="gray">SOLD OUT</Badge>
+                <Badge variant="gray">{URGENCY_LABEL.sold_out}</Badge>
               </div>
             )}
 

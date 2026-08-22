@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from 'next/server';
 import { getServerSupabase } from '@/lib/supabase/server';
 import { getEventsHostedCounts } from '@/lib/server/eventsHosted';
 import { isUUID } from '@/lib/slug';
+import { ticketUrgency } from '@/lib/ticketUrgency';
 
 type RawTier = { id: string; name: string; price: number; available: number; sold: number };
 
@@ -9,11 +10,7 @@ function computeBadge(tiers: RawTier[]) {
   if (!tiers?.length) return undefined;
   const totalAvailable = tiers.reduce((s, t) => s + t.available, 0);
   const totalSold = tiers.reduce((s, t) => s + t.sold, 0);
-  const remaining = totalAvailable - totalSold;
-  if (remaining === 0) return 'sold_out' as const;
-  if (totalAvailable > 0 && remaining / totalAvailable <= 0.2) return 'limited' as const;
-  if (totalAvailable > 0 && totalSold / totalAvailable >= 0.5) return 'selling_fast' as const;
-  return undefined;
+  return ticketUrgency(totalAvailable, totalSold);
 }
 
 export async function GET(

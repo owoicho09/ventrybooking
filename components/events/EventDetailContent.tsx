@@ -10,6 +10,7 @@ import { Button } from '@/components/ui/Button';
 import { Badge } from '@/components/ui/Badge';
 import { formatNGN, formatDate, eventsHostedLabel } from '@/lib/utils';
 import { serviceFeePerTicket, processingFee as computeProcessingFee } from '@/lib/fees';
+import { ticketUrgency, URGENCY_LABEL } from '@/lib/ticketUrgency';
 import type { Event, TicketTier } from '@/types';
 import { EventReviews } from '@/components/events/EventReviews';
 import { useToast } from '@/components/ui/Toast';
@@ -189,16 +190,10 @@ export function EventDetailContent({ identifier }: EventDetailContentProps) {
             const qty = quantities[tier.id] ?? 0;
             const remaining = tier.available - tier.sold;
             const isSoldOut = remaining <= 0;
-            // Urgency copy only kicks in once a tier is genuinely running out —
-            // both mostly-sold (70%+) AND down to a low absolute count, so a
-            // huge tier that's 70% sold but still has hundreds left doesn't
-            // cry wolf.
-            const percentSold = tier.available > 0 ? tier.sold / tier.available : 0;
-            const urgency = isSoldOut || percentSold < 0.7 ? null
-              : remaining <= 10 ? { text: 'Almost gone',   variant: 'red' as const }
-              : remaining <= 30 ? { text: 'Very few left', variant: 'amber' as const }
-              : remaining <= 50 ? { text: 'Few left',      variant: 'amber' as const }
-              : null;
+            const urgency = ticketUrgency(tier.available, tier.sold);
+            // Sold-out already gets its own badge on the right below — no need
+            // to also show it here on the left.
+            const urgencyVariant = urgency === 'almost_gone' ? 'red' as const : 'amber' as const;
             return (
               <div key={tier.id} className="rounded-lg border p-4" style={{ borderColor: qty > 0 ? 'var(--color-purple)' : 'var(--color-border)', backgroundColor: qty > 0 ? 'var(--color-purple-dim)' : 'var(--color-surface-2)' }}>
                 <div className="flex items-center justify-between mb-2">
@@ -207,11 +202,11 @@ export function EventDetailContent({ identifier }: EventDetailContentProps) {
                     <p className="text-base font-bold" style={{ color: tier.price === 0 ? 'var(--color-green)' : 'var(--color-text)' }}>
                       {tier.price === 0 ? 'Free' : formatNGN(tier.price)}
                     </p>
-                    {urgency && (
-                      <Badge variant={urgency.variant} className="mt-1">{urgency.text}</Badge>
+                    {urgency && urgency !== 'sold_out' && (
+                      <Badge variant={urgencyVariant} className="mt-1">{URGENCY_LABEL[urgency]}</Badge>
                     )}
                   </div>
-                  {isSoldOut ? <Badge variant="gray">Sold Out</Badge> : (
+                  {isSoldOut ? <Badge variant="gray">{URGENCY_LABEL.sold_out}</Badge> : (
                     <div className="flex items-center gap-2">
                       <button onClick={() => updateQty(tier.id, -1)} disabled={qty === 0} className="w-7 h-7 rounded-md flex items-center justify-center border transition-colors disabled:opacity-30" style={{ borderColor: 'var(--color-border)', color: 'var(--color-text)', backgroundColor: 'var(--color-surface)' }}><Minus size={13} /></button>
                       <span className="w-5 text-center text-sm font-semibold" style={{ color: 'var(--color-text)' }}>{qty}</span>
