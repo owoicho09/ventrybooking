@@ -389,7 +389,7 @@ export default function OrganizerEventDetailPage() {
           <p className="text-sm" style={{ color: 'var(--color-text-muted)' }}>No tiers configured.</p>
         )}
 
-        {event.tiers.map(tier => (
+        {[...event.tiers].sort((a, b) => a.price - b.price).map(tier => (
           editingTierId === tier.id
             ? <EditTierRow
                 key={tier.id}

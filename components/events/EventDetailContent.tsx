@@ -186,7 +186,7 @@ export function EventDetailContent({ identifier }: EventDetailContentProps) {
       <div className="p-5 flex flex-col gap-4">
         <h3 className="font-semibold text-base" style={{ color: 'var(--color-text)' }}>Select Tickets</h3>
         <div className="flex flex-col gap-3">
-          {event.tiers.map((tier: TicketTier) => {
+          {[...event.tiers].sort((a, b) => a.price - b.price).map((tier: TicketTier) => {
             const qty = quantities[tier.id] ?? 0;
             const remaining = tier.available - tier.sold;
             const isSoldOut = remaining <= 0;
@@ -203,7 +203,10 @@ export function EventDetailContent({ identifier }: EventDetailContentProps) {
                       {tier.price === 0 ? 'Free' : formatNGN(tier.price)}
                     </p>
                     {urgency && urgency !== 'sold_out' && (
-                      <Badge variant={urgencyVariant} className="mt-1">{URGENCY_LABEL[urgency]}</Badge>
+                      <div className="flex items-center gap-1.5 mt-1">
+                        <Badge variant={urgencyVariant}>{URGENCY_LABEL[urgency]}</Badge>
+                        <span className="text-xs" style={{ color: 'var(--color-text-dim)' }}>{remaining} left</span>
+                      </div>
                     )}
                   </div>
                   {isSoldOut ? <Badge variant="gray">{URGENCY_LABEL.sold_out}</Badge> : (

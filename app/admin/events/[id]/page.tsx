@@ -183,7 +183,7 @@ export default function AdminEventDetailPage() {
           style={{ backgroundColor: 'var(--color-surface)', borderColor: 'var(--color-border)' }}>
           <h2 className="font-semibold" style={{ color: 'var(--color-text)' }}>Tiers</h2>
           <div className="flex flex-col gap-2">
-            {event.tiers.map(tier => (
+            {[...event.tiers].sort((a, b) => a.price - b.price).map(tier => (
               <div key={tier.id} className="flex items-center justify-between text-sm">
                 <span style={{ color: 'var(--color-text)' }}>{tier.name}</span>
                 <span style={{ color: 'var(--color-text-muted)' }}>
