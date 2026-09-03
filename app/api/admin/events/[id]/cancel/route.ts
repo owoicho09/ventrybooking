@@ -102,7 +102,7 @@ export async function POST(
       title: `Event cancelled — ${event.event_name}`,
       body: 'No outstanding tickets; no refunds required.',
       link: '/admin/events',
-    }).catch(console.error);
+    }, { emailChannel: 'immediate' }).catch(console.error);
     return NextResponse.json({ success: true, data: { refunded: 0, failed: 0, failures: [] } });
   }
 
@@ -229,7 +229,7 @@ export async function POST(
     title: `Event cancelled — ${event.event_name}`,
     body: `${refunded} refund${refunded !== 1 ? 's' : ''} processed${failures.length > 0 ? `, ${failures.length} failed` : ' successfully'}.`,
     link: '/admin/events',
-  }).catch(console.error);
+  }, { emailChannel: 'immediate' }).catch(console.error);
 
   return NextResponse.json({
     success: true,

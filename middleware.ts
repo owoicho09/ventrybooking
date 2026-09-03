@@ -3,12 +3,18 @@ import { jwtVerify } from 'jose';
 
 const ORGANIZER_LOGIN = '/organizer/login';
 const ADMIN_LOGIN = '/admin/login';
+const AFFILIATE_LOGIN = '/affiliate/login';
 
 const ORGANIZER_AUTH_PATHS = [
   '/organizer/login',
   '/organizer/register',
   '/organizer/forgot-password',
   '/organizer/reset-password',
+];
+
+const AFFILIATE_AUTH_PATHS = [
+  '/affiliate/login',
+  '/affiliate/register',
 ];
 
 const SECRET = new TextEncoder().encode(process.env.JWT_SECRET!);
@@ -65,9 +71,33 @@ export async function middleware(req: NextRequest) {
     return NextResponse.next();
   }
 
+  // Affiliate routes
+  if (pathname.startsWith('/affiliate')) {
+    const isAuthPage = AFFILIATE_AUTH_PATHS.some((p) => pathname.startsWith(p));
+
+    if (isAuthPage) {
+      if (token) {
+        const payload = await verifyToken(token);
+        if (payload?.role === 'affiliate') {
+          return NextResponse.redirect(new URL('/affiliate/dashboard', req.url));
+        }
+      }
+      return NextResponse.next();
+    }
+
+    if (!token) {
+      return NextResponse.redirect(new URL(AFFILIATE_LOGIN, req.url));
+    }
+    const payload = await verifyToken(token);
+    if (!payload || payload.role !== 'affiliate') {
+      return NextResponse.redirect(new URL(AFFILIATE_LOGIN, req.url));
+    }
+    return NextResponse.next();
+  }
+
   return NextResponse.next();
 }
 
 export const config = {
-  matcher: ['/organizer/:path*', '/admin/:path*'],
+  matcher: ['/organizer/:path*', '/admin/:path*', '/affiliate/:path*'],
 };

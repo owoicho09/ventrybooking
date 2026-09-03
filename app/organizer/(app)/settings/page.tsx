@@ -23,7 +23,7 @@ interface Me {
   name: string; email: string; phone: string; bio: string;
   bank_name: string; account_number: string; account_name: string;
   email_notifications: boolean; sms_alerts: boolean;
-  handle: string; avatar_url: string | null; socials: Socials;
+  handle: string; avatar_url: string | null; cover_image_url: string | null; socials: Socials;
 }
 
 export default function OrganizerSettingsPage() {
@@ -33,6 +33,7 @@ export default function OrganizerSettingsPage() {
   const [storefrontSaving, setStorefrontSaving] = useState(false);
   const [storefrontMsg, setStorefrontMsg]       = useState('');
   const [avatarUploading, setAvatarUploading]   = useState(false);
+  const [coverUploading, setCoverUploading]     = useState(false);
   const [profileSaving, setProfileSaving] = useState(false);
   const [bankSaving, setBankSaving]   = useState(false);
   const [pwSaving, setPwSaving]       = useState(false);
@@ -91,6 +92,19 @@ export default function OrganizerSettingsPage() {
     setAvatarUploading(false);
     if (!res.ok) { setStorefrontMsg(d.error || 'Avatar upload failed'); return; }
     setMe(p => ({ ...p, avatar_url: d.data.avatarUrl }));
+  };
+
+  const handleCoverChange = async (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    if (!file) return;
+    setCoverUploading(true);
+    const fd = new FormData();
+    fd.append('cover', file);
+    const res = await fetch('/api/organizer/cover', { method: 'POST', body: fd });
+    const d = await res.json();
+    setCoverUploading(false);
+    if (!res.ok) { setStorefrontMsg(d.error || 'Cover image upload failed'); return; }
+    setMe(p => ({ ...p, cover_image_url: d.data.coverImageUrl }));
   };
 
   const setSocial = (platform: keyof Socials) => (e: React.ChangeEvent<HTMLInputElement>) =>
@@ -168,6 +182,20 @@ export default function OrganizerSettingsPage() {
           </p>
         </div>
         <form onSubmit={saveStorefront} className="flex flex-col gap-4">
+          <div>
+            <p className="text-sm font-medium mb-2" style={{ color: 'var(--color-text)' }}>Cover Image</p>
+            <div className="w-full h-28 rounded-lg overflow-hidden mb-2" style={{ backgroundColor: 'var(--color-surface-2)' }}>
+              {me.cover_image_url && (
+                // eslint-disable-next-line @next/next/no-img-element
+                <img src={me.cover_image_url} alt="Cover" className="w-full h-full object-cover" />
+              )}
+            </div>
+            <label className="text-sm font-medium px-4 py-2 rounded-lg border cursor-pointer inline-block"
+              style={{ borderColor: 'var(--color-border)', color: 'var(--color-text)' }}>
+              <input type="file" accept="image/*" className="sr-only" onChange={handleCoverChange} disabled={coverUploading} />
+              {coverUploading ? 'Uploading…' : me.cover_image_url ? 'Change Cover Image' : 'Add Cover Image'}
+            </label>
+          </div>
           <div className="flex items-center gap-4">
             <div className="w-16 h-16 rounded-full flex items-center justify-center text-xl font-bold text-white flex-shrink-0 overflow-hidden"
               style={{ backgroundColor: 'var(--color-purple)' }}>

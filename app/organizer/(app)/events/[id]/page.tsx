@@ -5,11 +5,12 @@ import { useParams, useRouter } from 'next/navigation';
 import Link from 'next/link';
 import {
   ArrowLeft, Download, Plus, Pencil, Check, X,
-  AlertTriangle, Ticket, Copy, Eye, EyeOff, Users,
+  AlertTriangle, Ticket, Copy, Eye, EyeOff, Users, Upload,
 } from 'lucide-react';
 import { Badge } from '@/components/ui/Badge';
 import { Button } from '@/components/ui/Button';
 import { Input, Textarea } from '@/components/ui/Input';
+import { Select } from '@/components/ui/Select';
 import { useToast } from '@/components/ui/Toast';
 import { formatNGN, formatShortDate } from '@/lib/utils';
 import { ACCENT_COLOR_PRESETS } from '@/lib/accentColors';
@@ -18,14 +19,27 @@ import { EventQRCode } from '@/components/organizer/EventQRCode';
 
 interface Tier { id: string; name: string; price: number; available: number; sold: number; }
 interface Affiliate { id: string; name: string; code: string; link: string; clicks: number; buys: number; }
-interface LineupAct { name: string; role: string; }
+type LineupLiability = 'headliner' | 'guest' | 'surprise';
+interface LineupAct { name: string; role: string; liability?: LineupLiability; photoUrl?: string | null; }
+
+const LIABILITY_OPTIONS = [
+  { value: 'guest', label: 'Guest Artist / Special Guest / Speaker' },
+  { value: 'headliner', label: 'Headliner' },
+  { value: 'surprise', label: 'Surprise Guest' },
+];
+
+const LIABILITY_HINT: Record<LineupLiability, string> = {
+  headliner: "This is the single billed act the ticket is sold on — it carries refund liability if they don't perform. Only one allowed per event.",
+  guest: 'Listed and promoted alongside the headliner — no refund exposure if they drop out.',
+  surprise: "Listed on the page, but their name is never shown to buyers — you can still enter it here for your own record.",
+};
 interface OrgEvent {
   id: string; slug: string; event_name: string; category: string; description: string;
   date: string; time: string; event_mode: 'physical' | 'online'; venue: string; address: string; city: string;
   landmark: string | null; location_hidden: boolean;
   meeting_link: string | null; meeting_passcode: string | null;
-  status: string; total_sold: number; banner_url: string | null; banner_color: string;
-  accent_color: string | null; lineup: LineupAct[];
+  status: string; total_sold: number; banner_url: string | null; header_banner_url: string | null; banner_color: string;
+  accent_color: string | null; lineup: LineupAct[]; allowed_email_domains: string[] | null;
   organizer_id: string; tiers: Tier[];
 }
 
@@ -118,6 +132,8 @@ export default function OrganizerEventDetailPage() {
   const [loading, setLoading]     = useState(true);
   const [editingInfo, setEditingInfo] = useState(false);
   const [description, setDescription] = useState('');
+  const [date, setDate] = useState('');
+  const [time, setTime] = useState('');
   const [venue, setVenue] = useState('');
   const [address, setAddress]     = useState('');
   const [city, setCity] = useState('');
@@ -138,6 +154,7 @@ export default function OrganizerEventDetailPage() {
   const [addingAffiliate, setAddingAffiliate] = useState(false);
   const [accentColor, setAccentColor] = useState<string | null>(null);
   const [lineup, setLineup] = useState<LineupAct[]>([]);
+  const [restrictedDomainsInput, setRestrictedDomainsInput] = useState('');
   const [savingBranding, setSavingBranding] = useState(false);
 
   const load = () => {
@@ -148,6 +165,8 @@ export default function OrganizerEventDetailPage() {
         if (d.success) {
           setEvent(d.data);
           setDescription(d.data.description);
+          setDate(d.data.date);
+          setTime(d.data.time);
           setVenue(d.data.venue);
           setAddress(d.data.address);
           setCity(d.data.city);
@@ -157,6 +176,7 @@ export default function OrganizerEventDetailPage() {
           setMeetingPasscode(d.data.meeting_passcode ?? '');
           setAccentColor(d.data.accent_color ?? null);
           setLineup(d.data.lineup ?? []);
+          setRestrictedDomainsInput((d.data.allowed_email_domains ?? []).join(', '));
         } else {
           toast(d.error || 'Event not found', 'error');
           router.push('/organizer/events');
@@ -183,13 +203,20 @@ export default function OrganizerEventDetailPage() {
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify(
           event?.event_mode === 'online'
-            ? { description, meeting_link: meetingLink, meeting_passcode: meetingPasscode }
-            : { description, venue, address, city, landmark, location_hidden: locationHidden },
+            ? { description, date, time, meeting_link: meetingLink, meeting_passcode: meetingPasscode }
+            : { description, date, time, venue, address, city, landmark, location_hidden: locationHidden },
         ),
       });
       const data = await res.json();
       if (!res.ok) { toast(data.error || 'Update failed', 'error'); return; }
-      toast('Event updated', 'success');
+      if (data.data?.pendingApproval) {
+        toast('This event has used its 2 included changes — the venue/date change was submitted to Ventry for approval and has not been applied yet.', 'success');
+      } else {
+        const venueOrDateChanged = isApproved && (
+          date !== event?.date || (event?.event_mode !== 'online' && (venue !== event?.venue || address !== event?.address || city !== event?.city))
+        );
+        toast(venueOrDateChanged ? 'Event updated — buyers are being notified with a refund option' : 'Event updated', 'success');
+      }
       setEditingInfo(false);
       load();
     } finally {
@@ -203,7 +230,11 @@ export default function OrganizerEventDetailPage() {
       const res = await fetch(`/api/organizer/events/${id}`, {
         method: 'PATCH',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ accent_color: accentColor, lineup: lineup.filter(a => a.name.trim()) }),
+        body: JSON.stringify({
+          accent_color: accentColor,
+          lineup: lineup.filter(a => a.name.trim() || a.liability === 'surprise'),
+          allowed_email_domains: restrictedDomainsInput.split(',').map(d => d.trim()).filter(Boolean),
+        }),
       });
       const data = await res.json();
       if (!res.ok) { toast(data.error || 'Update failed', 'error'); return; }
@@ -214,10 +245,30 @@ export default function OrganizerEventDetailPage() {
     }
   };
 
-  const addAct = () => setLineup(p => [...p, { name: '', role: '' }]);
+  const addAct = () => setLineup(p => [...p, { name: '', role: '', liability: 'guest' }]);
   const removeAct = (index: number) => setLineup(p => p.filter((_, i) => i !== index));
-  const updateAct = (index: number, field: keyof LineupAct, value: string) =>
+  const updateAct = (index: number, field: 'name' | 'role', value: string) =>
     setLineup(p => p.map((a, i) => (i === index ? { ...a, [field]: value } : a)));
+  const updateLiability = (index: number, liability: LineupLiability) =>
+    setLineup(p => p.map((a, i) => {
+      if (i === index) return { ...a, liability };
+      if (liability === 'headliner' && a.liability === 'headliner') return { ...a, liability: 'guest' };
+      return a;
+    }));
+  const [uploadingLineupPhoto, setUploadingLineupPhoto] = useState<number | null>(null);
+  const handleLineupPhotoChange = async (index: number, file: File) => {
+    setUploadingLineupPhoto(index);
+    try {
+      const fd = new FormData();
+      fd.append('photo', file);
+      const res = await fetch(`/api/organizer/events/${id}/lineup-photo`, { method: 'POST', body: fd });
+      const data = await res.json();
+      if (!res.ok) { toast(data.error || 'Photo upload failed', 'error'); return; }
+      setLineup(p => p.map((a, i) => (i === index ? { ...a, photoUrl: data.data.url } : a)));
+    } finally {
+      setUploadingLineupPhoto(null);
+    }
+  };
 
   const handleBannerChange = async (file: File) => {
     const fd = new FormData();
@@ -225,7 +276,17 @@ export default function OrganizerEventDetailPage() {
     const res = await fetch(`/api/organizer/events/${id}/banner`, { method: 'POST', body: fd });
     const data = await res.json();
     if (!res.ok) { toast(data.error || 'Upload failed', 'error'); return; }
-    toast('Banner updated', 'success');
+    toast('Flyer updated', 'success');
+    load();
+  };
+
+  const handleHeaderBannerChange = async (file: File) => {
+    const fd = new FormData();
+    fd.append('headerBanner', file);
+    const res = await fetch(`/api/organizer/events/${id}/header-banner`, { method: 'POST', body: fd });
+    const data = await res.json();
+    if (!res.ok) { toast(data.error || 'Upload failed', 'error'); return; }
+    toast('Header banner updated', 'success');
     load();
   };
 
@@ -439,7 +500,7 @@ export default function OrganizerEventDetailPage() {
             <h2 className="font-semibold" style={{ color: 'var(--color-text)' }}>Event Details</h2>
             {isApproved && (
               <p className="text-xs mt-0.5" style={{ color: 'var(--color-text-dim)' }}>
-                Name and date are locked after approval. You can edit description and location details.
+                Name is locked after approval. Changing the date or venue notifies every buyer and gives them a 48-hour refund option.
               </p>
             )}
           </div>
@@ -453,6 +514,18 @@ export default function OrganizerEventDetailPage() {
         {editingInfo ? (
           <div className="flex flex-col gap-4">
             <Textarea label="Description" value={description} onChange={e => setDescription(e.target.value)} rows={4} />
+            <div className="grid grid-cols-2 gap-3">
+              <Input label="Event Date" type="date" value={date} onChange={e => setDate(e.target.value)} />
+              <Input label="Start Time" type="time" value={time} onChange={e => setTime(e.target.value)} />
+            </div>
+            {isApproved && (date !== event.date) && (
+              <div className="rounded-lg px-4 py-3 flex items-start gap-2 text-sm" style={{ backgroundColor: '#f59e0b10', border: '1px solid #f59e0b30' }}>
+                <AlertTriangle size={15} className="flex-shrink-0 mt-0.5" style={{ color: 'var(--color-amber)' }} />
+                <p style={{ color: 'var(--color-text-muted)' }}>
+                  Saving this date change will email every current ticket holder and give them a 48-hour window to opt out for a full refund. The event keeps selling throughout. Events get 2 organiser-made changes included — after that, changes need Ventry&apos;s approval before they apply.
+                </p>
+              </div>
+            )}
             {event.event_mode === 'online' ? (
               <>
                 <Input label="Meeting Link" value={meetingLink} onChange={e => setMeetingLink(e.target.value)} placeholder="https://zoom.us/j/..." />
@@ -467,6 +540,14 @@ export default function OrganizerEventDetailPage() {
                 <Input label="Venue Address" value={address} onChange={e => setAddress(e.target.value)} />
                 <Input label="City" value={city} onChange={e => setCity(e.target.value)} />
                 <Input label="Nearby Landmark" value={landmark} onChange={e => setLandmark(e.target.value)} placeholder="e.g. Landmark Towers, Victoria Island" />
+                {isApproved && (venue !== event.venue || address !== event.address || city !== event.city) && (
+                  <div className="rounded-lg px-4 py-3 flex items-start gap-2 text-sm" style={{ backgroundColor: '#f59e0b10', border: '1px solid #f59e0b30' }}>
+                    <AlertTriangle size={15} className="flex-shrink-0 mt-0.5" style={{ color: 'var(--color-amber)' }} />
+                    <p style={{ color: 'var(--color-text-muted)' }}>
+                      Saving this venue change will email every current ticket holder and give them a 48-hour window to opt out for a full refund. The event keeps selling throughout. Events get 2 organiser-made changes included — after that, changes need Ventry&apos;s approval before they apply.
+                    </p>
+                  </div>
+                )}
                 <label className="flex items-start gap-3 rounded-lg border px-4 py-3 cursor-pointer"
                   style={{ borderColor: 'var(--color-border)', backgroundColor: 'var(--color-surface-2)' }}>
                   <input
@@ -525,15 +606,33 @@ export default function OrganizerEventDetailPage() {
         )}
       </div>
 
-      {/* Banner upload */}
+      {/* Flyer upload */}
       <div className="rounded-xl border p-5 flex flex-col gap-3"
         style={{ backgroundColor: 'var(--color-surface)', borderColor: 'var(--color-border)' }}>
         <BannerCropInput
-          label="Event Banner"
+          label="Event Flyer"
           currentUrl={event.banner_url}
           onCropped={handleBannerChange}
-          buttonText={event.banner_url ? 'Click to replace banner' : undefined}
+          buttonText={event.banner_url ? 'Click to replace flyer' : undefined}
         />
+      </div>
+
+      {/* Header banner upload */}
+      <div className="rounded-xl border p-5 flex flex-col gap-3"
+        style={{ backgroundColor: 'var(--color-surface)', borderColor: 'var(--color-border)' }}>
+        <BannerCropInput
+          label="Event Page Header Banner (optional)"
+          currentUrl={event.header_banner_url}
+          ratio={2}
+          minWidth={1200}
+          minHeight={600}
+          safeZoneHint
+          onCropped={handleHeaderBannerChange}
+          buttonText={event.header_banner_url ? 'Click to replace header banner' : 'Click or drag to upload a wide header banner'}
+        />
+        <p className="text-xs" style={{ color: 'var(--color-text-dim)' }}>
+          Shown as the fixed header on your event page. Leave empty to keep using the flyer there instead.
+        </p>
       </div>
 
       {/* Accent colour + lineup */}
@@ -575,19 +674,54 @@ export default function OrganizerEventDetailPage() {
         <div>
           <p className="text-sm font-medium mb-1.5" style={{ color: 'var(--color-text)' }}>Lineup</p>
           <div className="flex flex-col gap-2 mb-2">
-            {lineup.map((act, i) => (
-              <div key={i} className="rounded-lg border p-3 flex items-center gap-3" style={{ borderColor: 'var(--color-border)', backgroundColor: 'var(--color-surface-2)' }}>
-                <div className="grid grid-cols-2 gap-3 flex-1">
-                  <Input label="Name" value={act.name} onChange={e => updateAct(i, 'name', e.target.value)} placeholder="e.g. Burna Boy" />
-                  <Input label="Role" value={act.role} onChange={e => updateAct(i, 'role', e.target.value)} placeholder="e.g. Headliner" />
+            {lineup.map((act, i) => {
+              const liability: LineupLiability = act.liability ?? 'guest';
+              return (
+                <div key={i} className="rounded-lg border p-3 flex flex-col gap-3" style={{ borderColor: 'var(--color-border)', backgroundColor: 'var(--color-surface-2)' }}>
+                  <div className="flex items-start gap-3">
+                    <div className="grid grid-cols-2 gap-3 flex-1">
+                      <Input label="Name" value={act.name} onChange={e => updateAct(i, 'name', e.target.value)} placeholder="e.g. Burna Boy" />
+                      <Input label="Role" value={act.role} onChange={e => updateAct(i, 'role', e.target.value)} placeholder="e.g. DJ, Opening Act" />
+                    </div>
+                    <button type="button" onClick={() => removeAct(i)} className="mt-5" style={{ color: 'var(--color-red)' }}><X size={16} /></button>
+                  </div>
+                  <Select
+                    label="Billing"
+                    options={LIABILITY_OPTIONS}
+                    value={liability}
+                    onChange={e => updateLiability(i, e.target.value as LineupLiability)}
+                  />
+                  <p className="text-xs" style={{ color: 'var(--color-text-dim)' }}>{LIABILITY_HINT[liability]}</p>
+                  <label className="flex items-center gap-3 text-xs cursor-pointer" style={{ color: 'var(--color-text-muted)' }}>
+                    {act.photoUrl ? (
+                      // eslint-disable-next-line @next/next/no-img-element
+                      <img src={act.photoUrl} alt="" className="w-9 h-9 rounded-full object-cover" />
+                    ) : (
+                      <span className="w-9 h-9 rounded-full flex items-center justify-center" style={{ backgroundColor: 'var(--color-surface)' }}><Upload size={13} /></span>
+                    )}
+                    <input type="file" className="sr-only" accept="image/*" disabled={uploadingLineupPhoto === i} onChange={e => { const f = e.target.files?.[0]; if (f) handleLineupPhotoChange(i, f); }} />
+                    {uploadingLineupPhoto === i ? 'Uploading…' : act.photoUrl ? 'Change photo' : 'Add photo (optional)'}
+                  </label>
                 </div>
-                <button type="button" onClick={() => removeAct(i)} className="mt-5" style={{ color: 'var(--color-red)' }}><X size={16} /></button>
-              </div>
-            ))}
+              );
+            })}
           </div>
           <button type="button" onClick={addAct} className="flex items-center gap-2 text-sm font-medium" style={{ color: 'var(--color-purple-light)' }}>
             <Plus size={16} />Add Lineup Act
           </button>
+        </div>
+
+        <div>
+          <p className="text-sm font-medium mb-1.5" style={{ color: 'var(--color-text)' }}>Restrict to Email Domains</p>
+          <p className="text-xs mb-3" style={{ color: 'var(--color-text-dim)' }}>
+            Only buyers with an email at one of these domains can check out. Leave blank for a normal, open event.
+          </p>
+          <Input
+            value={restrictedDomainsInput}
+            onChange={e => setRestrictedDomainsInput(e.target.value)}
+            placeholder="e.g. nileuniversity.edu.ng, unilag.edu.ng"
+            helper="Comma-separated. No @ needed."
+          />
         </div>
 
         <Button size="sm" disabled={savingBranding} onClick={handleSaveBranding} className="self-start">

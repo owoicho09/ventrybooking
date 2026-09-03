@@ -76,6 +76,7 @@ export async function POST(req: NextRequest) {
         body:      `${email} filed a complaint for ticket ${ticketId} (${eventName}).`,
         link:      '/admin/complaints',
       },
+      { emailChannel: 'immediate' },
     ).catch(err => console.error('POST /api/help/refund: notify error', err));
 
     return NextResponse.json({

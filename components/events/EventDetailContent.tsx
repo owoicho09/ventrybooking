@@ -119,6 +119,7 @@ export function EventDetailContent({ identifier }: EventDetailContentProps) {
         quantity:  quantities[tier.id],
       })),
       ref,
+      allowedEmailDomains: event.allowedEmailDomains ?? null,
     }));
     router.push('/checkout');
   };
@@ -185,6 +186,18 @@ export function EventDetailContent({ identifier }: EventDetailContentProps) {
       </div>
       <div className="p-5 flex flex-col gap-4">
         <h3 className="font-semibold text-base" style={{ color: 'var(--color-text)' }}>Select Tickets</h3>
+        {event.allowedEmailDomains && event.allowedEmailDomains.length > 0 && (
+          <p className="text-xs rounded-lg px-3 py-2" style={{ backgroundColor: 'var(--color-surface-2)', color: 'var(--color-text-muted)' }}>
+            This event is restricted to buyers with a{' '}
+            {event.allowedEmailDomains.map((d, i) => (
+              <span key={d}>
+                <span className="font-medium" style={{ color: 'var(--color-text)' }}>@{d}</span>
+                {i < event.allowedEmailDomains!.length - 1 ? (i === event.allowedEmailDomains!.length - 2 ? ' or ' : ', ') : ''}
+              </span>
+            ))}{' '}
+            email address.
+          </p>
+        )}
         <div className="flex flex-col gap-3">
           {[...event.tiers].sort((a, b) => a.price - b.price).map((tier: TicketTier) => {
             const qty = quantities[tier.id] ?? 0;
@@ -255,57 +268,89 @@ export function EventDetailContent({ identifier }: EventDetailContentProps) {
     </div>
   );
 
+  const ventryWordmark = (
+    <Link href="/" className="text-lg font-bold tracking-tight" style={{ fontFamily: 'var(--font-syne), sans-serif' }}>
+      <span style={{ color: 'var(--color-purple)' }}>V</span>
+      <span style={{ color: '#fff' }}>ENTRY</span>
+    </Link>
+  );
+
   return (
     <div style={{ backgroundColor: 'var(--color-bg)' }}>
-      <div
-        className="relative"
-        style={{
-          // Normal, static top banner — it scrolls away with the rest of
-          // the page like any other content. An earlier version pinned this
-          // with position:fixed so it stayed put while content scrolled
-          // over it, but that made the banner read as a page background:
-          // once you scrolled past the actual page content, the still-fixed
-          // image kept showing through the gap at the bottom/edges. A plain
-          // in-flow block avoids that entirely.
-          height: BANNER_HEIGHT,
-        }}
-      >
-        {event.banner_url ? (
-          // object-contain looked "off" in practice: most organiser banners
-          // are portrait flyers, and letterboxing a tall image inside this
-          // short, full-bleed, wide strip leaves it a tiny sliver surrounded
-          // by dead space on anything wider than a phone. object-cover with
-          // a top-biased crop instead fills the strip cleanly on every
-          // screen size and keeps the part of the flyer that actually
-          // carries the title (almost always near the top).
-          <Image
-            src={event.banner_url}
-            alt={event.name}
-            fill
-            className="object-cover"
-            style={{ objectPosition: 'center top' }}
-            sizes="100vw"
-            priority
-          />
-        ) : (
-          <div className={`w-full h-full bg-gradient-to-br ${event.bannerColor} flex items-center justify-center`}>
-            <p className="text-6xl opacity-20" style={{ color: '#fff', fontFamily: 'var(--font-syne), sans-serif' }}>{event.category[0]}</p>
+      {event.headerBannerUrl ? (
+        // Wide header banner (events.header_banner_url), fixed at the top of
+        // the page. Uses position:sticky rather than position:fixed: sticky
+        // is bounded by this wrapper's own height, so once the page content
+        // below it (which has an opaque background and a higher z-index)
+        // has scrolled up to fully cover it, it simply stops being pinned —
+        // there's no way for it to show through past the end of the page,
+        // which is exactly the bug a fixed-position version of this hero hit
+        // previously (see the flyer-hero fallback branch below for that
+        // history). The negative margin on the content wrapper pulls it up
+        // to visually slide over the banner from the first frame.
+        <div className="relative">
+          <div className="sticky top-0 z-0 w-full overflow-hidden h-[220px] sm:h-[300px] lg:h-[400px]">
+            <Image
+              src={event.headerBannerUrl}
+              alt={event.name}
+              fill
+              className="object-cover"
+              sizes="100vw"
+              priority
+            />
+            <div
+              className="absolute inset-0 pointer-events-none"
+              style={{ background: 'linear-gradient(to bottom, rgba(0,0,0,0.5), transparent 45%)' }}
+            />
+            <div className="absolute top-4 left-4 sm:left-6 z-10">{ventryWordmark}</div>
           </div>
-        )}
-        <div
-          className="absolute inset-x-0 top-0 h-24 pointer-events-none"
-          style={{ background: 'linear-gradient(to bottom, rgba(0,0,0,0.55), transparent)' }}
-        />
-        <div className="absolute top-4 left-4 sm:left-6 z-10">
-          <Link href="/" className="text-lg font-bold tracking-tight" style={{ fontFamily: 'var(--font-syne), sans-serif' }}>
-            <span style={{ color: 'var(--color-purple)' }}>V</span>
-            <span style={{ color: '#fff' }}>ENTRY</span>
-          </Link>
         </div>
-      </div>
+      ) : (
+        <div
+          className="relative"
+          style={{
+            // Normal, static top banner — it scrolls away with the rest of
+            // the page like any other content. An earlier version pinned this
+            // with position:fixed so it stayed put while content scrolled
+            // over it, but that made the banner read as a page background:
+            // once you scrolled past the actual page content, the still-fixed
+            // image kept showing through the gap at the bottom/edges. A plain
+            // in-flow block avoids that entirely.
+            height: BANNER_HEIGHT,
+          }}
+        >
+          {event.banner_url ? (
+            // object-contain looked "off" in practice: most organiser banners
+            // are portrait flyers, and letterboxing a tall image inside this
+            // short, full-bleed, wide strip leaves it a tiny sliver surrounded
+            // by dead space on anything wider than a phone. object-cover with
+            // a top-biased crop instead fills the strip cleanly on every
+            // screen size and keeps the part of the flyer that actually
+            // carries the title (almost always near the top).
+            <Image
+              src={event.banner_url}
+              alt={event.name}
+              fill
+              className="object-cover"
+              style={{ objectPosition: 'center top' }}
+              sizes="100vw"
+              priority
+            />
+          ) : (
+            <div className={`w-full h-full bg-gradient-to-br ${event.bannerColor} flex items-center justify-center`}>
+              <p className="text-6xl opacity-20" style={{ color: '#fff', fontFamily: 'var(--font-syne), sans-serif' }}>{event.category[0]}</p>
+            </div>
+          )}
+          <div
+            className="absolute inset-x-0 top-0 h-24 pointer-events-none"
+            style={{ background: 'linear-gradient(to bottom, rgba(0,0,0,0.55), transparent)' }}
+          />
+          <div className="absolute top-4 left-4 sm:left-6 z-10">{ventryWordmark}</div>
+        </div>
+      )}
 
       <div
-        className="max-w-7xl mx-auto px-6 py-8"
+        className={`max-w-7xl mx-auto px-6 py-8 ${event.headerBannerUrl ? 'relative z-10 -mt-6 sm:-mt-8 rounded-t-3xl' : ''}`}
         style={{ backgroundColor: 'var(--color-bg)' }}
       >
         <nav className="flex items-center gap-1.5 text-sm mb-8" style={{ color: 'var(--color-text-muted)' }}>
@@ -340,12 +385,26 @@ export function EventDetailContent({ identifier }: EventDetailContentProps) {
                   <Mic2 size={16} style={{ color: 'var(--color-purple)' }} />Lineup
                 </h3>
                 <div className="grid grid-cols-2 sm:grid-cols-3 gap-3">
-                  {event.lineup.map((act, i) => (
-                    <div key={i} className="rounded-lg p-3" style={{ backgroundColor: 'var(--color-surface-2)' }}>
-                      <p className="text-sm font-medium" style={{ color: 'var(--color-text)' }}>{act.name}</p>
-                      {act.role && <p className="text-xs mt-0.5" style={{ color: 'var(--color-text-muted)' }}>{act.role}</p>}
-                    </div>
-                  ))}
+                  {event.lineup.map((act, i) => {
+                    const isSurprise = act.liability === 'surprise';
+                    return (
+                      <div key={i} className="rounded-lg p-3 flex flex-col items-center text-center gap-2" style={{ backgroundColor: 'var(--color-surface-2)' }}>
+                        {isSurprise ? (
+                          <div className="w-12 h-12 rounded-full flex items-center justify-center text-lg font-semibold" style={{ backgroundColor: 'var(--color-surface)', color: 'var(--color-text-dim)' }}>?</div>
+                        ) : act.photoUrl ? (
+                          // eslint-disable-next-line @next/next/no-img-element
+                          <img src={act.photoUrl} alt={act.name} className="w-12 h-12 rounded-full object-cover" />
+                        ) : null}
+                        <div>
+                          {act.liability === 'headliner' && (
+                            <span className="inline-block text-[10px] font-semibold uppercase tracking-wide px-2 py-0.5 rounded-full mb-1" style={{ backgroundColor: 'var(--color-purple-dim)', color: 'var(--color-purple-light)' }}>Headliner</span>
+                          )}
+                          <p className="text-sm font-medium" style={{ color: 'var(--color-text)' }}>{isSurprise ? 'Surprise Guest' : act.name}</p>
+                          {act.role && !isSurprise && <p className="text-xs mt-0.5" style={{ color: 'var(--color-text-muted)' }}>{act.role}</p>}
+                        </div>
+                      </div>
+                    );
+                  })}
                 </div>
               </div>
             )}

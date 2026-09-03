@@ -1,7 +1,7 @@
 'use client';
 
 import { useState, useEffect } from 'react';
-import { CheckCircle, AtSign, X as XIcon, Globe, Bell } from 'lucide-react';
+import { CheckCircle, AtSign, X as XIcon, Globe, Bell, Users, Star } from 'lucide-react';
 import { PublicNav } from '@/components/layout/PublicNav';
 import { Footer } from '@/components/layout/Footer';
 import { Badge } from '@/components/ui/Badge';
@@ -12,6 +12,14 @@ import { eventsHostedLabel } from '@/lib/utils';
 import { useToast } from '@/components/ui/Toast';
 import type { Event } from '@/types';
 
+interface Review {
+  id: string;
+  rating: number;
+  body: string | null;
+  display_name: string;
+  created_at: string;
+}
+
 interface StorefrontData {
   organizer: {
     name: string;
@@ -21,11 +29,37 @@ interface StorefrontData {
     memberSince: string;
     bio: string | null;
     avatarUrl: string | null;
+    coverImageUrl: string | null;
     socials: { instagram?: string; twitter?: string; website?: string };
     eventsHosted: number;
+    followerCount: number;
   };
   upcoming: Event[];
   past: Event[];
+  reviews: Review[];
+  reviewStats: { avg: number | null; count: number };
+}
+
+function StarDisplay({ rating, size = 14 }: { rating: number; size?: number }) {
+  return (
+    <span className="inline-flex items-center gap-0.5">
+      {[1, 2, 3, 4, 5].map(i => (
+        <Star key={i} size={size} fill={i <= rating ? '#f59e0b' : 'none'} stroke={i <= rating ? '#f59e0b' : 'var(--color-border)'} strokeWidth={1.5} />
+      ))}
+    </span>
+  );
+}
+
+function timeAgo(dateStr: string): string {
+  const diff = Date.now() - new Date(dateStr).getTime();
+  const mins = Math.floor(diff / 60_000);
+  if (mins < 2) return 'just now';
+  if (mins < 60) return `${mins}m ago`;
+  const hours = Math.floor(mins / 60);
+  if (hours < 24) return `${hours}h ago`;
+  const days = Math.floor(hours / 24);
+  if (days < 30) return `${days}d ago`;
+  return `${Math.floor(days / 30)}mo ago`;
 }
 
 export function OrganizerStorefront({ handle }: { handle: string }) {
@@ -90,16 +124,24 @@ export function OrganizerStorefront({ handle }: { handle: string }) {
     </div>
   );
 
-  const { organizer, upcoming, past } = data;
+  const { organizer, upcoming, past, reviews, reviewStats } = data;
 
   return (
     <div style={{ backgroundColor: 'var(--color-bg)' }}>
       <PublicNav />
-      <div className="pt-16 max-w-6xl mx-auto px-6 py-12">
+
+      {organizer.coverImageUrl && (
+        <div className="w-full h-40 sm:h-56 relative">
+          {/* eslint-disable-next-line @next/next/no-img-element */}
+          <img src={organizer.coverImageUrl} alt="" className="w-full h-full object-cover" />
+        </div>
+      )}
+
+      <div className={`max-w-6xl mx-auto px-6 py-12 ${organizer.coverImageUrl ? '' : 'pt-16'}`}>
         {/* Header */}
-        <div className="flex flex-col sm:flex-row items-start sm:items-center gap-5 mb-10">
-          <div className="w-20 h-20 rounded-full flex items-center justify-center text-3xl font-bold text-white flex-shrink-0 overflow-hidden"
-            style={{ backgroundColor: 'var(--color-purple)' }}>
+        <div className={`flex flex-col sm:flex-row items-start sm:items-center gap-5 mb-10 ${organizer.coverImageUrl ? '-mt-12 sm:-mt-14' : ''}`}>
+          <div className="w-20 h-20 rounded-full flex items-center justify-center text-3xl font-bold text-white flex-shrink-0 overflow-hidden border-4"
+            style={{ backgroundColor: 'var(--color-purple)', borderColor: 'var(--color-bg)' }}>
             {organizer.avatarUrl
               // eslint-disable-next-line @next/next/no-img-element
               ? <img src={organizer.avatarUrl} alt={organizer.name} className="w-full h-full object-cover" />
@@ -113,9 +155,16 @@ export function OrganizerStorefront({ handle }: { handle: string }) {
               {organizer.verified && <Badge variant="green"><CheckCircle size={11} />Verified</Badge>}
               <Badge variant="purple">{organizer.tier}</Badge>
             </div>
-            <p className="text-sm" style={{ color: 'var(--color-text-muted)' }}>
-              Member since {new Date(organizer.memberSince).getFullYear()} &middot; {eventsHostedLabel(organizer.eventsHosted)}
-            </p>
+            <div className="flex items-center gap-3 flex-wrap text-sm" style={{ color: 'var(--color-text-muted)' }}>
+              <span>Member since {new Date(organizer.memberSince).getFullYear()} &middot; {eventsHostedLabel(organizer.eventsHosted)}</span>
+              <span className="flex items-center gap-1"><Users size={13} />{organizer.followerCount} follower{organizer.followerCount !== 1 ? 's' : ''}</span>
+              {reviewStats.avg !== null && (
+                <span className="flex items-center gap-1.5">
+                  <StarDisplay rating={Math.round(reviewStats.avg)} size={13} />
+                  {reviewStats.avg.toFixed(1)} ({reviewStats.count})
+                </span>
+              )}
+            </div>
             {organizer.bio && (
               <p className="text-sm mt-2 max-w-xl" style={{ color: 'var(--color-text-muted)' }}>{organizer.bio}</p>
             )}
@@ -153,6 +202,37 @@ export function OrganizerStorefront({ handle }: { handle: string }) {
             <h2 className="text-lg font-semibold mb-4" style={{ color: 'var(--color-text)' }}>Past Events</h2>
             <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-5">
               {past.map(event => <EventCard key={event.id} event={event} variant="compact" />)}
+            </div>
+          </div>
+        )}
+
+        {/* Reviews */}
+        {reviews.length > 0 && (
+          <div className="mb-12 rounded-xl border p-5" style={{ backgroundColor: 'var(--color-surface)', borderColor: 'var(--color-border)' }}>
+            <div className="flex items-center justify-between gap-3 mb-4">
+              <h2 className="text-lg font-semibold" style={{ color: 'var(--color-text)' }}>Reviews</h2>
+              {reviewStats.avg !== null && (
+                <div className="flex items-center gap-2">
+                  <StarDisplay rating={Math.round(reviewStats.avg)} size={14} />
+                  <span className="text-sm font-semibold" style={{ color: 'var(--color-text)' }}>{reviewStats.avg.toFixed(1)}</span>
+                  <span className="text-sm" style={{ color: 'var(--color-text-muted)' }}>({reviewStats.count})</span>
+                </div>
+              )}
+            </div>
+            <div className="flex flex-col">
+              {reviews.map((review, i) => (
+                <div key={review.id} className="flex flex-col gap-1.5 py-3" style={{ borderTop: i === 0 ? 'none' : '1px solid var(--color-border)' }}>
+                  <div className="flex items-center gap-2 flex-wrap">
+                    <StarDisplay rating={review.rating} size={13} />
+                    <span className="text-xs font-medium" style={{ color: 'var(--color-text-muted)' }}>{review.display_name}</span>
+                    <span style={{ color: 'var(--color-text-dim)' }}>&middot;</span>
+                    <span className="text-xs" style={{ color: 'var(--color-text-dim)' }}>{timeAgo(review.created_at)}</span>
+                  </div>
+                  {review.body && (
+                    <p className="text-sm leading-relaxed" style={{ color: 'var(--color-text-muted)' }}>{review.body}</p>
+                  )}
+                </div>
+              ))}
             </div>
           </div>
         )}

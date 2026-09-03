@@ -22,6 +22,7 @@ interface Cart {
   eventDate: string;
   items: CartLine[];
   ref?: string;
+  allowedEmailDomains?: string[] | null;
 }
 
 export default function CheckoutPage() {
@@ -45,10 +46,18 @@ export default function CheckoutPage() {
     : { subtotal: 0, serviceFee: 0, processingFee: 0, total: 0 };
   const isFree = total === 0;
 
+  const restrictedDomains = cart?.allowedEmailDomains ?? null;
+  const emailDomain = email.trim().toLowerCase().split('@')[1];
+  const domainBlocked = !!restrictedDomains?.length && !!email && !restrictedDomains.includes(emailDomain || '');
+
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     if (!cart) return;
     setError('');
+    if (domainBlocked) {
+      setError(`This event is restricted to ${restrictedDomains!.map(d => `@${d}`).join(' or ')} email addresses.`);
+      return;
+    }
     setLoading(true);
     try {
       if (isFree) {
@@ -203,9 +212,18 @@ export default function CheckoutPage() {
                 value={email}
                 onChange={e => setEmail(e.target.value)}
                 placeholder="you@example.com"
-                helper="Your QR ticket will be sent here. You'll also use this to retrieve your ticket."
+                helper={
+                  restrictedDomains?.length
+                    ? `Restricted event — only ${restrictedDomains.map(d => `@${d}`).join(' or ')} email addresses can buy.`
+                    : "Your QR ticket will be sent here. You'll also use this to retrieve your ticket."
+                }
                 required
               />
+              {domainBlocked && (
+                <p className="text-xs -mt-3" style={{ color: 'var(--color-red)' }}>
+                  This email doesn&apos;t match an allowed domain for this event.
+                </p>
+              )}
 
               {/* Marketing consent opt-ins — two separate, unticked, optional boxes */}
               <div className="flex flex-col gap-3">
@@ -239,7 +257,7 @@ export default function CheckoutPage() {
                 and <Link href="/refund-policy" className="underline" style={{ color: 'var(--color-text-muted)' }}>Refund Policy</Link>.
               </p>
 
-              <Button type="submit" size="lg" fullWidth disabled={loading || !email}>
+              <Button type="submit" size="lg" fullWidth disabled={loading || !email || domainBlocked}>
                 {loading
                   ? (isFree ? 'Getting your ticket…' : 'Redirecting to payment…')
                   : (isFree ? 'Get Free Ticket' : `Pay ${formatNGN(total)}`)}

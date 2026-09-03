@@ -63,16 +63,23 @@ export async function GET(req: NextRequest) {
       .eq('status', 'approved')
       .order('date', { ascending: true });
 
+    // Populated alongside events when there's a search query, so an
+    // organiser is findable through the same search box as events, not just
+    // as a way to surface their events.
+    let matchingOrganizers: { id: string; name: string; handle: string | null; avatar_url: string | null; verified: boolean; tier: string }[] = [];
+
     if (query) {
       // Organiser name isn't a column on `events`, so a same-table .ilike()
       // can't reach it — resolve matching organiser ids first, then fold
       // them into the .or() as an organizer_id.in.(...) clause alongside
       // the direct column matches.
-      const { data: matchingOrganizers } = await db
+      const { data: orgMatches } = await db
         .from('users')
-        .select('id')
-        .ilike('name', `%${query}%`);
-      const organizerIds = (matchingOrganizers ?? []).map(o => o.id);
+        .select('id, name, handle, avatar_url, verified, tier')
+        .ilike('name', `%${query}%`)
+        .not('handle', 'is', null);
+      matchingOrganizers = orgMatches ?? [];
+      const organizerIds = matchingOrganizers.map(o => o.id);
 
       const orClauses = [`event_name.ilike.%${query}%`, `city.ilike.%${query}%`, `venue.ilike.%${query}%`];
       if (organizerIds.length > 0) {
@@ -104,8 +111,22 @@ export async function GET(req: NextRequest) {
       if (row.organizer) row.organizer.events_hosted = counts[row.organizer.id] ?? 0;
     }
 
+    let organizers: unknown[] = [];
+    if (matchingOrganizers.length > 0) {
+      const orgCounts = await getEventsHostedCounts(db, matchingOrganizers.map(o => o.id));
+      organizers = matchingOrganizers.map(o => ({
+        id: o.id,
+        name: o.name,
+        handle: o.handle,
+        avatarUrl: o.avatar_url,
+        verified: o.verified,
+        tier: o.tier,
+        eventsHosted: orgCounts[o.id] ?? 0,
+      }));
+    }
+
     return NextResponse.json(
-      { success: true, data: rows.map(shapeEvent) },
+      { success: true, data: rows.map(shapeEvent), organizers },
       { headers: { 'Cache-Control': 'public, s-maxage=30, stale-while-revalidate=60' } }
     );
   } catch (err) {

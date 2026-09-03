@@ -69,8 +69,10 @@ export interface Event {
   totalSold: number;
   bannerColor: string;
   banner_url?: string | null;
+  headerBannerUrl?: string | null;
   accentColor?: string | null;
-  lineup?: { name: string; role: string }[];
+  lineup?: { name: string; role: string; liability?: 'headliner' | 'guest' | 'surprise'; photoUrl?: string | null }[];
+  allowedEmailDomains?: string[] | null;
 }
 
 export interface Ticket {
@@ -113,6 +115,28 @@ export interface Complaint {
   status: 'open' | 'investigating' | 'resolved' | 'rejected';
   priority: 'high' | 'medium' | 'low';
   notes?: string;
+}
+
+export interface EventReview {
+  id: string;
+  eventId: string;
+  organizerId: string;
+  rating: number;
+  body?: string | null;
+  displayName: string;
+  createdAt: string;
+}
+
+export interface Notification {
+  id: string;
+  recipientType: 'admin' | 'organizer';
+  recipientId: string | null;
+  type: string;
+  title: string;
+  body: string;
+  link?: string | null;
+  read: boolean;
+  createdAt: string;
 }
 
 export interface ScanLog {

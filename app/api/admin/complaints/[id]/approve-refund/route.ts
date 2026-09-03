@@ -104,6 +104,7 @@ export async function POST(
           body:      `Paystack refunded ${fmt(refundAmount)} to ${complaint.buyer_email} for ticket ${ticket.id}, but the database record was NOT updated. Fix the ticket/complaint status manually.`,
           link:      `/admin/buyers?search=${encodeURIComponent(complaint.buyer_email)}`,
         },
+        { emailChannel: 'immediate' },
       ).catch(err => console.error('approve-refund: notify (DB failure) error', err));
     }
 

@@ -72,7 +72,30 @@ export async function POST(req: NextRequest) {
         body:      `${name} (${email}) has registered and is pending email verification.`,
         link:      '/admin/organizers',
       },
+      { emailChannel: 'immediate' },
     ).catch(console.error);
+
+    // Affiliate attribution — first-touch only, resolved once, right now.
+    // A cookie set by an earlier ?aff=CODE page visit (see
+    // AffiliateAttributionCapture) is the only source; nothing here can be
+    // re-attributed later by a different link.
+    const refCode = req.cookies.get('ventry_aff')?.value;
+    if (refCode) {
+      const { data: affiliate } = await db
+        .from('platform_affiliates')
+        .select('id, email')
+        .eq('referral_code', refCode)
+        .maybeSingle();
+      // Guard against the most obvious gaming: an affiliate can't credit themselves.
+      if (affiliate && affiliate.email.toLowerCase() !== user.email.toLowerCase()) {
+        const { error: refErr } = await db
+          .from('platform_affiliate_referrals')
+          .insert({ affiliate_id: affiliate.id, organizer_id: user.id });
+        if (refErr && refErr.code !== '23505') {
+          console.error('register: affiliate referral insert error', refErr);
+        }
+      }
+    }
 
     const token = signAuthToken({ sub: user.id, role: 'organizer', email: user.email });
     const res = NextResponse.json({ success: true, data: { id: user.id, name: user.name, email: user.email } });

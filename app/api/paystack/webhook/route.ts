@@ -190,5 +190,6 @@ async function handleTransferFailure(data: { reference: string }, eventType: str
       body:      `Payout for "${payout.event_name}" was ${isReversed ? 'reversed' : 'rejected'} by Paystack. It has been reset to processing for retry.`,
       link:      '/admin/payouts',
     },
+    { emailChannel: 'immediate' },
   ).catch(err => console.error(`${eventType}: notify error`, err));
 }

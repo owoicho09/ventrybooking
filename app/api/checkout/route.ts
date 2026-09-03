@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from 'next/server';
 import { getServerSupabase } from '@/lib/supabase/server';
 import { initializeTransaction } from '@/lib/server/paystack';
 import { buyerTotalForItems } from '@/lib/server/fees';
+import { isEmailDomainAllowed } from '@/lib/server/domainRestriction';
 import { v4 as uuidv4 } from 'uuid';
 
 interface CartItem { tierId: string; quantity: number }
@@ -29,7 +30,7 @@ export async function POST(req: NextRequest) {
     // Verify event is approved
     const { data: event, error: eventErr } = await db
       .from('events')
-      .select('id, event_name, status, organizer_id')
+      .select('id, event_name, status, organizer_id, allowed_email_domains')
       .eq('id', eventId)
       .maybeSingle();
 
@@ -39,6 +40,12 @@ export async function POST(req: NextRequest) {
     }
     if (!event || event.status !== 'approved') {
       return NextResponse.json({ error: 'Event is not available for purchase' }, { status: 400 });
+    }
+    if (!isEmailDomainAllowed(buyerEmail, event.allowed_email_domains)) {
+      return NextResponse.json(
+        { error: `This event is restricted to ${(event.allowed_email_domains as string[]).map(d => `@${d}`).join(' or ')} email addresses.` },
+        { status: 403 },
+      );
     }
 
     // Get every requested tier and check availability. Fetched in one query

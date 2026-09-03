@@ -12,7 +12,20 @@ import { ACCENT_COLOR_PRESETS } from '@/lib/accentColors';
 import { BannerCropInput } from '@/components/organizer/BannerCropInput';
 
 interface Tier { id: string; name: string; price: string; quantity: string; }
-interface LineupAct { id: string; name: string; role: string; }
+type LineupLiability = 'headliner' | 'guest' | 'surprise';
+interface LineupAct { id: string; name: string; role: string; liability: LineupLiability; photoFile?: File | null; photoPreview?: string; }
+
+const LIABILITY_OPTIONS = [
+  { value: 'guest', label: 'Guest Artist / Special Guest / Speaker' },
+  { value: 'headliner', label: 'Headliner' },
+  { value: 'surprise', label: 'Surprise Guest' },
+];
+
+const LIABILITY_HINT: Record<LineupLiability, string> = {
+  headliner: "This is the single billed act the ticket is sold on — it carries refund liability if they don't perform. Only one allowed per event.",
+  guest: 'Listed and promoted alongside the headliner — no refund exposure if they drop out.',
+  surprise: "Listed on the page, but their name is never shown to buyers — you can still enter it here for your own record.",
+};
 
 const eventTypes = [
   { value: 'Concert', label: 'Concert' },
@@ -43,20 +56,31 @@ export default function CreateEventPage() {
   const [meetingLink, setMeetingLink] = useState('');
   const [meetingPasscode, setMeetingPasscode] = useState('');
   const [banner, setBanner] = useState<File | null>(null);
+  const [headerBanner, setHeaderBanner] = useState<File | null>(null);
   const [venueProof, setVenueProof] = useState<File | null>(null);
   const [tiers, setTiers] = useState<Tier[]>([{ id: '1', name: 'Regular', price: '', quantity: '' }]);
   const [accentColor, setAccentColor] = useState<string | null>(null);
   const [lineup, setLineup] = useState<LineupAct[]>([]);
+  const [restrictedDomainsInput, setRestrictedDomainsInput] = useState('');
 
   const addTier = () => setTiers(p => [...p, { id: Date.now().toString(), name: '', price: '', quantity: '' }]);
   const removeTier = (id: string) => { if (tiers.length > 1) setTiers(p => p.filter(t => t.id !== id)); };
   const updateTier = (id: string, field: keyof Tier, value: string) =>
     setTiers(p => p.map(t => (t.id === id ? { ...t, [field]: value } : t)));
 
-  const addAct = () => setLineup(p => [...p, { id: Date.now().toString(), name: '', role: '' }]);
+  const addAct = () => setLineup(p => [...p, { id: Date.now().toString(), name: '', role: '', liability: 'guest' }]);
   const removeAct = (id: string) => setLineup(p => p.filter(a => a.id !== id));
-  const updateAct = (id: string, field: keyof LineupAct, value: string) =>
+  const updateAct = (id: string, field: 'name' | 'role', value: string) =>
     setLineup(p => p.map(a => (a.id === id ? { ...a, [field]: value } : a)));
+  const updateLiability = (id: string, liability: LineupLiability) =>
+    setLineup(p => p.map(a => {
+      if (a.id === id) return { ...a, liability };
+      // Only one Headliner allowed — picking a new one demotes the old one.
+      if (liability === 'headliner' && a.liability === 'headliner') return { ...a, liability: 'guest' };
+      return a;
+    }));
+  const updatePhoto = (id: string, file: File | null) =>
+    setLineup(p => p.map(a => (a.id === id ? { ...a, photoFile: file, photoPreview: file ? URL.createObjectURL(file) : undefined } : a)));
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -82,9 +106,15 @@ export default function CreateEventPage() {
       }
       fd.append('tiers', JSON.stringify(tiers.map(t => ({ name: t.name, price: t.price, quantity: t.quantity }))));
       if (accentColor) fd.append('accentColor', accentColor);
-      const validLineup = lineup.filter(a => a.name.trim());
-      if (validLineup.length) fd.append('lineup', JSON.stringify(validLineup.map(a => ({ name: a.name, role: a.role }))));
+      const domains = restrictedDomainsInput.split(',').map(d => d.trim()).filter(Boolean);
+      if (domains.length) fd.append('allowedEmailDomains', JSON.stringify(domains));
+      const validLineup = lineup.filter(a => a.name.trim() || a.liability === 'surprise');
+      if (validLineup.length) {
+        fd.append('lineup', JSON.stringify(validLineup.map(a => ({ name: a.name, role: a.role, liability: a.liability }))));
+        validLineup.forEach((a, i) => { if (a.photoFile) fd.append(`lineupPhoto${i}`, a.photoFile); });
+      }
       if (banner) fd.append('banner', banner);
+      if (headerBanner) fd.append('headerBanner', headerBanner);
 
       const res = await fetch('/api/organizer/events', { method: 'POST', body: fd });
       const data = await res.json();
@@ -114,10 +144,24 @@ export default function CreateEventPage() {
         <Select label="Event Type" options={eventTypes} value={category} onChange={e => setCategory(e.target.value)} />
         <Textarea label="Description" value={description} onChange={e => setDescription(e.target.value)} placeholder="Tell attendees what to expect..." rows={4} />
         <BannerCropInput
-          label="Event Banner"
+          label="Event Flyer"
           onCropped={setBanner}
           buttonText={banner ? `${banner.name} — click to replace` : undefined}
         />
+        <div>
+          <BannerCropInput
+            label="Event Page Header Banner (optional)"
+            ratio={2}
+            minWidth={1200}
+            minHeight={600}
+            safeZoneHint
+            onCropped={setHeaderBanner}
+            buttonText={headerBanner ? `${headerBanner.name} — click to replace` : 'Click or drag to upload a wide header banner'}
+          />
+          <p className="text-xs mt-1.5" style={{ color: 'var(--color-text-dim)' }}>
+            A wide banner (2160×1080 recommended) shown as the fixed header on your event page — separate from the flyer above, which keeps doing its job on cards, previews, and ticket emails. Skip this and the page falls back to the flyer.
+          </p>
+        </div>
         <div>
           <label className="text-sm font-medium block mb-1.5" style={{ color: 'var(--color-text)' }}>Accent Colour</label>
           <p className="text-xs mb-3" style={{ color: 'var(--color-text-dim)' }}>Applied to your ticket panel — tier cards, purchase button, and quantity steppers. Everything else stays Ventry purple.</p>
@@ -150,6 +194,18 @@ export default function CreateEventPage() {
               />
             ))}
           </div>
+        </div>
+        <div>
+          <label className="text-sm font-medium block mb-1.5" style={{ color: 'var(--color-text)' }}>Restrict to Email Domains (optional)</label>
+          <p className="text-xs mb-3" style={{ color: 'var(--color-text-dim)' }}>
+            For closed events (e.g. a university-only event) — only buyers with an email at one of these domains can check out. Leave blank for a normal, open event.
+          </p>
+          <Input
+            value={restrictedDomainsInput}
+            onChange={e => setRestrictedDomainsInput(e.target.value)}
+            placeholder="e.g. nileuniversity.edu.ng, unilag.edu.ng"
+            helper="Comma-separated. No @ needed."
+          />
         </div>
       </section>
 
@@ -212,11 +268,14 @@ export default function CreateEventPage() {
             </label>
             <div>
               <label className="text-sm font-medium block mb-1.5" style={{ color: 'var(--color-text)' }}>Venue Proof Document</label>
+              <p className="text-xs mb-2" style={{ color: 'var(--color-text-dim)' }}>
+                Upload a lease agreement, booking confirmation, or receipt from the venue. Photos of the building are <strong>not</strong> accepted as proof.
+              </p>
               <label className="flex items-center gap-3 rounded-xl border-2 border-dashed px-4 py-3.5 cursor-pointer transition-colors hover:border-[var(--color-purple)]" style={{ borderColor: 'var(--color-border)' }}>
                 <input type="file" className="sr-only" accept=".pdf,image/*" onChange={e => setVenueProof(e.target.files?.[0] ?? null)} />
                 <Upload size={16} style={{ color: 'var(--color-text-dim)' }} />
                 <span className="text-sm" style={{ color: venueProof ? 'var(--color-green)' : 'var(--color-text-muted)' }}>
-                  {venueProof ? venueProof.name : 'Upload venue booking confirmation or rental agreement'}
+                  {venueProof ? venueProof.name : 'Upload lease agreement, booking confirmation, or receipt'}
                 </span>
               </label>
             </div>
@@ -239,14 +298,33 @@ export default function CreateEventPage() {
         </div>
         <div className="flex flex-col gap-3">
           {lineup.map(act => (
-            <div key={act.id} className="rounded-lg border p-3 flex items-center gap-3" style={{ borderColor: 'var(--color-border)', backgroundColor: 'var(--color-surface-2)' }}>
-              <div className="grid grid-cols-2 gap-3 flex-1">
-                <Input label="Name" value={act.name} onChange={e => updateAct(act.id, 'name', e.target.value)} placeholder="e.g. Burna Boy" />
-                <Input label="Role" value={act.role} onChange={e => updateAct(act.id, 'role', e.target.value)} placeholder="e.g. Headliner" />
+            <div key={act.id} className="rounded-lg border p-3 flex flex-col gap-3" style={{ borderColor: 'var(--color-border)', backgroundColor: 'var(--color-surface-2)' }}>
+              <div className="flex items-start gap-3">
+                <div className="grid grid-cols-2 gap-3 flex-1">
+                  <Input label="Name" value={act.name} onChange={e => updateAct(act.id, 'name', e.target.value)} placeholder="e.g. Burna Boy" />
+                  <Input label="Role" value={act.role} onChange={e => updateAct(act.id, 'role', e.target.value)} placeholder="e.g. DJ, Opening Act" />
+                </div>
+                <button type="button" onClick={() => removeAct(act.id)} className="mt-5" style={{ color: 'var(--color-red)' }}>
+                  <Trash2 size={16} />
+                </button>
               </div>
-              <button type="button" onClick={() => removeAct(act.id)} className="mt-5" style={{ color: 'var(--color-red)' }}>
-                <Trash2 size={16} />
-              </button>
+              <Select
+                label="Billing"
+                options={LIABILITY_OPTIONS}
+                value={act.liability}
+                onChange={e => updateLiability(act.id, e.target.value as LineupLiability)}
+              />
+              <p className="text-xs" style={{ color: 'var(--color-text-dim)' }}>{LIABILITY_HINT[act.liability]}</p>
+              <label className="flex items-center gap-3 text-xs cursor-pointer" style={{ color: 'var(--color-text-muted)' }}>
+                {act.photoPreview ? (
+                  // eslint-disable-next-line @next/next/no-img-element
+                  <img src={act.photoPreview} alt="" className="w-9 h-9 rounded-full object-cover" />
+                ) : (
+                  <span className="w-9 h-9 rounded-full flex items-center justify-center" style={{ backgroundColor: 'var(--color-surface)' }}><Upload size={13} /></span>
+                )}
+                <input type="file" className="sr-only" accept="image/*" onChange={e => updatePhoto(act.id, e.target.files?.[0] ?? null)} />
+                {act.photoPreview ? 'Change photo' : 'Add photo (optional)'}
+              </label>
             </div>
           ))}
         </div>

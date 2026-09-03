@@ -4,7 +4,7 @@ const SECRET = process.env.JWT_SECRET!;
 
 export interface AuthPayload {
   sub: string;
-  role: 'organizer' | 'admin';
+  role: 'organizer' | 'admin' | 'affiliate';
   email: string;
 }
 

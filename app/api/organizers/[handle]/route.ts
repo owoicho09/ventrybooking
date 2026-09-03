@@ -46,6 +46,12 @@ const EVENT_SELECT = `
   tiers:ticket_tiers(id, name, price, available, sold)
 `;
 
+function calcStats(rows: { rating: number }[] | null): { avg: number | null; count: number } {
+  if (!rows?.length) return { avg: null, count: 0 };
+  const avg = rows.reduce((s, r) => s + r.rating, 0) / rows.length;
+  return { avg: Math.round(avg * 10) / 10, count: rows.length };
+}
+
 export async function GET(
   _req: NextRequest,
   { params }: { params: Promise<{ handle: string }> },
@@ -56,7 +62,7 @@ export async function GET(
 
     const { data: organizer, error } = await db
       .from('users')
-      .select('id, name, tier, verified, member_since, bio, avatar_url, socials, handle')
+      .select('id, name, tier, verified, member_since, bio, avatar_url, cover_image_url, socials, handle')
       .eq('handle', handle.toLowerCase())
       .maybeSingle();
 
@@ -68,8 +74,19 @@ export async function GET(
       return NextResponse.json({ error: 'Organizer not found' }, { status: 404 });
     }
 
-    const counts = await getEventsHostedCounts(db, [organizer.id]);
-    const eventsHosted = counts[organizer.id] ?? 0;
+    const [countsResult, followerCountsResult, reviewRowsResult] = await Promise.all([
+      getEventsHostedCounts(db, [organizer.id]),
+      db.rpc('get_audience_counts', { organizer_ids: [organizer.id] }),
+      db.from('event_reviews').select('id, rating, body, display_name, created_at').eq('organizer_id', organizer.id).eq('hidden', false).order('created_at', { ascending: false }).limit(20),
+    ]);
+
+    const eventsHosted = countsResult[organizer.id] ?? 0;
+    const followerCounts = new Map(
+      (followerCountsResult.data ?? []).map((c: { organizer_id: string; member_count: number }) => [c.organizer_id, c.member_count]),
+    );
+    const followerCount = followerCounts.get(organizer.id) ?? 0;
+    const reviews = reviewRowsResult.data ?? [];
+    const ratingRows = reviews.map(r => ({ rating: r.rating }));
 
     const organizerSummary = {
       id: organizer.id,
@@ -80,11 +97,16 @@ export async function GET(
       eventsHosted,
     };
 
+    // Past events keep their old 'approved' status forever if nothing ever
+    // re-checks them — but the Phase 5 completion cron now moves elapsed
+    // events to 'completed', so both statuses have to be included here or
+    // an organiser's own past events would vanish off their profile the day
+    // after the cron catches up to them.
     const { data: rows } = await db
       .from('events')
       .select(EVENT_SELECT)
       .eq('organizer_id', organizer.id)
-      .eq('status', 'approved')
+      .in('status', ['approved', 'completed'])
       .order('date', { ascending: true });
 
     const today = new Date().toISOString().slice(0, 10);
@@ -102,11 +124,15 @@ export async function GET(
           memberSince: organizer.member_since,
           bio: organizer.bio,
           avatarUrl: organizer.avatar_url,
+          coverImageUrl: organizer.cover_image_url,
           socials: organizer.socials ?? {},
           eventsHosted,
+          followerCount,
         },
         upcoming,
         past,
+        reviews,
+        reviewStats: calcStats(ratingRows),
       },
     });
   } catch (err) {

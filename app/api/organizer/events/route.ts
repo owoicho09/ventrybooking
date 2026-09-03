@@ -7,6 +7,9 @@ import { sendAdminNewEventEmail } from '@/lib/server/email';
 import { generateEventSlug } from '@/lib/server/slug';
 import { ACCENT_COLOR_PRESETS } from '@/lib/accentColors';
 import { PLATFORM_FEE_RATE } from '@/lib/fees';
+import { compressToWebp } from '@/lib/server/imageCompress';
+import { normalizeLineup } from '@/lib/server/lineup';
+import { normalizeEmailDomains } from '@/lib/server/domainRestriction';
 
 export async function GET(req: NextRequest) {
   const user = await getAuthUser();
@@ -82,11 +85,14 @@ export async function POST(req: NextRequest) {
     const meetingPasscode = (formData.get('meetingPasscode') as string) || '';
     const tiersJson = formData.get('tiers') as string;
     const bannerFile = formData.get('banner') as File | null;
+    const headerBannerFile = formData.get('headerBanner') as File | null;
     const venueProofFile = formData.get('venueProof') as File | null;
     const accentColorRaw = formData.get('accentColor') as string | null;
     const accentColor = accentColorRaw && ACCENT_COLOR_PRESETS.some(p => p.hex === accentColorRaw) ? accentColorRaw : null;
     const lineupJson = formData.get('lineup') as string | null;
     const lineup = lineupJson ? JSON.parse(lineupJson) : [];
+    const allowedDomainsJson = formData.get('allowedEmailDomains') as string | null;
+    const allowedEmailDomains = normalizeEmailDomains(allowedDomainsJson ? JSON.parse(allowedDomainsJson) : []);
 
     if (!name || !category || !description || !date || !time) {
       return NextResponse.json({ error: 'Missing required fields' }, { status: 400 });
@@ -98,9 +104,10 @@ export async function POST(req: NextRequest) {
       return NextResponse.json({ error: 'Meeting link is required for online events' }, { status: 400 });
     }
 
+    const FILE_LABELS: Record<string, string> = { 'venue-proofs': 'Venue proof', banners: 'Banner image', lineup: 'Lineup photo' };
     async function uploadEventFile(file: File, folder: string, maxMb: number) {
       if (file.size > maxMb * 1024 * 1024) {
-        throw new Error(`${folder === 'venue-proofs' ? 'Venue proof' : 'Banner image'} must be under ${maxMb}MB`);
+        throw new Error(`${FILE_LABELS[folder] ?? 'File'} must be under ${maxMb}MB`);
       }
       const ext = file.name.split('.').pop() || 'bin';
       const path = `${folder}/${organizerId}/${uuidv4()}.${ext}`;
@@ -120,9 +127,40 @@ export async function POST(req: NextRequest) {
       bannerUrl = await uploadEventFile(bannerFile, 'banners', 5);
     }
 
+    let headerBannerUrl: string | null = null;
+    if (headerBannerFile && headerBannerFile.size > 0) {
+      if (headerBannerFile.size > 8 * 1024 * 1024) {
+        return NextResponse.json({ error: 'Header banner image must be under 8MB' }, { status: 400 });
+      }
+      const webp = await compressToWebp(await headerBannerFile.arrayBuffer(), { maxWidth: 2160, maxHeight: 1080 });
+      const path = `header-banners/${organizerId}/${uuidv4()}.webp`;
+      const { error: uploadError } = await db.storage
+        .from('event-assets')
+        .upload(path, webp, { contentType: 'image/webp' });
+      if (uploadError) throw uploadError;
+      headerBannerUrl = db.storage.from('event-assets').getPublicUrl(path).data.publicUrl;
+    }
+
     let venueProofUrl: string | null = null;
     if (venueProofFile && venueProofFile.size > 0) {
       venueProofUrl = await uploadEventFile(venueProofFile, 'venue-proofs', 10);
+    }
+
+    // Lineup photos arrive as separate `lineupPhoto{index}` files (the lineup
+    // array itself can't carry File objects through JSON), matched back up
+    // by position before validation/normalization.
+    for (let i = 0; i < lineup.length; i++) {
+      const photoFile = formData.get(`lineupPhoto${i}`) as File | null;
+      if (photoFile && photoFile.size > 0) {
+        lineup[i].photoUrl = await uploadEventFile(photoFile, 'lineup', 5);
+      }
+    }
+
+    let normalizedLineup;
+    try {
+      normalizedLineup = normalizeLineup(lineup);
+    } catch (err) {
+      return NextResponse.json({ error: (err as Error).message }, { status: 400 });
     }
 
     const tiers = tiersJson ? JSON.parse(tiersJson) : [];
@@ -147,10 +185,12 @@ export async function POST(req: NextRequest) {
       status: 'under_review',
       total_sold: 0,
       banner_url: bannerUrl,
+      header_banner_url: headerBannerUrl,
       venue_proof_url: venueProofUrl,
       banner_color: 'from-purple-900 to-indigo-900',
       accent_color: accentColor,
-      lineup,
+      lineup: normalizedLineup,
+      allowed_email_domains: allowedEmailDomains.length > 0 ? allowedEmailDomains : null,
       created_at: new Date().toISOString(),
     }).select('id').single();
 
@@ -173,6 +213,7 @@ export async function POST(req: NextRequest) {
     notify(
       { type: 'admin' },
       { notifType: 'event', title: 'New Event Submitted', body: `"${name}" has been submitted for review.`, link: '/admin/events' },
+      { emailChannel: 'dedicated' }, // sendAdminNewEventEmail below covers this
     ).catch(console.error);
 
     sendAdminNewEventEmail({

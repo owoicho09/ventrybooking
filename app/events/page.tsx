@@ -1,11 +1,25 @@
 'use client';
 
 import { useState, useEffect, useMemo } from 'react';
+import Link from 'next/link';
+import { CheckCircle } from 'lucide-react';
 import { PublicNav } from '@/components/layout/PublicNav';
 import { Footer } from '@/components/layout/Footer';
 import { FilterBar } from '@/components/events/FilterBar';
 import { EventGrid } from '@/components/events/EventGrid';
+import { Badge } from '@/components/ui/Badge';
+import { eventsHostedLabel } from '@/lib/utils';
 import type { Event } from '@/types';
+
+interface OrganizerResult {
+  id: string;
+  name: string;
+  handle: string | null;
+  avatarUrl: string | null;
+  verified: boolean;
+  tier: string;
+  eventsHosted: number;
+}
 
 // "This weekend" = the upcoming (or current, if today is already Sat/Sun) Saturday-Sunday pair.
 function isThisWeekend(dateStr: string) {
@@ -64,6 +78,7 @@ export default function EventsPage() {
   const [date,     setDate]     = useState('All');
   const [sort,     setSort]     = useState('Soonest');
   const [events,   setEvents]   = useState<Event[]>([]);
+  const [organizers, setOrganizers] = useState<OrganizerResult[]>([]);
   const [cities,   setCities]   = useState<string[]>([]);
   const [loading,  setLoading]  = useState(true);
 
@@ -84,7 +99,7 @@ export default function EventsPage() {
 
     fetch(`/api/events?${params}`)
       .then(r => r.json())
-      .then(d => { if (d.success) setEvents(d.data); })
+      .then(d => { if (d.success) { setEvents(d.data); setOrganizers(d.organizers ?? []); } })
       .catch(console.error)
       .finally(() => setLoading(false));
   }, [query, category, city]);
@@ -109,6 +124,37 @@ export default function EventsPage() {
           }}
         />
         <div className="max-w-7xl mx-auto px-4 sm:px-6 py-8">
+          {query && organizers.length > 0 && (
+            <div className="mb-8">
+              <p className="text-sm font-medium mb-3" style={{ color: 'var(--color-text)' }}>Organisers</p>
+              <div className="flex flex-wrap gap-3">
+                {organizers.map(org => (
+                  <Link
+                    key={org.id}
+                    href={`/${org.handle}`}
+                    className="flex items-center gap-3 rounded-xl border px-4 py-3 transition-colors hover:border-[var(--color-purple)]"
+                    style={{ borderColor: 'var(--color-border)', backgroundColor: 'var(--color-surface)' }}
+                  >
+                    <div className="w-10 h-10 rounded-full flex items-center justify-center text-sm font-bold text-white flex-shrink-0 overflow-hidden"
+                      style={{ backgroundColor: 'var(--color-purple)' }}>
+                      {org.avatarUrl
+                        // eslint-disable-next-line @next/next/no-img-element
+                        ? <img src={org.avatarUrl} alt={org.name} className="w-full h-full object-cover" />
+                        : org.name[0]}
+                    </div>
+                    <div>
+                      <span className="flex items-center gap-1.5 text-sm font-medium" style={{ color: 'var(--color-text)' }}>
+                        {org.name}
+                        {org.verified && <CheckCircle size={13} style={{ color: 'var(--color-green)' }} />}
+                      </span>
+                      <span className="text-xs" style={{ color: 'var(--color-text-muted)' }}>{eventsHostedLabel(org.eventsHosted)}</span>
+                    </div>
+                    <Badge variant="purple">{org.tier}</Badge>
+                  </Link>
+                ))}
+              </div>
+            </div>
+          )}
           <div className="flex items-center justify-between mb-6">
             <p className="text-sm" style={{ color: 'var(--color-text-muted)' }}>
               {loading

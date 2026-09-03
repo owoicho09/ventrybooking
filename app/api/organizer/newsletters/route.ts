@@ -104,6 +104,7 @@ export async function POST(req: NextRequest) {
         body:      `"${subject}" is waiting in the newsletter queue.`,
         link:      '/admin/newsletters',
       },
+      { emailChannel: 'immediate' },
     ).catch(console.error);
 
     return NextResponse.json({ success: true, data: { id: created.id } }, { status: 201 });

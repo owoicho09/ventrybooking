@@ -172,6 +172,7 @@ export async function POST(
             body:      `Paystack refunded ${ticket.id} but the database was not updated. Fix it manually.`,
             link:      `/admin/events/${id}`,
           },
+          { emailChannel: 'immediate' },
         ).catch(console.error);
       } else {
         bumpTierRefundCount(ticket.tier_id);

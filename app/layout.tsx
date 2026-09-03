@@ -4,6 +4,7 @@ import { Analytics } from '@vercel/analytics/next';
 import './globals.css';
 import { ThemeProvider } from '@/components/layout/ThemeProvider';
 import { ToastProvider } from '@/components/ui/Toast';
+import { AffiliateAttributionCapture } from '@/components/AffiliateAttributionCapture';
 
 const syne = Syne({
   subsets: ['latin'],
@@ -77,6 +78,7 @@ export default function RootLayout({ children }: { children: React.ReactNode }) 
     >
       <body>
         <ThemeProvider><ToastProvider>{children}</ToastProvider></ThemeProvider>
+        <AffiliateAttributionCapture />
         <Analytics />
       </body>
     </html>

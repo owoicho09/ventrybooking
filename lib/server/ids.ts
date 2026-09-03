@@ -32,3 +32,13 @@ export function generateStaffCode(): string {
 export function generateAffiliateCode(): string {
   return `AFF-${randomAlphaNum(8)}`;
 }
+
+/**
+ * Ventry-wide platform affiliate referral code: REF-XXXXXXXX. Deliberately a
+ * different prefix from generateAffiliateCode() (AFF-...) — that one is the
+ * existing organiser-created per-event marketer link, a different feature
+ * from the platform-level affiliate program this belongs to.
+ */
+export function generatePlatformReferralCode(): string {
+  return `REF-${randomAlphaNum(8)}`;
+}

@@ -1,4 +1,5 @@
 import { Resend } from 'resend';
+import { getOrganizerSenderName } from '@/lib/server/senderIdentity';
 
 const resend = new Resend(process.env.RESEND_API_KEY!);
 const FROM    = process.env.RESEND_FROM_EMAIL!;
@@ -330,6 +331,56 @@ export async function sendMeetingLinkUpdatedEmail(params: {
   });
 }
 
+export async function sendChangeRefundOptOutEmail(params: {
+  to: string;
+  buyerName: string;
+  eventName: string;
+  changeType: 'venue' | 'date' | 'venue_and_date';
+  newDate: string;
+  newTime: string;
+  newVenue?: string | null;
+  newAddress?: string | null;
+  newCity?: string | null;
+  optOutUrl: string;
+  windowClosesAt: string;
+  eventUrl: string;
+}) {
+  const heading = params.changeType === 'date'
+    ? 'Event Date Changed'
+    : params.changeType === 'venue'
+    ? 'Event Venue Changed'
+    : 'Event Date & Venue Changed';
+
+  const closesLabel = new Date(params.windowClosesAt).toLocaleString('en-NG', {
+    dateStyle: 'medium', timeStyle: 'short', timeZone: 'Africa/Lagos',
+  });
+
+  await sendEmail({
+    to: params.to,
+    fromName: params.eventName,
+    subject: `Important update to ${params.eventName} — refund available`,
+    html: emailShell(`
+      <h1 style="color:#f59e0b;font-size:22px;margin:0 0 12px;">${heading}</h1>
+      <p style="color:#f1f0ff;">Hi ${esc(params.buyerName || params.to)}, the organiser updated <strong>${esc(params.eventName)}</strong>:</p>
+      <table width="100%" cellpadding="0" cellspacing="0"
+        style="background:#12121a;border:1px solid #2d2d3d;border-radius:8px;margin:16px 0 24px;">
+        <tr><td style="padding:20px;">
+          <p style="margin:4px 0;color:#9ca3af;font-size:13px;"><strong style="color:#f1f0ff;">New date:</strong> ${esc(params.newDate)}</p>
+          <p style="margin:4px 0;color:#9ca3af;font-size:13px;"><strong style="color:#f1f0ff;">New time:</strong> ${esc(params.newTime)}</p>
+          ${params.newVenue ? `
+          <p style="margin:12px 0 4px;color:#f1f0ff;font-size:13px;"><strong>New venue:</strong></p>
+          <p style="margin:4px 0;color:#9ca3af;font-size:13px;">${esc(params.newVenue)}</p>
+          ${params.newAddress ? `<p style="margin:4px 0;color:#9ca3af;font-size:13px;">${esc(params.newAddress)}${params.newCity ? `, ${esc(params.newCity)}` : ''}</p>` : ''}
+          ` : ''}
+        </td></tr>
+      </table>
+      <p style="color:#f1f0ff;">If the new details don&apos;t work for you, you can get a full refund of your ticket &mdash; no account or support ticket needed &mdash; but only until <strong>${closesLabel}</strong>.</p>
+      <a href="${params.optOutUrl}" class="btn" style="background:#f59e0b;">Request a Refund</a>
+      <p class="footer" style="margin-top:20px;">If you&apos;re happy with the new details, no action is needed &mdash; your ticket stays valid as-is. <a href="${params.eventUrl}" style="color:#a855f7;">View the updated event page</a>.</p>
+    `),
+  });
+}
+
 // Explicitly always 'Ventry' — refunds are a platform action, and organisers
 // must never receive a buyer's refund correspondence.
 export async function sendRefundConfirmationEmail(to: string, ticketId: string, amount: number, eventName: string) {
@@ -478,6 +529,54 @@ export async function sendReminderEmail(params: {
   await sendEmail({ to: params.to, subject, html, fromName: params.eventName });
 }
 
+export async function sendReviewRequestEmail(params: {
+  to: string;
+  buyerName: string;
+  eventName: string;
+  reviewUrl: string;
+  organizerName?: string | null;
+}) {
+  await sendEmail({
+    to: params.to,
+    fromName: getOrganizerSenderName(params.organizerName),
+    subject: `How was ${params.eventName}?`,
+    html: emailShell(`
+      <h1 style="color:#a855f7;font-size:22px;margin:0 0 12px;">Rate your experience</h1>
+      <p style="color:#f1f0ff;margin:0 0 24px;">Hi ${esc(params.buyerName || params.to)}, thanks for coming to <strong>${esc(params.eventName)}</strong>! Got a minute to rate it?</p>
+      <a href="${params.reviewUrl}" class="btn">Leave a Review</a>
+      <p class="footer" style="margin-top:20px;">Takes 10 seconds, no account needed. This link is personal to your ticket and works once.</p>
+    `),
+  });
+}
+
+export async function sendChangeRequestDecisionEmail(params: {
+  to: string;
+  organizerName: string;
+  eventName: string;
+  approved: boolean;
+  rejectionReason?: string | null;
+}) {
+  await sendEmail({
+    to: params.to,
+    subject: params.approved
+      ? `Your requested change to "${params.eventName}" is now live`
+      : `Your requested change to "${params.eventName}" was not approved`,
+    html: emailShell(
+      params.approved
+        ? `
+      <h1 style="color:#34d399;font-size:22px;margin:0 0 12px;">Change Approved ✓</h1>
+      <p style="color:#f1f0ff;">Hi ${esc(params.organizerName)}, the venue/date change you requested for <strong>&ldquo;${esc(params.eventName)}&rdquo;</strong> has been approved and applied. Buyers who bought before the change have been notified with a refund option, same as your first two changes.</p>
+      `
+        : `
+      <h1 style="color:#f87171;font-size:22px;margin:0 0 12px;">Change Not Approved</h1>
+      <p style="color:#f1f0ff;">Hi ${esc(params.organizerName)}, the venue/date change you requested for <strong>&ldquo;${esc(params.eventName)}&rdquo;</strong> was not approved.</p>
+      ${params.rejectionReason ? `<p style="color:#f1f0ff;"><strong>Reason:</strong> ${esc(params.rejectionReason)}</p>` : ''}
+      <p style="color:#9ca3af;font-size:13px;">Contact support@ventrybooking.com if you have questions.</p>
+      `,
+    ),
+  });
+}
+
 export async function sendAdminNewEventEmail(params: {
   eventName: string;
   organizerName: string;
@@ -505,6 +604,40 @@ export async function sendAdminNewEventEmail(params: {
   });
 }
 
+export async function sendAdminAlertEmail(params: { title: string; body: string; link?: string }) {
+  const adminEmail = process.env.ADMIN_EMAIL;
+  if (!adminEmail) return;
+  await sendEmail({
+    to: adminEmail,
+    subject: params.title,
+    html: emailShell(`
+      <h1 style="color:#f59e0b;font-size:20px;margin:0 0 12px;">${esc(params.title)}</h1>
+      <p style="color:#f1f0ff;white-space:pre-wrap;">${esc(params.body)}</p>
+      ${params.link ? `<a href="${APP_URL}${params.link}" class="btn" style="margin-top:16px;">View in Admin</a>` : ''}
+    `),
+  });
+}
+
+export async function sendAdminDigestEmail(items: { title: string; body: string; link: string | null }[]) {
+  const adminEmail = process.env.ADMIN_EMAIL;
+  if (!adminEmail || items.length === 0) return;
+  const rows = items.map(i => `
+    <div style="padding:12px 0;border-bottom:1px solid #2d2d3d;">
+      <p style="margin:0 0 4px;color:#f1f0ff;font-size:14px;font-weight:700;">${esc(i.title)}</p>
+      <p style="margin:0 0 4px;color:#9ca3af;font-size:13px;">${esc(i.body)}</p>
+      ${i.link ? `<a href="${APP_URL}${i.link}" style="color:#a855f7;font-size:12px;">View &rarr;</a>` : ''}
+    </div>
+  `).join('');
+  await sendEmail({
+    to: adminEmail,
+    subject: `Admin digest — ${items.length} item${items.length !== 1 ? 's' : ''} pending`,
+    html: emailShell(`
+      <h1 style="color:#a855f7;font-size:20px;margin:0 0 16px;">Admin Digest</h1>
+      ${rows}
+    `),
+  });
+}
+
 export async function sendNewsletterEmail(params: {
   to: string;
   organizerName: string;
@@ -524,7 +657,7 @@ export async function sendNewsletterEmail(params: {
 
   await sendEmail({
     to: params.to,
-    fromName: params.organizerName,
+    fromName: getOrganizerSenderName(params.organizerName),
     subject: params.subject,
     html: emailShell(`
       <h1 style="color:#a855f7;font-size:20px;margin:0 0 16px;">${esc(params.subject)}</h1>
@@ -605,6 +738,6 @@ export async function sendNewEventTeaserEmail(params: {
     to: params.to,
     subject: `${params.organizerName} just announced: ${params.eventName}`,
     html,
-    fromName: params.organizerName,
+    fromName: getOrganizerSenderName(params.organizerName),
   });
 }

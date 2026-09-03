@@ -3,29 +3,42 @@
 import { useEffect, useRef, useState } from 'react';
 import { Upload } from 'lucide-react';
 
-// The fixed hero banner spans the full viewport width at a fixed height
-// (25vh) — a wide strip, not a standard photo ratio. 3:1 is a reasonable
-// fixed crop target for that: wide enough to read as a strip, not so
-// extreme that organizers struggle to find or shoot a matching source image.
-const CROP_RATIO = 3;
-const MIN_SOURCE_WIDTH = 1200;
-
 interface BannerCropInputProps {
   label: string;
   currentUrl?: string | null;
   onCropped: (file: File) => void;
   buttonText?: string;
+  /** Output width:height ratio. Defaults to 3 (the original fixed hero strip). */
+  ratio?: number;
+  /** Minimum source image width accepted, in px. Defaults to 1200. */
+  minWidth?: number;
+  /** Minimum source image height accepted, in px. Unenforced if omitted. */
+  minHeight?: number;
+  /**
+   * Shows a middle-60%-safe-zone overlay + hint text while cropping. Use for
+   * uploads that get cropped further/differently per device (e.g. the wide
+   * header banner, whose edges are cut more aggressively on mobile) so
+   * organisers know to keep faces/text away from the outer edges.
+   */
+  safeZoneHint?: boolean;
 }
 
 /**
- * Upload + fixed-aspect-ratio crop control for the event hero banner.
- * Rejects sources narrower than MIN_SOURCE_WIDTH. Organizer picks which
- * horizontal slice of a wider source to keep (vertical framing matters most
- * for a short, wide strip — this keeps the interaction simple: one slider,
- * not a full drag-resize crop box) so header text near the top isn't cut
- * off by the hero's dark gradient scrim.
+ * Upload + fixed-aspect-ratio crop control. Originally built for the event
+ * hero strip (ratio 3, i.e. `events.banner_url`, the "flyer"); the `ratio`/
+ * `minWidth`/`minHeight` props let it double for the wide 2:1 header banner
+ * (`events.header_banner_url`) without duplicating the crop UI.
  */
-export function BannerCropInput({ label, currentUrl, onCropped, buttonText }: BannerCropInputProps) {
+export function BannerCropInput({
+  label,
+  currentUrl,
+  onCropped,
+  buttonText,
+  ratio = 3,
+  minWidth = 1200,
+  minHeight,
+  safeZoneHint,
+}: BannerCropInputProps) {
   const fileRef = useRef<HTMLInputElement>(null);
   const canvasRef = useRef<HTMLCanvasElement>(null);
   const [sourceImage, setSourceImage] = useState<HTMLImageElement | null>(null);
@@ -38,8 +51,14 @@ export function BannerCropInput({ label, currentUrl, onCropped, buttonText }: Ba
     const url = URL.createObjectURL(file);
     const img = new Image();
     img.onload = () => {
-      if (img.width < MIN_SOURCE_WIDTH) {
-        setError(`Image is ${img.width}px wide — please upload one at least ${MIN_SOURCE_WIDTH}px wide.`);
+      if (img.width < minWidth) {
+        setError(`Image is ${img.width}px wide — please upload one at least ${minWidth}px wide.`);
+        setSourceImage(null);
+        URL.revokeObjectURL(url);
+        return;
+      }
+      if (minHeight && img.height < minHeight) {
+        setError(`Image is ${img.height}px tall — please upload one at least ${minHeight}px tall.`);
         setSourceImage(null);
         URL.revokeObjectURL(url);
         return;
@@ -60,19 +79,18 @@ export function BannerCropInput({ label, currentUrl, onCropped, buttonText }: Ba
     const ctx = canvas.getContext('2d');
     if (!ctx) return;
 
-    const outW = 1200;
-    const outH = Math.round(outW / CROP_RATIO);
+    const outW = Math.max(1200, minWidth);
+    const outH = Math.round(outW / ratio);
     canvas.width = outW;
     canvas.height = outH;
 
-    const srcRatio = sourceImage.width / sourceImage.height;
     // Crop height = full source height (or as much as fits); crop width is
-    // whatever keeps CROP_RATIO given that height, clamped to source width.
+    // whatever keeps `ratio` given that height, clamped to source width.
     let cropH = sourceImage.height;
-    let cropW = cropH * CROP_RATIO;
+    let cropW = cropH * ratio;
     if (cropW > sourceImage.width) {
       cropW = sourceImage.width;
-      cropH = cropW / CROP_RATIO;
+      cropH = cropW / ratio;
     }
     const maxX = sourceImage.width - cropW;
     const srcX = maxX * panX;
@@ -80,8 +98,7 @@ export function BannerCropInput({ label, currentUrl, onCropped, buttonText }: Ba
 
     ctx.clearRect(0, 0, outW, outH);
     ctx.drawImage(sourceImage, srcX, srcY, cropW, cropH, 0, 0, outW, outH);
-    void srcRatio;
-  }, [sourceImage, panX]);
+  }, [sourceImage, panX, ratio, minWidth]);
 
   const confirmCrop = () => {
     if (!canvasRef.current) return;
@@ -92,7 +109,7 @@ export function BannerCropInput({ label, currentUrl, onCropped, buttonText }: Ba
     }, 'image/jpeg', 0.9);
   };
 
-  const needsPan = sourceImage && sourceImage.width / sourceImage.height > CROP_RATIO;
+  const needsPan = sourceImage && sourceImage.width / sourceImage.height > ratio;
 
   return (
     <div className="flex flex-col gap-3">
@@ -105,7 +122,20 @@ export function BannerCropInput({ label, currentUrl, onCropped, buttonText }: Ba
 
       {sourceImage ? (
         <div className="flex flex-col gap-3">
-          <canvas ref={canvasRef} className="w-full rounded-lg border" style={{ borderColor: 'var(--color-border)' }} />
+          <div className="relative">
+            <canvas ref={canvasRef} className="w-full rounded-lg border" style={{ borderColor: 'var(--color-border)' }} />
+            {safeZoneHint && (
+              <>
+                <div className="absolute inset-y-0 left-0 pointer-events-none rounded-l-lg" style={{ width: '20%', backgroundColor: 'rgba(0,0,0,0.35)' }} />
+                <div className="absolute inset-y-0 right-0 pointer-events-none rounded-r-lg" style={{ width: '20%', backgroundColor: 'rgba(0,0,0,0.35)' }} />
+              </>
+            )}
+          </div>
+          {safeZoneHint && (
+            <p className="text-xs" style={{ color: 'var(--color-text-dim)' }}>
+              Keep faces and text inside the unshaded middle area — phones crop the shaded edges on the event page.
+            </p>
+          )}
           {needsPan && (
             <div>
               <label className="text-xs block mb-1" style={{ color: 'var(--color-text-dim)' }}>Pan crop</label>
@@ -135,7 +165,9 @@ export function BannerCropInput({ label, currentUrl, onCropped, buttonText }: Ba
           <div className="w-10 h-10 rounded-lg flex items-center justify-center" style={{ backgroundColor: 'var(--color-surface-2)', color: 'var(--color-text-dim)' }}><Upload size={18} /></div>
           <div className="text-center">
             <p className="text-sm" style={{ color: 'var(--color-text-muted)' }}>{buttonText || 'Click or drag to upload event banner'}</p>
-            <p className="text-xs mt-0.5" style={{ color: 'var(--color-text-dim)' }}>Minimum {MIN_SOURCE_WIDTH}px wide, max 5MB. You&apos;ll crop it to a wide banner strip next.</p>
+            <p className="text-xs mt-0.5" style={{ color: 'var(--color-text-dim)' }}>
+              Minimum {minWidth}px wide{minHeight ? ` × ${minHeight}px tall` : ''}, max 5MB. You&apos;ll crop it next.
+            </p>
           </div>
         </label>
       )}

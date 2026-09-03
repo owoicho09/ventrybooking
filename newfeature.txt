@@ -1,0 +1,50 @@
+You're working on Ventry (ventrybooking.com) — a live event ticketing platform for the Nigerian market built on Next.js 14 App Router, Supabase Postgres, Paystack, Resend, deployed on Vercel. Its core thesis: ticketing in Nigeria is a trust problem, not a payment problem. Buyer money sits in escrow until the event happens; organisers get paid 24–48h after. Everything you build must serve that thesis and must work beautifully on cheap Android phones on slow data — most of our traffic is mobile Nigeria.
+
+Before writing any code, explore the codebase thoroughly. There are pending migrations (#11–16) that may not have been applied — check migration state first and tell me if the schema on the ground doesn't match what the code expects. Where anything below contradicts what already exists, stop and flag it rather than guessing.
+
+This is a major update package from the platform owner. I'll describe each piece as a problem and the outcome we want. How you model, sequence, and implement it is your call — reason about it and propose where you see a better path.
+
+── 1. Flyer + banner ──
+Today organisers upload one image (a portrait flyer) that does every job including the event page hero, which it's the wrong shape for. Split this: organisers upload a flyer (portrait — keeps its roles in cards, OG previews, ticket emails) and optionally a wide rectangular banner (think Twitter profile header, ~2:1, recommend 2160×1080, min 1200×600) that becomes the event page header. The banner sits fixed at the top while page content scrolls over it. One responsive image via object-fit cover with different container heights on desktop vs mobile — warn organisers at upload to keep faces/text in the middle 60% since mobile crops the edges. Compress on upload (resize, WebP) so pages stay fast. If no banner is uploaded, degrade gracefully to current behaviour.
+
+── 2. Guest & lineup system with liability tiers ──
+Organisers build flyers on names, and we need to let them announce lineups honestly. An organiser can add named people to an event — name, photo, role — shown in a lineup/guests section on the event detail page. Roles carry different promises:
+- Headliner — the single billed act the ticket is sold on. Carries refund liability if they don't perform. At most one per event.
+- Guest Artist / Special Guest / Speaker — listed and promoted, zero refund exposure.
+- Surprise Guest — listed without a name revealed.
+Names can be added or edited up to event day. The role distinction must be visible in the organiser's UI when adding people ("this slot carries refund liability" vs "this one doesn't") because the whole point is organisers choosing exactly what they're standing behind. We're building the display and the data model for liability now; the actual headliner no-show claims process comes later — model it so that's an addition, not a rewrite.
+
+── 3. Venue/date change → buyer refund window ──
+When an organiser changes an event's venue or date, buyers must be protected without the organiser's payout being frozen. On change: every ticket holder is notified by email, and each has a 48-hour window to opt out for a full refund via a link in that email — no account, no support ticket. Only refunds actually issued come off the organiser's payout. The event keeps selling throughout. Think through edge cases: changes close to event day, buyers who purchased after the change (they don't get the window — they bought the new details), multiple changes.
+
+── 4. Post-event reviews & ratings, no buyer accounts ──
+Buyers don't have accounts, so identity lives in the ticket. After an event completes, Ventry emails every checked-in ticket holder asking them to rate and review it. That email carries a unique signed link tied to their ticket — opening it lets them leave one rating (stars) and optional text, no login. One review per ticket, only checked-in tickets qualify, links expire after a sensible window. Reviews and average ratings display on the event and roll up to the organiser profile. Handle moderation minimally for now: admin can hide a review.
+
+── 5. Organiser profile 2.0 ──
+The organiser page should feel like a public brand page — Instagram-energy, not a database listing. Their banner/branding, bio, socials, upcoming events, past events with their ratings and reviews, follower count (Notify Me), and the Notify Me button. Organisers should be findable through the site's search alongside events. This page is what eight years of an organiser's audience-building lands on — treat the design with that weight, consistent with Ventry's existing design system, fully responsive.
+
+── 6. Personalised transactional sender ──
+All buyer-facing emails about an event (ticket confirmations, reminders, change notices, review requests) currently come "from Ventry". They should come from the organiser's display name — still sent through our Resend domain and address, reply-to support@ventrybooking.com. Buyers should feel the organiser's brand in their inbox. Build this as one shared sender-identity mechanism, because an upcoming newsletter feature will need exactly the same thing.
+
+── 7. Ventry affiliate program ──
+We want marketers recruiting organisers onto Ventry. An affiliate signs up (own auth, separate from organisers), gets a unique referral link/code, and when an organiser they referred runs events, the affiliate earns 0.9% of that organiser's gross ticket sales — that's 30% of Ventry's 3% platform fee, coming out of our side, never the organiser's. Commission is capped at the referred organiser's first 2 events, then stops. The affiliate dashboard shows their referred organisers, ticket sales performance per referral, and their earned/pending commission — but never the organisers' detailed financials beyond what's needed to understand their own commission. Admin gets an Affiliates section: all affiliates, their referrals, commission owed, and a way to mark commissions paid (manual payout for now — model the ledger so automated payouts can come later). Attribution: referral link → organiser signup, resolve how you'll persist attribution (cookie + code at signup) and prevent obvious gaming.
+
+── 8. Admin notifications by email ──
+Admin notifications currently only live in a dashboard tab, which means nothing gets seen. Every event that needs admin awareness or action — new organiser registration, new event submission, KYC items, newsletter-style approvals, anything pending — must also send an email to admin@ventrybooking.com, promptly. Keep the in-dashboard record as the log; email is the alert channel. Batch/digest where flooding is a risk, immediate where action is needed.
+
+── 9. Restricted-audience events ──
+Some events are for a closed group — e.g. a university event only its students may attend. An organiser can restrict an event to one or more email domains (e.g. @nileuniversity.edu.ng). Checkout validates the buyer's email against the allowed domains before payment and explains clearly why a non-matching email can't buy. Unrestricted events are unaffected.
+
+── 10. Venue proof form copy ──
+Organisers are uploading photos of buildings as "venue proof", which is useless. The upload UI must state plainly what qualifies — lease agreement, booking confirmation, receipt from the venue — and that photos of the venue are not accepted. Copy and UX fix.
+
+── Working rules ──
+- Migrations first: reconcile #11–16 before layering new schema.
+- Escrow correctness is sacred — anything touching money (refund windows, affiliate commissions) needs an audit trail and must never allow money out that escrow hasn't covered.
+- Every email through the existing Resend patterns; every page responsive; match the existing design system.
+- Where I've left something unspecified, make the call a thoughtful product engineer would make for the Nigerian events market, and note the decision.
+
+── Done means ──
+An organiser can upload flyer + banner and see the fixed banner header on mobile and desktop; add a lineup with a headliner and guests that renders on the event page with liability roles modelled; change a venue and watch buyer notifications + a working 48h self-serve refund link flow; a checked-in test ticket receives a review email post-event and the review appears on the event and organiser profile; the organiser profile page is live, searchable, and shows past events with ratings; ticket emails arrive under the organiser's display name; an affiliate can sign up, refer an organiser, and see commission accrue on that organiser's first 2 events with the admin able to view and mark it paid; admin receives emails for pending items; a domain-restricted event blocks a wrong-domain email at checkout with a clear message; and the venue proof form tells organisers exactly what to upload.
+
+Sequence the work yourself, run and verify as you go, and give me a summary of what shipped, what decisions you made, and anything that needs my action (env vars, migrations to run, Paystack/Resend config).

@@ -11,6 +11,9 @@ import {
   ShieldAlert,
   MessageSquareWarning,
   Mail,
+  Star,
+  Handshake,
+  CalendarClock,
   Settings,
 } from 'lucide-react';
 import { ThemeToggle } from './ThemeToggle';
@@ -20,10 +23,13 @@ const navItems = [
   { href: '/admin', label: 'Dashboard', icon: LayoutDashboard },
   { href: '/admin/organizers', label: 'KYC Review', icon: UserCheck },
   { href: '/admin/events', label: 'Events Queue', icon: CalendarCheck },
+  { href: '/admin/change-requests', label: 'Change Requests', icon: CalendarClock },
   { href: '/admin/buyers', label: 'Buyers', icon: Users },
   { href: '/admin/payouts', label: 'Payouts', icon: Wallet },
   { href: '/admin/complaints', label: 'Complaints', icon: MessageSquareWarning },
   { href: '/admin/newsletters', label: 'Newsletter Queue', icon: Mail },
+  { href: '/admin/reviews', label: 'Reviews', icon: Star },
+  { href: '/admin/affiliates', label: 'Affiliates', icon: Handshake },
   { href: '/admin/fraud', label: 'Fraud Monitor', icon: ShieldAlert },
   { href: '/admin/settings', label: 'Settings', icon: Settings },
 ];

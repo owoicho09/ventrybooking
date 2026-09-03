@@ -3,6 +3,7 @@ import { getServerSupabase } from '@/lib/supabase/server';
 import { generateTicketId, generateRefundCode } from '@/lib/server/ids';
 import { sendTicketEmail } from '@/lib/server/email';
 import { notify } from '@/lib/server/notify';
+import { isEmailDomainAllowed } from '@/lib/server/domainRestriction';
 import { randomBytes } from 'crypto';
 
 interface CartItem { tierId: string; quantity: number }
@@ -28,12 +29,18 @@ export async function POST(req: NextRequest) {
 
     const { data: event } = await db
       .from('events')
-      .select('id, event_name, date, time, event_mode, venue, status, organizer_id, banner_url')
+      .select('id, event_name, date, time, event_mode, venue, status, organizer_id, banner_url, allowed_email_domains')
       .eq('id', eventId)
       .maybeSingle();
 
     if (!event || event.status !== 'approved') {
       return NextResponse.json({ error: 'Event is not available' }, { status: 400 });
+    }
+    if (!isEmailDomainAllowed(buyerEmail, event.allowed_email_domains)) {
+      return NextResponse.json(
+        { error: `This event is restricted to ${(event.allowed_email_domains as string[]).map(d => `@${d}`).join(' or ')} email addresses.` },
+        { status: 403 },
+      );
     }
 
     const { data: tiers } = await db

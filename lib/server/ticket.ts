@@ -3,6 +3,7 @@ import { generateTicketId, generateRefundCode } from '@/lib/server/ids';
 import { sendTicketEmail } from '@/lib/server/email';
 import { calculateFees, serviceFeePerTicket } from '@/lib/server/fees';
 import { notify } from '@/lib/server/notify';
+import { recordAffiliateCommissionIfApplicable } from '@/lib/server/affiliateCommission';
 
 export interface CartItem {
   tierId: string;
@@ -196,6 +197,12 @@ export async function createTicketFromClaimedPayment(p: PaymentData): Promise<st
   await Promise.all([
     ...items.map(item => db.rpc('increment_tier_sold', { tier_id: item.tierId, amount: item.quantity })),
     upsertPayout(db, p.eventId, eventRow, orgRow?.name ?? '', subtotal, fee, net),
+    recordAffiliateCommissionIfApplicable(db, {
+      organizerId: eventRow.organizer_id,
+      eventId: p.eventId,
+      eventName: eventRow.event_name,
+      grossAmount: subtotal,
+    }),
   ]);
 
   // Box 1 consent (organiser mailing list) — adds/reactivates this buyer in

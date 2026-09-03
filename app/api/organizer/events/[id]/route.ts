@@ -3,6 +3,10 @@ import { getAuthUser } from '@/lib/server/auth';
 import { getServerSupabase } from '@/lib/supabase/server';
 import { sendLocationUpdatedEmail, sendMeetingLinkUpdatedEmail } from '@/lib/server/email';
 import { ACCENT_COLOR_PRESETS } from '@/lib/accentColors';
+import { normalizeLineup, type LineupAct } from '@/lib/server/lineup';
+import { normalizeEmailDomains } from '@/lib/server/domainRestriction';
+import { createChangeRefundWindow, countAppliedEventChanges, FREE_ORGANIZER_CHANGE_LIMIT } from '@/lib/server/eventChangeWindow';
+import { notify } from '@/lib/server/notify';
 
 export async function GET(
   _req: NextRequest,
@@ -21,7 +25,7 @@ export async function GET(
       .from('events')
       .select(`
         id, slug, event_name, category, description, date, time, event_mode, venue, address, city, landmark,
-        location_hidden, meeting_link, meeting_passcode, status, total_sold, banner_color, banner_url, accent_color, lineup, organizer_id, created_at,
+        location_hidden, meeting_link, meeting_passcode, status, total_sold, banner_color, banner_url, header_banner_url, accent_color, lineup, allowed_email_domains, organizer_id, created_at,
         tiers:ticket_tiers(id, name, price, available, sold)
       `)
       .eq('id', id)
@@ -65,14 +69,15 @@ export async function PATCH(
 
     let allowedFields: string[];
     if (event.status === 'approved') {
-      // After approval: keep identity/date locked, but allow operational location updates.
-      allowedFields = ['description', 'banner_url', 'venue', 'address', 'city', 'landmark', 'location_hidden', 'meeting_link', 'meeting_passcode', 'accent_color', 'lineup'];
+      // After approval: name/category locked, but venue and date can change —
+      // each qualifying change opens a buyer refund window (see below).
+      allowedFields = ['description', 'banner_url', 'date', 'time', 'venue', 'address', 'city', 'landmark', 'location_hidden', 'meeting_link', 'meeting_passcode', 'accent_color', 'lineup', 'allowed_email_domains'];
     } else {
       // Before approval: all fields except organizer_id, status and event_mode (mode is locked at creation)
-      allowedFields = ['event_name', 'description', 'date', 'time', 'venue', 'address', 'city', 'landmark', 'location_hidden', 'meeting_link', 'meeting_passcode', 'category', 'banner_url', 'accent_color', 'lineup'];
+      allowedFields = ['event_name', 'description', 'date', 'time', 'venue', 'address', 'city', 'landmark', 'location_hidden', 'meeting_link', 'meeting_passcode', 'category', 'banner_url', 'accent_color', 'lineup', 'allowed_email_domains'];
     }
 
-    const updates: Record<string, string | boolean | null | { name: string; role: string }[]> = {};
+    const updates: Record<string, string | boolean | null | LineupAct[] | string[]> = {};
     for (const key of allowedFields) {
       if (body[key] !== undefined) {
         if (key === 'location_hidden') {
@@ -81,9 +86,14 @@ export async function PATCH(
           const value = body[key];
           updates[key] = value && ACCENT_COLOR_PRESETS.some(p => p.hex === value) ? value : null;
         } else if (key === 'lineup') {
-          updates[key] = Array.isArray(body[key])
-            ? body[key].map((a: { name?: string; role?: string }) => ({ name: String(a.name ?? '').trim(), role: String(a.role ?? '').trim() })).filter((a: { name: string }) => a.name)
-            : [];
+          try {
+            updates[key] = normalizeLineup(body[key]);
+          } catch (err) {
+            return NextResponse.json({ error: (err as Error).message }, { status: 400 });
+          }
+        } else if (key === 'allowed_email_domains') {
+          const normalized = normalizeEmailDomains(body[key]);
+          updates[key] = normalized.length > 0 ? normalized : null;
         } else if (key === 'landmark' || key === 'meeting_passcode') {
           updates[key] = String(body[key] ?? '').trim() || null;
         } else {
@@ -96,8 +106,92 @@ export async function PATCH(
       return NextResponse.json({ error: 'No valid fields to update' }, { status: 400 });
     }
 
-    const { error } = await db.from('events').update(updates).eq('id', id);
-    if (error) throw error;
+    const dateChanged = 'date' in updates && String(updates.date) !== String(event.date ?? '');
+    if (dateChanged && event.status === 'approved') {
+      const todayStr = new Date().toISOString().split('T')[0];
+      if (String(updates.date) < todayStr) {
+        return NextResponse.json({ error: 'New event date cannot be in the past' }, { status: 400 });
+      }
+    }
+
+    const newDate = String(updates.date ?? event.date);
+    const newTime = String(updates.time ?? event.time);
+
+    // Only venue/address/city (physical) or date (either mode) are
+    // "qualifying" — the ones that mean the thing the buyer bought a ticket
+    // for has actually changed, and so are subject to the 2-free-changes cap.
+    const coreVenueChanged = event.event_mode !== 'online' && ['venue', 'address', 'city'].some((key) => {
+      if (!(key in updates)) return false;
+      return String(updates[key] ?? '') !== String(event[key as keyof typeof event] ?? '');
+    });
+    const qualifyingChangeRequested = coreVenueChanged || dateChanged;
+
+    let deferredToApproval = false;
+    let changeRequestId: string | null = null;
+
+    if (qualifyingChangeRequested) {
+      const appliedCount = await countAppliedEventChanges(db, id);
+      if (appliedCount >= FREE_ORGANIZER_CHANGE_LIMIT) {
+        deferredToApproval = true;
+
+        const deferredOld: Record<string, unknown> = {};
+        const deferredNew: Record<string, unknown> = {};
+        if (dateChanged) {
+          deferredOld.date = event.date;
+          deferredOld.time = event.time;
+          deferredNew.date = updates.date;
+          deferredNew.time = updates.time ?? event.time;
+          delete updates.date;
+          delete updates.time;
+        }
+        if (coreVenueChanged) {
+          deferredOld.venue = event.venue;
+          deferredOld.address = event.address;
+          deferredOld.city = event.city;
+          deferredNew.venue = updates.venue ?? event.venue;
+          deferredNew.address = updates.address ?? event.address;
+          deferredNew.city = updates.city ?? event.city;
+          delete updates.venue;
+          delete updates.address;
+          delete updates.city;
+        }
+        const changeType = dateChanged && coreVenueChanged ? 'venue_and_date' : dateChanged ? 'date' : 'venue';
+
+        const { data: reqRow, error: reqErr } = await db
+          .from('event_change_requests')
+          .insert({
+            event_id: id,
+            organizer_id: user.sub,
+            change_type: changeType,
+            old_value: deferredOld,
+            new_value: deferredNew,
+          })
+          .select('id')
+          .single();
+        if (reqErr) throw reqErr;
+        changeRequestId = reqRow.id;
+
+        notify(
+          { type: 'admin' },
+          {
+            notifType: 'event_change_request',
+            title: `Change request awaiting approval — ${event.event_name}`,
+            body: `A ${changeType.replace('_', ' ')} change was requested. This event has already had its 2 included organiser changes, so this one needs your approval before it applies or buyers are notified.`,
+            link: '/admin/change-requests',
+          },
+          { emailChannel: 'immediate' },
+        ).catch(console.error);
+      }
+    }
+
+    if (Object.keys(updates).length > 0) {
+      const { error } = await db.from('events').update(updates).eq('id', id);
+      if (error) throw error;
+    }
+
+    if (deferredToApproval) {
+      return NextResponse.json({ success: true, data: { pendingApproval: true, changeRequestId } });
+    }
 
     if (event.event_mode === 'online') {
       const meetingChanged = ['meeting_link', 'meeting_passcode'].some((key) => {
@@ -115,6 +209,21 @@ export async function PATCH(
           meetingPasscode: String(updates.meeting_passcode ?? event.meeting_passcode ?? ''),
         }).catch(err => console.error('meeting link update buyer notification error', err));
       }
+
+      // Meeting-link-only changes don't warrant a refund window — but a date
+      // change does, whether the event is online or physical.
+      if (dateChanged) {
+        createChangeRefundWindow(db, {
+          eventId: id,
+          eventSlug: event.slug,
+          eventName: event.event_name,
+          changeType: 'date',
+          oldValue: { date: event.date, time: event.time },
+          newValue: { date: newDate, time: newTime },
+          newEventDate: newDate,
+          newEventTime: newTime,
+        }).catch(err => console.error('date change refund window error', err));
+      }
     } else {
       const locationFields = ['venue', 'address', 'city', 'landmark', 'location_hidden'];
       const locationChanged = locationFields.some((key) => {
@@ -122,7 +231,27 @@ export async function PATCH(
         return String(updates[key] ?? '') !== String(event[key as keyof typeof event] ?? '');
       });
 
-      if (locationChanged) {
+      if (coreVenueChanged || dateChanged) {
+        const nextLocation = {
+          venue: String(updates.venue ?? event.venue ?? ''),
+          address: String(updates.address ?? event.address ?? ''),
+          city: String(updates.city ?? event.city ?? ''),
+        };
+
+        createChangeRefundWindow(db, {
+          eventId: id,
+          eventSlug: event.slug,
+          eventName: event.event_name,
+          changeType: coreVenueChanged && dateChanged ? 'venue_and_date' : coreVenueChanged ? 'venue' : 'date',
+          oldValue: { venue: event.venue, address: event.address, city: event.city, date: event.date, time: event.time },
+          newValue: { ...nextLocation, date: newDate, time: newTime },
+          newEventDate: newDate,
+          newEventTime: newTime,
+          location: nextLocation,
+        }).catch(err => console.error('venue/date change refund window error', err));
+      } else if (locationChanged) {
+        // Landmark-only or hide/reveal-only change — no refund implication,
+        // just let buyers know the listing details moved.
         const nextLocation = {
           venue: String(updates.venue ?? event.venue ?? ''),
           address: String(updates.address ?? event.address ?? ''),
