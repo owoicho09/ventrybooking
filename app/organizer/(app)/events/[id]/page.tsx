@@ -1,6 +1,6 @@
 'use client';
 
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useRef } from 'react';
 import { useParams, useRouter } from 'next/navigation';
 import Link from 'next/link';
 import {
@@ -212,7 +212,7 @@ export default function OrganizerEventDetailPage() {
       if (data.data?.pendingApproval) {
         toast('This event has used its 2 included changes — the venue/date change was submitted to Ventry for approval and has not been applied yet.', 'success');
       } else {
-        const venueOrDateChanged = isApproved && (
+        const venueOrDateChanged = hasSales && (
           date !== event?.date || (event?.event_mode !== 'online' && (venue !== event?.venue || address !== event?.address || city !== event?.city))
         );
         toast(venueOrDateChanged ? 'Event updated — buyers are being notified with a refund option' : 'Event updated', 'success');
@@ -270,6 +270,27 @@ export default function OrganizerEventDetailPage() {
     }
   };
 
+  // Bridges BannerCropInput's two separate callbacks (onColorExtracted fires
+  // just before onCropped, both synchronously inside its confirmCrop) so the
+  // upload handler below can persist the extracted colour in the SAME
+  // request cycle as the image — applying it via local setState instead
+  // would just get clobbered by the load() refetch a moment later, since the
+  // server wouldn't have the new colour yet.
+  const pendingExtractedColorRef = useRef<string | null>(null);
+  const [colorManuallySet, setColorManuallySet] = useState(false);
+
+  const persistExtractedColorIfAny = async () => {
+    const hex = pendingExtractedColorRef.current;
+    pendingExtractedColorRef.current = null;
+    if (!hex || colorManuallySet) return;
+    setAccentColor(hex);
+    await fetch(`/api/organizer/events/${id}`, {
+      method: 'PATCH',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ accent_color: hex }),
+    }).catch(() => {});
+  };
+
   const handleBannerChange = async (file: File) => {
     const fd = new FormData();
     fd.append('banner', file);
@@ -277,6 +298,7 @@ export default function OrganizerEventDetailPage() {
     const data = await res.json();
     if (!res.ok) { toast(data.error || 'Upload failed', 'error'); return; }
     toast('Flyer updated', 'success');
+    await persistExtractedColorIfAny();
     load();
   };
 
@@ -287,6 +309,7 @@ export default function OrganizerEventDetailPage() {
     const data = await res.json();
     if (!res.ok) { toast(data.error || 'Upload failed', 'error'); return; }
     toast('Header banner updated', 'success');
+    await persistExtractedColorIfAny();
     load();
   };
 
@@ -389,10 +412,13 @@ export default function OrganizerEventDetailPage() {
 
   if (!event) return null;
 
-  const isApproved    = event.status === 'approved';
   const totalAvailable = event.tiers.reduce((s, t) => s + t.available, 0);
   const totalSold      = event.tiers.reduce((s, t) => s + t.sold, 0);
   const allSoldOut     = totalAvailable > 0 && totalSold >= totalAvailable;
+  // Events go live immediately now, so "approved" no longer implies buyers
+  // exist — the real gate for name-locking and the refund-window/change-cap
+  // system is whether anyone has actually bought a ticket yet.
+  const hasSales       = totalSold > 0;
 
   return (
     <div className="max-w-3xl flex flex-col gap-6">
@@ -498,9 +524,9 @@ export default function OrganizerEventDetailPage() {
         <div className="flex items-center justify-between">
           <div>
             <h2 className="font-semibold" style={{ color: 'var(--color-text)' }}>Event Details</h2>
-            {isApproved && (
+            {hasSales && (
               <p className="text-xs mt-0.5" style={{ color: 'var(--color-text-dim)' }}>
-                Name is locked after approval. Changing the date or venue notifies every buyer and gives them a 48-hour refund option.
+                Name is locked once tickets are selling. Changing the date or venue notifies every buyer and gives them a 48-hour refund option.
               </p>
             )}
           </div>
@@ -518,7 +544,7 @@ export default function OrganizerEventDetailPage() {
               <Input label="Event Date" type="date" value={date} onChange={e => setDate(e.target.value)} />
               <Input label="Start Time" type="time" value={time} onChange={e => setTime(e.target.value)} />
             </div>
-            {isApproved && (date !== event.date) && (
+            {hasSales && (date !== event.date) && (
               <div className="rounded-lg px-4 py-3 flex items-start gap-2 text-sm" style={{ backgroundColor: '#f59e0b10', border: '1px solid #f59e0b30' }}>
                 <AlertTriangle size={15} className="flex-shrink-0 mt-0.5" style={{ color: 'var(--color-amber)' }} />
                 <p style={{ color: 'var(--color-text-muted)' }}>
@@ -540,7 +566,7 @@ export default function OrganizerEventDetailPage() {
                 <Input label="Venue Address" value={address} onChange={e => setAddress(e.target.value)} />
                 <Input label="City" value={city} onChange={e => setCity(e.target.value)} />
                 <Input label="Nearby Landmark" value={landmark} onChange={e => setLandmark(e.target.value)} placeholder="e.g. Landmark Towers, Victoria Island" />
-                {isApproved && (venue !== event.venue || address !== event.address || city !== event.city) && (
+                {hasSales && (venue !== event.venue || address !== event.address || city !== event.city) && (
                   <div className="rounded-lg px-4 py-3 flex items-start gap-2 text-sm" style={{ backgroundColor: '#f59e0b10', border: '1px solid #f59e0b30' }}>
                     <AlertTriangle size={15} className="flex-shrink-0 mt-0.5" style={{ color: 'var(--color-amber)' }} />
                     <p style={{ color: 'var(--color-text-muted)' }}>
@@ -613,6 +639,7 @@ export default function OrganizerEventDetailPage() {
           label="Event Flyer"
           currentUrl={event.banner_url}
           onCropped={handleBannerChange}
+          onColorExtracted={hex => { pendingExtractedColorRef.current = hex; }}
           buttonText={event.banner_url ? 'Click to replace flyer' : undefined}
         />
       </div>
@@ -628,6 +655,7 @@ export default function OrganizerEventDetailPage() {
           minHeight={600}
           safeZoneHint
           onCropped={handleHeaderBannerChange}
+          onColorExtracted={hex => { pendingExtractedColorRef.current = hex; }}
           buttonText={event.header_banner_url ? 'Click to replace header banner' : 'Click or drag to upload a wide header banner'}
         />
         <p className="text-xs" style={{ color: 'var(--color-text-dim)' }}>
@@ -646,7 +674,7 @@ export default function OrganizerEventDetailPage() {
           <div className="flex flex-wrap gap-2.5">
             <button
               type="button"
-              onClick={() => setAccentColor(null)}
+              onClick={() => { setColorManuallySet(true); setAccentColor(null); }}
               className="w-9 h-9 rounded-full border-2 flex items-center justify-center text-[9px] font-semibold"
               style={{
                 borderColor: accentColor === null ? 'var(--color-text)' : 'var(--color-border)',
@@ -661,13 +689,23 @@ export default function OrganizerEventDetailPage() {
               <button
                 key={preset.hex}
                 type="button"
-                onClick={() => setAccentColor(preset.hex)}
+                onClick={() => { setColorManuallySet(true); setAccentColor(preset.hex); }}
                 className="w-9 h-9 rounded-full border-2"
                 style={{ backgroundColor: preset.hex, borderColor: accentColor === preset.hex ? 'var(--color-text)' : 'transparent' }}
                 title={preset.name}
                 aria-label={preset.name}
               />
             ))}
+            {accentColor && !ACCENT_COLOR_PRESETS.some(p => p.hex === accentColor) && (
+              <button
+                type="button"
+                className="w-9 h-9 rounded-full border-2"
+                style={{ backgroundColor: accentColor, borderColor: 'var(--color-text)' }}
+                title="Detected from your image"
+                aria-label="Detected colour"
+                disabled
+              />
+            )}
           </div>
         </div>
 

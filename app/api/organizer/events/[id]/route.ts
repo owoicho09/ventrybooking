@@ -2,7 +2,7 @@ import { NextRequest, NextResponse } from 'next/server';
 import { getAuthUser } from '@/lib/server/auth';
 import { getServerSupabase } from '@/lib/supabase/server';
 import { sendLocationUpdatedEmail, sendMeetingLinkUpdatedEmail } from '@/lib/server/email';
-import { ACCENT_COLOR_PRESETS } from '@/lib/accentColors';
+import { isValidAccentColor } from '@/lib/accentColors';
 import { normalizeLineup, type LineupAct } from '@/lib/server/lineup';
 import { normalizeEmailDomains } from '@/lib/server/domainRestriction';
 import { createChangeRefundWindow, countAppliedEventChanges, FREE_ORGANIZER_CHANGE_LIMIT } from '@/lib/server/eventChangeWindow';
@@ -67,13 +67,23 @@ export async function PATCH(
 
     const body = await req.json();
 
+    // Events go live the instant they're created now, so "approved" no
+    // longer means "might have buyers" the way it used to — an event can be
+    // approved and five seconds old with nobody to protect yet. The real
+    // question for how much editing freedom to allow is whether anyone has
+    // actually bought a ticket: zero sales means free editing of everything
+    // (no one to notify, nothing to cap); any sale means name/category lock
+    // and venue/date changes route through the refund-window + cap system.
+    const { count: soldCount } = await db
+      .from('tickets')
+      .select('id', { count: 'exact', head: true })
+      .eq('event_id', id);
+    const hasSales = (soldCount ?? 0) > 0;
+
     let allowedFields: string[];
-    if (event.status === 'approved') {
-      // After approval: name/category locked, but venue and date can change —
-      // each qualifying change opens a buyer refund window (see below).
+    if (hasSales) {
       allowedFields = ['description', 'banner_url', 'date', 'time', 'venue', 'address', 'city', 'landmark', 'location_hidden', 'meeting_link', 'meeting_passcode', 'accent_color', 'lineup', 'allowed_email_domains'];
     } else {
-      // Before approval: all fields except organizer_id, status and event_mode (mode is locked at creation)
       allowedFields = ['event_name', 'description', 'date', 'time', 'venue', 'address', 'city', 'landmark', 'location_hidden', 'meeting_link', 'meeting_passcode', 'category', 'banner_url', 'accent_color', 'lineup', 'allowed_email_domains'];
     }
 
@@ -84,7 +94,7 @@ export async function PATCH(
           updates[key] = Boolean(body[key]);
         } else if (key === 'accent_color') {
           const value = body[key];
-          updates[key] = value && ACCENT_COLOR_PRESETS.some(p => p.hex === value) ? value : null;
+          updates[key] = isValidAccentColor(value) ? value : null;
         } else if (key === 'lineup') {
           try {
             updates[key] = normalizeLineup(body[key]);
@@ -107,7 +117,7 @@ export async function PATCH(
     }
 
     const dateChanged = 'date' in updates && String(updates.date) !== String(event.date ?? '');
-    if (dateChanged && event.status === 'approved') {
+    if (dateChanged) {
       const todayStr = new Date().toISOString().split('T')[0];
       if (String(updates.date) < todayStr) {
         return NextResponse.json({ error: 'New event date cannot be in the past' }, { status: 400 });
@@ -124,7 +134,9 @@ export async function PATCH(
       if (!(key in updates)) return false;
       return String(updates[key] ?? '') !== String(event[key as keyof typeof event] ?? '');
     });
-    const qualifyingChangeRequested = coreVenueChanged || dateChanged;
+    // With no tickets sold, there's no buyer to protect and no reason to
+    // spend one of the 2 free changes — let it through untracked.
+    const qualifyingChangeRequested = hasSales && (coreVenueChanged || dateChanged);
 
     let deferredToApproval = false;
     let changeRequestId: string | null = null;
@@ -211,8 +223,9 @@ export async function PATCH(
       }
 
       // Meeting-link-only changes don't warrant a refund window — but a date
-      // change does, whether the event is online or physical.
-      if (dateChanged) {
+      // change does, whether the event is online or physical. Skipped entirely
+      // with zero sales — nothing to notify, and it shouldn't spend a change.
+      if (hasSales && dateChanged) {
         createChangeRefundWindow(db, {
           eventId: id,
           eventSlug: event.slug,
@@ -231,7 +244,7 @@ export async function PATCH(
         return String(updates[key] ?? '') !== String(event[key as keyof typeof event] ?? '');
       });
 
-      if (coreVenueChanged || dateChanged) {
+      if (hasSales && (coreVenueChanged || dateChanged)) {
         const nextLocation = {
           venue: String(updates.venue ?? event.venue ?? ''),
           address: String(updates.address ?? event.address ?? ''),

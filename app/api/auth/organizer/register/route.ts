@@ -9,7 +9,7 @@ import { notify } from '@/lib/server/notify';
 
 export async function POST(req: NextRequest) {
   try {
-    const { name, email, phone, password, confirmPassword } = await req.json();
+    const { name, email, phone, password, confirmPassword, referralCode } = await req.json();
 
     if (!name || !email || !phone || !password) {
       return NextResponse.json({ error: 'All fields are required' }, { status: 400 });
@@ -76,10 +76,12 @@ export async function POST(req: NextRequest) {
     ).catch(console.error);
 
     // Affiliate attribution — first-touch only, resolved once, right now.
-    // A cookie set by an earlier ?aff=CODE page visit (see
-    // AffiliateAttributionCapture) is the only source; nothing here can be
-    // re-attributed later by a different link.
-    const refCode = req.cookies.get('ventry_aff')?.value;
+    // Preferred source is the cookie set by an earlier ?aff=CODE page visit
+    // (see AffiliateAttributionCapture); if there is none, fall back to a
+    // code the organiser typed in manually — covers referrals that happened
+    // by word of mouth rather than a clicked link. Either way this only ever
+    // runs once, right now — nothing here can be re-attributed later.
+    const refCode = req.cookies.get('ventry_aff')?.value || (typeof referralCode === 'string' ? referralCode.trim() : '');
     if (refCode) {
       const { data: affiliate } = await db
         .from('platform_affiliates')

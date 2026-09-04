@@ -19,3 +19,16 @@ export const ACCENT_COLOR_PRESETS: AccentColorPreset[] = [
   { name: 'Fuchsia',       hex: '#a21caf' },
   { name: 'Slate',         hex: '#475569' },
 ];
+
+/**
+ * A preset swatch, or any well-formed 6-digit hex — the latter covers colours
+ * auto-extracted from an organiser's flyer/banner (lib/colorExtract.ts),
+ * which already enforces the same WCAG AA contrast floor the presets were
+ * hand-picked to clear before a value ever reaches here. Strict format check
+ * matters since this value gets used directly as a CSS custom property.
+ */
+export function isValidAccentColor(value: unknown): value is string {
+  return typeof value === 'string' && (
+    ACCENT_COLOR_PRESETS.some(p => p.hex === value) || /^#[0-9a-fA-F]{6}$/.test(value)
+  );
+}

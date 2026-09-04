@@ -60,6 +60,19 @@ export default function CreateEventPage() {
   const [venueProof, setVenueProof] = useState<File | null>(null);
   const [tiers, setTiers] = useState<Tier[]>([{ id: '1', name: 'Regular', price: '', quantity: '' }]);
   const [accentColor, setAccentColor] = useState<string | null>(null);
+  const [accentAutoDetected, setAccentAutoDetected] = useState(false);
+  const [colorManuallySet, setColorManuallySet] = useState(false);
+
+  const handleColorExtracted = (hex: string | null) => {
+    if (colorManuallySet || !hex) return;
+    setAccentColor(hex);
+    setAccentAutoDetected(true);
+  };
+  const pickAccent = (hex: string | null) => {
+    setColorManuallySet(true);
+    setAccentAutoDetected(false);
+    setAccentColor(hex);
+  };
   const [lineup, setLineup] = useState<LineupAct[]>([]);
   const [restrictedDomainsInput, setRestrictedDomainsInput] = useState('');
 
@@ -122,7 +135,7 @@ export default function CreateEventPage() {
         toast(data.error || 'Failed to create event', 'error');
         return;
       }
-      toast('Event submitted for review! We\'ll notify you within 2–4 business days.', 'success');
+      toast('Your event is live! You can start sharing it right away.', 'success');
       router.push('/organizer/events');
     } catch {
       toast('Network error. Please try again.', 'error');
@@ -146,6 +159,7 @@ export default function CreateEventPage() {
         <BannerCropInput
           label="Event Flyer"
           onCropped={setBanner}
+          onColorExtracted={handleColorExtracted}
           buttonText={banner ? `${banner.name} — click to replace` : undefined}
         />
         <div>
@@ -156,6 +170,7 @@ export default function CreateEventPage() {
             minHeight={600}
             safeZoneHint
             onCropped={setHeaderBanner}
+            onColorExtracted={handleColorExtracted}
             buttonText={headerBanner ? `${headerBanner.name} — click to replace` : 'Click or drag to upload a wide header banner'}
           />
           <p className="text-xs mt-1.5" style={{ color: 'var(--color-text-dim)' }}>
@@ -165,10 +180,16 @@ export default function CreateEventPage() {
         <div>
           <label className="text-sm font-medium block mb-1.5" style={{ color: 'var(--color-text)' }}>Accent Colour</label>
           <p className="text-xs mb-3" style={{ color: 'var(--color-text-dim)' }}>Applied to your ticket panel — tier cards, purchase button, and quantity steppers. Everything else stays Ventry purple.</p>
+          {accentAutoDetected && accentColor && (
+            <p className="text-xs mb-2 flex items-center gap-1.5" style={{ color: 'var(--color-purple-light)' }}>
+              <span className="w-3 h-3 rounded-full inline-block" style={{ backgroundColor: accentColor }} />
+              Detected from your image — pick a swatch below to override.
+            </p>
+          )}
           <div className="flex flex-wrap gap-2.5">
             <button
               type="button"
-              onClick={() => setAccentColor(null)}
+              onClick={() => pickAccent(null)}
               className="w-9 h-9 rounded-full border-2 flex items-center justify-center text-[10px] font-semibold"
               style={{
                 borderColor: accentColor === null ? 'var(--color-text)' : 'var(--color-border)',
@@ -183,7 +204,7 @@ export default function CreateEventPage() {
               <button
                 key={preset.hex}
                 type="button"
-                onClick={() => setAccentColor(preset.hex)}
+                onClick={() => pickAccent(preset.hex)}
                 className="w-9 h-9 rounded-full border-2"
                 style={{
                   backgroundColor: preset.hex,
@@ -193,6 +214,16 @@ export default function CreateEventPage() {
                 aria-label={preset.name}
               />
             ))}
+            {accentColor && !ACCENT_COLOR_PRESETS.some(p => p.hex === accentColor) && (
+              <button
+                type="button"
+                className="w-9 h-9 rounded-full border-2"
+                style={{ backgroundColor: accentColor, borderColor: 'var(--color-text)' }}
+                title="Detected from your image"
+                aria-label="Detected colour"
+                disabled
+              />
+            )}
           </div>
         </div>
         <div>
@@ -360,16 +391,16 @@ export default function CreateEventPage() {
       </section>
 
       <section className="rounded-xl border p-6 flex flex-col gap-5" style={{ backgroundColor: 'var(--color-surface)', borderColor: 'var(--color-border)' }}>
-        <h2 className="font-semibold text-lg" style={{ color: 'var(--color-text)' }}>5. Review & Submit</h2>
+        <h2 className="font-semibold text-lg" style={{ color: 'var(--color-text)' }}>5. Review & Publish</h2>
         <div className="rounded-lg p-4 text-sm" style={{ backgroundColor: 'var(--color-surface-2)', color: 'var(--color-text-muted)' }}>
           <p className="font-medium mb-2" style={{ color: 'var(--color-text)' }}>Summary</p>
           <p>Event: {name || '(not set)'}</p>
           <p className="mt-1">Tiers: {tiers.length} tier{tiers.length !== 1 ? 's' : ''} configured</p>
         </div>
-        <div className="rounded-lg px-4 py-3 flex items-start gap-3 text-sm" style={{ backgroundColor: '#f59e0b10', border: '1px solid #f59e0b30' }}>
-          <span className="flex-shrink-0 mt-0.5" style={{ color: 'var(--color-amber)' }}>!</span>
+        <div className="rounded-lg px-4 py-3 flex items-start gap-3 text-sm" style={{ backgroundColor: '#10b98110', border: '1px solid #10b98130' }}>
+          <span className="flex-shrink-0 mt-0.5" style={{ color: 'var(--color-green)' }}>✓</span>
           <p style={{ color: 'var(--color-text-muted)' }}>
-            Your event will be reviewed within <strong style={{ color: 'var(--color-text)' }}>2-4 business days</strong> before going live.
+            Your event goes <strong style={{ color: 'var(--color-text)' }}>live immediately</strong> after you submit — no waiting. Our team reviews new events shortly after publishing and may reach out if anything needs your attention.
           </p>
         </div>
         <p className="text-xs leading-relaxed" style={{ color: 'var(--color-text-dim)' }}>
@@ -377,7 +408,7 @@ export default function CreateEventPage() {
           <Link href="/terms/organisers" className="underline" style={{ color: 'var(--color-text-muted)' }}>Organiser Terms of Use</Link>.
         </p>
         <Button type="submit" size="lg" fullWidth disabled={loading}>
-          {loading ? 'Submitting...' : 'Submit for Review'}
+          {loading ? 'Publishing...' : 'Publish Event'}
         </Button>
       </section>
     </form>

@@ -13,6 +13,7 @@ import { serviceFeePerTicket, processingFee as computeProcessingFee } from '@/li
 import { ticketUrgency, URGENCY_LABEL } from '@/lib/ticketUrgency';
 import type { Event, TicketTier } from '@/types';
 import { EventReviews } from '@/components/events/EventReviews';
+import { SocialLinks } from '@/components/organizer/SocialLinks';
 import { useToast } from '@/components/ui/Toast';
 
 // Most organiser banners are portrait flyers, not wide landscape photos —
@@ -503,13 +504,24 @@ export function EventDetailContent({ identifier }: EventDetailContentProps) {
                 </>
               );
               const cardStyle = { backgroundColor: 'var(--color-surface)', borderColor: 'var(--color-border)' } as const;
-              return event.organizer?.handle ? (
-                <Link href={`/${event.organizer.handle}`} className="rounded-xl border p-5 flex items-start gap-4 transition-opacity hover:opacity-80" style={cardStyle}>
-                  {organizerBlockInner}
-                </Link>
-              ) : (
-                <div className="rounded-xl border p-5 flex items-start gap-4" style={cardStyle}>
-                  {organizerBlockInner}
+              // Social links carry their own <a> tags, so they can't live
+              // inside the profile-link anchor below without nesting one
+              // anchor inside another — kept as a separate row instead.
+              const hasSocials = event.organizer?.socials && Object.values(event.organizer.socials).some(Boolean);
+              return (
+                <div className="rounded-xl border p-5" style={cardStyle}>
+                  {event.organizer?.handle ? (
+                    <Link href={`/${event.organizer.handle}`} className="flex items-start gap-4 transition-opacity hover:opacity-80">
+                      {organizerBlockInner}
+                    </Link>
+                  ) : (
+                    <div className="flex items-start gap-4">{organizerBlockInner}</div>
+                  )}
+                  {hasSocials && (
+                    <div className="mt-3 pt-3 border-t" style={{ borderColor: 'var(--color-border)' }}>
+                      <SocialLinks socials={event.organizer?.socials} />
+                    </div>
+                  )}
                 </div>
               );
             })()}

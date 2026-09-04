@@ -2,6 +2,7 @@
 
 import { useState, useEffect } from 'react';
 import { useRouter } from 'next/navigation';
+import { Copy } from 'lucide-react';
 import { Button } from '@/components/ui/Button';
 import { Input, Textarea } from '@/components/ui/Input';
 import { Modal } from '@/components/ui/Modal';
@@ -18,7 +19,7 @@ function Toggle({ checked, onChange }: { checked: boolean; onChange: () => void 
   );
 }
 
-interface Socials { instagram?: string; twitter?: string; website?: string; }
+interface Socials { instagram?: string; twitter?: string; facebook?: string; snapchat?: string; tiktok?: string; website?: string; }
 interface Me {
   name: string; email: string; phone: string; bio: string;
   bank_name: string; account_number: string; account_name: string;
@@ -34,6 +35,7 @@ export default function OrganizerSettingsPage() {
   const [storefrontMsg, setStorefrontMsg]       = useState('');
   const [avatarUploading, setAvatarUploading]   = useState(false);
   const [coverUploading, setCoverUploading]     = useState(false);
+  const [shareCopied, setShareCopied]           = useState(false);
   const [profileSaving, setProfileSaving] = useState(false);
   const [bankSaving, setBankSaving]   = useState(false);
   const [pwSaving, setPwSaving]       = useState(false);
@@ -110,6 +112,22 @@ export default function OrganizerSettingsPage() {
   const setSocial = (platform: keyof Socials) => (e: React.ChangeEvent<HTMLInputElement>) =>
     setMe(p => ({ ...p, socials: { ...p.socials, [platform]: e.target.value } }));
 
+  const handleShareProfile = async () => {
+    if (!me.handle) return;
+    const url = `${window.location.origin}/${me.handle}`;
+    try {
+      if (navigator.share) {
+        await navigator.share({ title: me.name, url });
+        return;
+      }
+      await navigator.clipboard.writeText(url);
+      setShareCopied(true);
+      setTimeout(() => setShareCopied(false), 2000);
+    } catch {
+      // user cancelled the share sheet, or clipboard unavailable — no toast needed
+    }
+  };
+
   const saveBank = async (e: React.FormEvent) => {
     e.preventDefault();
     setBankSaving(true); setBankMsg('');
@@ -175,11 +193,23 @@ export default function OrganizerSettingsPage() {
       {/* Storefront */}
       <section className="rounded-xl border p-6 flex flex-col gap-5"
         style={{ backgroundColor: 'var(--color-surface)', borderColor: 'var(--color-border)' }}>
-        <div>
-          <h2 className="font-semibold" style={{ color: 'var(--color-text)' }}>Storefront</h2>
-          <p className="text-xs mt-0.5" style={{ color: 'var(--color-text-dim)' }}>
-            Your public page at ventrybooking.com/{me.handle || 'yourhandle'}
-          </p>
+        <div className="flex items-center justify-between gap-3 flex-wrap">
+          <div>
+            <h2 className="font-semibold" style={{ color: 'var(--color-text)' }}>Storefront</h2>
+            <p className="text-xs mt-0.5" style={{ color: 'var(--color-text-dim)' }}>
+              Your public page at ventrybooking.com/{me.handle || 'yourhandle'}
+            </p>
+          </div>
+          {me.handle && (
+            <button
+              type="button"
+              onClick={handleShareProfile}
+              className="text-xs font-medium px-3 py-1.5 rounded-lg border flex items-center gap-1.5 flex-shrink-0"
+              style={{ borderColor: 'var(--color-border)', color: 'var(--color-text)' }}
+            >
+              <Copy size={12} />{shareCopied ? 'Copied!' : 'Copy Profile Link'}
+            </button>
+          )}
         </div>
         <form onSubmit={saveStorefront} className="flex flex-col gap-4">
           <div>
@@ -219,6 +249,9 @@ export default function OrganizerSettingsPage() {
           />
           <Input label="Instagram" value={me.socials?.instagram || ''} onChange={setSocial('instagram')} placeholder="https://instagram.com/yourname" />
           <Input label="Twitter / X" value={me.socials?.twitter || ''} onChange={setSocial('twitter')} placeholder="https://x.com/yourname" />
+          <Input label="Facebook" value={me.socials?.facebook || ''} onChange={setSocial('facebook')} placeholder="https://facebook.com/yourpage" />
+          <Input label="Snapchat" value={me.socials?.snapchat || ''} onChange={setSocial('snapchat')} placeholder="https://snapchat.com/add/yourname" />
+          <Input label="TikTok" value={me.socials?.tiktok || ''} onChange={setSocial('tiktok')} placeholder="https://tiktok.com/@yourname" />
           <Input label="Website" value={me.socials?.website || ''} onChange={setSocial('website')} placeholder="https://yoursite.com" />
           {storefrontMsg && (
             <p className="text-xs" style={{ color: storefrontMsg.includes('saved') ? 'var(--color-green)' : 'var(--color-red)' }}>

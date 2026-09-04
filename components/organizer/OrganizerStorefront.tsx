@@ -1,13 +1,14 @@
 'use client';
 
 import { useState, useEffect } from 'react';
-import { CheckCircle, AtSign, X as XIcon, Globe, Bell, Users, Star } from 'lucide-react';
+import { CheckCircle, Bell, Star } from 'lucide-react';
 import { PublicNav } from '@/components/layout/PublicNav';
 import { Footer } from '@/components/layout/Footer';
 import { Badge } from '@/components/ui/Badge';
 import { Button } from '@/components/ui/Button';
 import { Input } from '@/components/ui/Input';
 import { EventCard } from '@/components/events/EventCard';
+import { SocialLinks, type Socials } from '@/components/organizer/SocialLinks';
 import { eventsHostedLabel } from '@/lib/utils';
 import { useToast } from '@/components/ui/Toast';
 import type { Event } from '@/types';
@@ -30,9 +31,8 @@ interface StorefrontData {
     bio: string | null;
     avatarUrl: string | null;
     coverImageUrl: string | null;
-    socials: { instagram?: string; twitter?: string; website?: string };
+    socials: Socials;
     eventsHosted: number;
-    followerCount: number;
   };
   upcoming: Event[];
   past: Event[];
@@ -157,7 +157,6 @@ export function OrganizerStorefront({ handle }: { handle: string }) {
             </div>
             <div className="flex items-center gap-3 flex-wrap text-sm" style={{ color: 'var(--color-text-muted)' }}>
               <span>Member since {new Date(organizer.memberSince).getFullYear()} &middot; {eventsHostedLabel(organizer.eventsHosted)}</span>
-              <span className="flex items-center gap-1"><Users size={13} />{organizer.followerCount} follower{organizer.followerCount !== 1 ? 's' : ''}</span>
               {reviewStats.avg !== null && (
                 <span className="flex items-center gap-1.5">
                   <StarDisplay rating={Math.round(reviewStats.avg)} size={13} />
@@ -168,19 +167,9 @@ export function OrganizerStorefront({ handle }: { handle: string }) {
             {organizer.bio && (
               <p className="text-sm mt-2 max-w-xl" style={{ color: 'var(--color-text-muted)' }}>{organizer.bio}</p>
             )}
-            {(organizer.socials.instagram || organizer.socials.twitter || organizer.socials.website) && (
-              <div className="flex items-center gap-3 mt-3">
-                {organizer.socials.instagram && (
-                  <a href={organizer.socials.instagram} target="_blank" rel="noopener noreferrer" style={{ color: 'var(--color-text-muted)' }}><AtSign size={16} /></a>
-                )}
-                {organizer.socials.twitter && (
-                  <a href={organizer.socials.twitter} target="_blank" rel="noopener noreferrer" style={{ color: 'var(--color-text-muted)' }}><XIcon size={16} /></a>
-                )}
-                {organizer.socials.website && (
-                  <a href={organizer.socials.website} target="_blank" rel="noopener noreferrer" style={{ color: 'var(--color-text-muted)' }}><Globe size={16} /></a>
-                )}
-              </div>
-            )}
+            <div className="mt-3">
+              <SocialLinks socials={organizer.socials} />
+            </div>
           </div>
         </div>
 

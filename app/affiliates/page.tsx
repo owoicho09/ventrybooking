@@ -18,14 +18,14 @@ const steps = [
   {
     icon: Wallet,
     title: 'Earn on their first 2 events',
-    body: "When someone signs up through your link and runs an event, you earn 30% of Ventry's platform fee — 0.9% of their gross ticket sales — on their first two events.",
+    body: "When someone signs up through your link and runs an event, you earn 30% of Ventry's service fee on their first two events.",
   },
 ];
 
 const faqs = [
   {
     q: 'How much do I actually earn?',
-    a: 'Ventry charges organisers a 3% platform fee on ticket sales. You earn 30% of that fee — 0.9% of gross ticket sales — on every event your referred organiser runs, for their first 2 events only.',
+    a: 'You earn 30% of Ventry\'s service fee on every event your referred organiser runs, for their first 2 events only.',
   },
   {
     q: 'How is a referral tracked?',
@@ -56,7 +56,7 @@ export default function AffiliatesLandingPage() {
             Bring in organisers. Earn on every ticket they sell.
           </h1>
           <p className="text-base sm:text-lg max-w-2xl mx-auto mb-10" style={{ color: 'var(--color-text-muted)' }}>
-            Know an event organiser who isn&apos;t on Ventry yet? Refer them, and earn <strong style={{ color: 'var(--color-text)' }}>30% of Ventry&apos;s platform fee — 0.9% of their gross ticket sales</strong> — on their first two events. No cap on how many organisers you refer.
+            Know an event organiser who isn&apos;t on Ventry yet? Refer them, and earn <strong style={{ color: 'var(--color-text)' }}>30% of Ventry&apos;s service fee</strong> — on their first two events. No cap on how many organisers you refer.
           </p>
           <div className="flex flex-col sm:flex-row items-center justify-center gap-3">
             <Link href="/affiliate/register"><Button size="lg">Become an Affiliate</Button></Link>

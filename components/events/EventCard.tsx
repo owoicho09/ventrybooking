@@ -43,13 +43,19 @@ export function EventCard({ event, variant = 'default' }: EventCardProps) {
 
   return (
     <div
-      className={`rounded-xl border overflow-hidden flex flex-col transition-all duration-200 hover:-translate-y-0.5 hover:shadow-lg ${compact ? 'opacity-70 hover:opacity-100' : ''}`}
+      className={`relative rounded-xl border overflow-hidden flex flex-col transition-all duration-200 hover:-translate-y-0.5 hover:shadow-lg ${compact ? 'opacity-70 hover:opacity-100' : ''}`}
       style={{
         backgroundColor: 'var(--color-surface)',
         borderColor: 'var(--color-border)',
         boxShadow: '0 1px 3px rgba(0,0,0,0.3)',
       }}
     >
+      {/* Whole card opens the event page — the organiser name and "Get
+          Tickets" below point somewhere else (or the same place), so they sit
+          above this via z-10 to keep receiving their own clicks instead of
+          this one underneath. */}
+      <Link href={`/${event.slug || event.id}`} className="absolute inset-0 z-0" aria-label={event.name} />
+
       {/* Banner */}
       <div className={`relative ${compact ? 'h-24' : 'h-40'} bg-gradient-to-br ${event.bannerColor} flex items-center justify-center overflow-hidden`}>
         {event.banner_url ? (
@@ -151,7 +157,7 @@ export function EventCard({ event, variant = 'default' }: EventCardProps) {
             {event.organizer.name[0]}
           </div>
           {event.organizer.handle ? (
-            <Link href={`/${event.organizer.handle}`} className="text-xs truncate hover:underline" style={{ color: 'var(--color-text-muted)' }}>
+            <Link href={`/${event.organizer.handle}`} className="relative z-10 text-xs truncate hover:underline" style={{ color: 'var(--color-text-muted)' }}>
               {event.organizer.name}
             </Link>
           ) : (
@@ -185,7 +191,7 @@ export function EventCard({ event, variant = 'default' }: EventCardProps) {
               </>
             )}
           </div>
-          <Link href={`/${event.slug || event.id}`}>
+          <Link href={`/${event.slug || event.id}`} className="relative z-10">
             <Button size="sm">Get Tickets</Button>
           </Link>
         </div>

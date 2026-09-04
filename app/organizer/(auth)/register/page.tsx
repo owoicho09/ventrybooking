@@ -18,7 +18,7 @@ export default function OrganizerRegisterPage() {
   const [agreed, setAgreed] = useState(false);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState('');
-  const [form, setForm] = useState({ name: '', email: '', phone: '', password: '', confirmPassword: '' });
+  const [form, setForm] = useState({ name: '', email: '', phone: '', password: '', confirmPassword: '', referralCode: '' });
 
   const set = (field: string) => (e: React.ChangeEvent<HTMLInputElement>) =>
     setForm((prev) => ({ ...prev, [field]: e.target.value }));
@@ -105,6 +105,13 @@ export default function OrganizerRegisterPage() {
             <Input label="Phone Number" type="tel" value={form.phone} onChange={set('phone')} placeholder="+234 801 234 5678" required />
             <Input label="Password" type="password" value={form.password} onChange={set('password')} placeholder="Create a strong password" required />
             <Input label="Confirm Password" type="password" value={form.confirmPassword} onChange={set('confirmPassword')} placeholder="Repeat your password" required />
+            <Input
+              label="Referral Code (optional)"
+              value={form.referralCode}
+              onChange={set('referralCode')}
+              placeholder="e.g. REF-XXXXXXXX"
+              helper="Were you referred by a Ventry affiliate? Enter their code here."
+            />
 
             <label className="flex items-start gap-3 cursor-pointer">
               <div className="relative mt-0.5">

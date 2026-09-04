@@ -2,6 +2,7 @@
 
 import { useEffect, useRef, useState } from 'react';
 import { Upload } from 'lucide-react';
+import { extractDominantColor } from '@/lib/colorExtract';
 
 interface BannerCropInputProps {
   label: string;
@@ -21,6 +22,8 @@ interface BannerCropInputProps {
    * organisers know to keep faces/text away from the outer edges.
    */
   safeZoneHint?: boolean;
+  /** Fires alongside onCropped with a dominant colour sampled from the cropped image, or null if nothing vivid enough was found. */
+  onColorExtracted?: (hex: string | null) => void;
 }
 
 /**
@@ -38,6 +41,7 @@ export function BannerCropInput({
   minWidth = 1200,
   minHeight,
   safeZoneHint,
+  onColorExtracted,
 }: BannerCropInputProps) {
   const fileRef = useRef<HTMLInputElement>(null);
   const canvasRef = useRef<HTMLCanvasElement>(null);
@@ -102,6 +106,9 @@ export function BannerCropInput({
 
   const confirmCrop = () => {
     if (!canvasRef.current) return;
+    if (onColorExtracted) {
+      onColorExtracted(extractDominantColor(canvasRef.current));
+    }
     canvasRef.current.toBlob((blob) => {
       if (!blob) return;
       onCropped(new File([blob], 'banner.jpg', { type: 'image/jpeg' }));

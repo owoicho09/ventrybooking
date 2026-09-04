@@ -588,10 +588,10 @@ export async function sendAdminNewEventEmail(params: {
   if (!adminEmail) return;
   await sendEmail({
     to: adminEmail,
-    subject: `New event submitted: ${params.eventName}`,
+    subject: `New event live: ${params.eventName}`,
     html: emailShell(`
-      <h1 style="color:#a855f7;font-size:22px;margin:0 0 12px;">New Event Submitted</h1>
-      <p style="color:#f1f0ff;margin:0 0 20px;"><strong>${esc(params.organizerName)}</strong> submitted a new event for review.</p>
+      <h1 style="color:#a855f7;font-size:22px;margin:0 0 12px;">New Event Live</h1>
+      <p style="color:#f1f0ff;margin:0 0 20px;"><strong>${esc(params.organizerName)}</strong> just published a new event — it's live and selling now.</p>
       <table width="100%" cellpadding="0" cellspacing="0"
         style="background:#12121a;border:1px solid #2d2d3d;border-radius:8px;margin-bottom:24px;">
         <tr><td style="padding:20px;">

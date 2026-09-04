@@ -8,6 +8,7 @@ import { Button } from '@/components/ui/Button';
 import { Drawer } from '@/components/ui/Drawer';
 import { Textarea } from '@/components/ui/Input';
 import { Table, Thead, Tbody, Th, Tr, Td } from '@/components/ui/Table';
+import { useToast } from '@/components/ui/Toast';
 import { formatShortDate, formatNGN } from '@/lib/utils';
 
 type Filter = 'all' | 'under_review' | 'approved' | 'cancelled';
@@ -52,6 +53,7 @@ interface CancelResult  { refunded: number; failed: number; failures: CancelFail
 type CancelStep = 'loading' | 'confirm' | 'processing' | 'result' | null;
 
 export default function AdminEventsPage() {
+  const { toast } = useToast();
   const [activeFilter, setActiveFilter] = useState<Filter>('all');
   const [events, setEvents]             = useState<EventData[]>([]);
   const [loading, setLoading]           = useState(true);
@@ -97,12 +99,14 @@ export default function AdminEventsPage() {
   const handleReject = async (id: string) => {
     if (!reason.trim()) return;
     setActing(true);
-    await fetch(`/api/admin/events/${id}/reject`, {
+    const res = await fetch(`/api/admin/events/${id}/reject`, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({ reason }),
     });
+    const data = await res.json().catch(() => ({}));
     setActing(false);
+    if (!res.ok) { toast(data.error || 'Failed to reject event', 'error'); return; }
     handleCloseDrawer();
     load();
   };

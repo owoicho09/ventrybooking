@@ -74,17 +74,12 @@ export async function GET(
       return NextResponse.json({ error: 'Organizer not found' }, { status: 404 });
     }
 
-    const [countsResult, followerCountsResult, reviewRowsResult] = await Promise.all([
+    const [countsResult, reviewRowsResult] = await Promise.all([
       getEventsHostedCounts(db, [organizer.id]),
-      db.rpc('get_audience_counts', { organizer_ids: [organizer.id] }),
       db.from('event_reviews').select('id, rating, body, display_name, created_at').eq('organizer_id', organizer.id).eq('hidden', false).order('created_at', { ascending: false }).limit(20),
     ]);
 
     const eventsHosted = countsResult[organizer.id] ?? 0;
-    const followerCounts = new Map(
-      (followerCountsResult.data ?? []).map((c: { organizer_id: string; member_count: number }) => [c.organizer_id, c.member_count]),
-    );
-    const followerCount = followerCounts.get(organizer.id) ?? 0;
     const reviews = reviewRowsResult.data ?? [];
     const ratingRows = reviews.map(r => ({ rating: r.rating }));
 
@@ -127,7 +122,6 @@ export async function GET(
           coverImageUrl: organizer.cover_image_url,
           socials: organizer.socials ?? {},
           eventsHosted,
-          followerCount,
         },
         upcoming,
         past,

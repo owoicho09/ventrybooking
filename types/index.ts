@@ -37,6 +37,7 @@ export interface Organizer {
   handle?: string | null;
   kycStatus: KYCStatus;
   submittedAt?: string;
+  socials?: { instagram?: string; twitter?: string; facebook?: string; snapchat?: string; tiktok?: string; website?: string };
 }
 
 export interface TicketTier {

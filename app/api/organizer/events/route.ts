@@ -5,7 +5,7 @@ import { v4 as uuidv4 } from 'uuid';
 import { notify } from '@/lib/server/notify';
 import { sendAdminNewEventEmail } from '@/lib/server/email';
 import { generateEventSlug } from '@/lib/server/slug';
-import { ACCENT_COLOR_PRESETS } from '@/lib/accentColors';
+import { isValidAccentColor } from '@/lib/accentColors';
 import { PLATFORM_FEE_RATE } from '@/lib/fees';
 import { compressToWebp } from '@/lib/server/imageCompress';
 import { normalizeLineup } from '@/lib/server/lineup';
@@ -88,7 +88,7 @@ export async function POST(req: NextRequest) {
     const headerBannerFile = formData.get('headerBanner') as File | null;
     const venueProofFile = formData.get('venueProof') as File | null;
     const accentColorRaw = formData.get('accentColor') as string | null;
-    const accentColor = accentColorRaw && ACCENT_COLOR_PRESETS.some(p => p.hex === accentColorRaw) ? accentColorRaw : null;
+    const accentColor = isValidAccentColor(accentColorRaw) ? accentColorRaw : null;
     const lineupJson = formData.get('lineup') as string | null;
     const lineup = lineupJson ? JSON.parse(lineupJson) : [];
     const allowedDomainsJson = formData.get('allowedEmailDomains') as string | null;
@@ -182,7 +182,12 @@ export async function POST(req: NextRequest) {
       meeting_link: eventMode === 'online' ? meetingLink : null,
       meeting_passcode: eventMode === 'online' && meetingPasscode ? meetingPasscode : null,
       organizer_id: organizerId,
-      status: 'under_review',
+      // Live immediately — no pre-approval wait. Admin still gets notified
+      // below to review after the fact and can reject/cancel it if something's
+      // wrong; the "Ventry Verified Event" badge is unaffected by this either
+      // way, since it already tracks the organiser's own KYC status, not
+      // per-event review.
+      status: 'approved',
       total_sold: 0,
       banner_url: bannerUrl,
       header_banner_url: headerBannerUrl,
@@ -212,7 +217,7 @@ export async function POST(req: NextRequest) {
 
     notify(
       { type: 'admin' },
-      { notifType: 'event', title: 'New Event Submitted', body: `"${name}" has been submitted for review.`, link: '/admin/events' },
+      { notifType: 'event', title: 'New Event Live', body: `"${name}" just went live.`, link: '/admin/events' },
       { emailChannel: 'dedicated' }, // sendAdminNewEventEmail below covers this
     ).catch(console.error);
 

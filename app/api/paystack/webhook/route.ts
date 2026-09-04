@@ -1,5 +1,5 @@
 import { NextRequest, NextResponse } from 'next/server';
-import { verifyWebhookSignature } from '@/lib/server/paystack';
+import { verifyWebhookSignature, verifyTransaction } from '@/lib/server/paystack';
 import { createTicketFromPayment } from '@/lib/server/ticket';
 import { getServerSupabase } from '@/lib/supabase/server';
 import { notify } from '@/lib/server/notify';
@@ -16,22 +16,41 @@ export async function POST(req: NextRequest) {
   const event = JSON.parse(body);
 
   if (event.event === 'charge.success') {
-    const { reference, metadata, amount, customer } = event.data;
-    let { eventId, items, buyerEmail, buyerName } = metadata || {};
-    // Not recoverable from pending_orders (that table doesn't persist the
-    // affiliate ref), so a metadata-less webhook just loses affiliate credit
-    // for this one order — the ticket itself still gets created below.
-    const { refCode } = metadata || {};
+    const { reference } = event.data;
+
+    // The webhook payload's own event.data.metadata is empirically unreliable
+    // — it arrives empty on a large fraction of real transactions even though
+    // the charge was correctly initialized with metadata, for reasons outside
+    // our control. Paystack's /transaction/verify REST endpoint does not have
+    // this problem (reconcile.ts has relied on it for every recovery), so
+    // verify immediately instead of trusting the webhook body — this is what
+    // actually fixes tickets being created only 15–35 minutes late via the
+    // reconcile cron instead of instantly here.
+    let verified;
+    try {
+      verified = await verifyTransaction(reference);
+    } catch (err) {
+      console.error('Webhook: verifyTransaction failed, leaving for reconcile cron', reference, err);
+      return NextResponse.json({ success: true });
+    }
+
+    if (verified?.status !== 'success') {
+      console.error('Webhook: verify did not confirm a successful charge', { reference, status: verified?.status });
+      return NextResponse.json({ success: true });
+    }
+
+    const metadata = verified.metadata || {};
+    let { eventId, items, buyerEmail, buyerName } = metadata;
+    const { refCode } = metadata;
     let marketingConsent = metadata?.marketingConsent === true;
     let ventryMarketingConsent = metadata?.ventryMarketingConsent === true;
     let declaredTotal = Number(metadata?.total);
+    const customerEmail = verified.customer?.email;
 
-    // Paystack occasionally echoes charge.success back without our custom
-    // metadata (empirically, not something we control) — before giving up,
-    // fall back to the checkout-time record we saved ourselves in
-    // pending_orders, keyed by the same reference. Same fallback
-    // reconcilePendingOrders() uses for its daily sweep; doing it here means
-    // most of these never need to wait on that sweep at all.
+    // Belt-and-suspenders: fall back to the checkout-time record in
+    // pending_orders if even the verify call somehow comes back without our
+    // metadata (e.g. the transaction was initialized without it reaching
+    // Paystack at all). Same fallback reconcilePendingOrders() uses.
     if (!eventId || !Array.isArray(items) || items.length === 0) {
       const db = getServerSupabase();
       const { data: order } = await db
@@ -54,14 +73,14 @@ export async function POST(req: NextRequest) {
     }
 
     if (!eventId || !Array.isArray(items) || items.length === 0) {
-      console.error('Webhook: missing eventId or items in metadata and no pending_orders match', { reference });
+      console.error('Webhook: missing eventId or items after verify and pending_orders fallback', { reference });
       notify(
         { type: 'admin' },
         {
           notifType: 'ticket_creation_failed',
           title:     `Ticket creation failed — ${reference}`,
-          body:      `Payment succeeded but metadata was missing eventId/tierId, and no matching checkout record was found either, so no ticket could be created. Buyer: ${buyerEmail || customer?.email || 'unknown'}.`,
-          link:      `/admin/buyers?search=${encodeURIComponent(buyerEmail || customer?.email || '')}`,
+          body:      `Payment succeeded but metadata was missing eventId/tierId, and no matching checkout record was found either, so no ticket could be created. Buyer: ${buyerEmail || customerEmail || 'unknown'}.`,
+          link:      `/admin/buyers?search=${encodeURIComponent(buyerEmail || customerEmail || '')}`,
         },
       ).catch(err => console.error('Webhook: notify-admin error', err));
       return NextResponse.json({ success: true }); // 200 — retrying won't help
@@ -73,11 +92,11 @@ export async function POST(req: NextRequest) {
     // inflated figure as total_paid corrupts every downstream use of it (the "Total
     // Paid" shown in the ticket email, and refund amounts). `metadata.total` (or,
     // failing that, pending_orders.total above) is the exact subtotal+serviceFee we
-    // requested at checkout, so prefer that and only fall back to `amount` if both
-    // are somehow missing it.
+    // requested at checkout, so prefer that and only fall back to the verified
+    // `amount` if both are somehow missing it.
     const totalPaidKobo = Number.isFinite(declaredTotal) && declaredTotal > 0
       ? Math.round(declaredTotal * 100)
-      : amount;
+      : verified.amount;
 
     try {
       await createTicketFromPayment({
@@ -87,7 +106,7 @@ export async function POST(req: NextRequest) {
         totalPaidKobo,
         buyerEmail,
         buyerName,
-        customerEmail: customer?.email,
+        customerEmail,
         marketingConsent,
         ventryMarketingConsent,
         refCode,

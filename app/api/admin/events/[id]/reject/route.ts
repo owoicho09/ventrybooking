@@ -28,8 +28,24 @@ export async function POST(
 
     if (!event) return NextResponse.json({ error: 'Event not found' }, { status: 404 });
 
-    // Delete the event — ticket_tiers cascade automatically.
-    // Rejected events are always under_review (never published), so no tickets exist.
+    // Events now go live the instant they're created, so "reject" can no
+    // longer assume zero tickets exist the way it could when every event
+    // waited under_review first. Hard-deleting an event with real paid
+    // tickets would silently destroy them with no refund — use the Cancel
+    // Event flow for that instead, which refunds every buyer properly.
+    const { count: soldCount } = await db
+      .from('tickets')
+      .select('id', { count: 'exact', head: true })
+      .eq('event_id', id);
+    if (soldCount && soldCount > 0) {
+      return NextResponse.json(
+        { error: `This event already has ${soldCount} ticket(s) sold — use "Cancel Event & Refund All Buyers" instead so buyers actually get refunded.` },
+        { status: 400 },
+      );
+    }
+
+    // Delete the event — ticket_tiers cascade automatically. Safe now that
+    // we've confirmed no tickets exist for it.
     const { error: deleteErr } = await db.from('events').delete().eq('id', id);
     if (deleteErr) return NextResponse.json({ error: 'Failed to reject event' }, { status: 500 });
 

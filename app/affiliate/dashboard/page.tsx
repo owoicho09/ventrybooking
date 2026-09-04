@@ -104,7 +104,7 @@ export default function AffiliateDashboardPage() {
             <Button size="sm" onClick={copyLink}><Copy size={13} />Copy</Button>
           </div>
           <p className="text-xs mt-2" style={{ color: 'var(--color-text-dim)' }}>
-            Share this with organisers. You earn a share of Ventry&apos;s platform fee on their first two events.
+            Share this with organisers. You earn 30% of Ventry&apos;s service fee on their first two events.
           </p>
         </div>
 
