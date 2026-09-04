@@ -1,5 +1,6 @@
 import { Resend } from 'resend';
 import { getOrganizerSenderName } from '@/lib/server/senderIdentity';
+import { getServerSupabase } from '@/lib/supabase/server';
 
 const resend = new Resend(process.env.RESEND_API_KEY!);
 const FROM    = process.env.RESEND_FROM_EMAIL!;
@@ -41,8 +42,8 @@ const SUPPORT_EMAIL = 'support@ventrybooking.com';
 // OTP, payouts, etc.) reads as coming from Ventry. reply-to always routes to
 // support so organisers never receive buyer replies (e.g. to a refund email)
 // directly.
-async function sendEmail(opts: { to: string; subject: string; html: string; fromName?: string; replyTo?: string }) {
-  const { error } = await resend.emails.send({
+async function sendEmail(opts: { to: string; subject: string; html: string; fromName?: string; replyTo?: string; purpose?: string }) {
+  const { data, error } = await resend.emails.send({
     from: `${opts.fromName ?? 'Ventry'} <${FROM}>`,
     to: opts.to,
     subject: opts.subject,
@@ -50,6 +51,18 @@ async function sendEmail(opts: { to: string; subject: string; html: string; from
     replyTo: opts.replyTo ?? SUPPORT_EMAIL,
   });
   if (error) throw new Error(`Resend error: ${error.message}`);
+
+  // A successful call here only means Resend accepted the request — actual
+  // delivery/bounce/complaint happens asynchronously and is reported later
+  // via the /api/webhooks/resend endpoint, matched back to this row by id.
+  if (data?.id) {
+    getServerSupabase()
+      .from('email_deliveries')
+      .insert({ id: data.id, to_email: opts.to, subject: opts.subject, purpose: opts.purpose ?? null })
+      .then(({ error: insertError }) => {
+        if (insertError) console.error('sendEmail: email_deliveries insert error', insertError.message);
+      });
+  }
 }
 
 export async function sendTicketEmail(params: {
@@ -166,7 +179,7 @@ export async function sendTicketEmail(params: {
     <p class="footer">Your payment is held in escrow by Ventry and only released to the organizer after the event occurs.</p>
   `);
 
-  await sendEmail({ to: params.to, subject, html, fromName: params.eventName });
+  await sendEmail({ to: params.to, subject, html, fromName: params.eventName, purpose: 'ticket' });
 }
 
 export async function sendOTPEmail(to: string, name: string, otp: string) {
@@ -526,7 +539,7 @@ export async function sendReminderEmail(params: {
     <p class="footer">You received this reminder because you purchased a ticket on Ventry.</p>
   `);
 
-  await sendEmail({ to: params.to, subject, html, fromName: params.eventName });
+  await sendEmail({ to: params.to, subject, html, fromName: params.eventName, purpose: 'reminder' });
 }
 
 export async function sendReviewRequestEmail(params: {
