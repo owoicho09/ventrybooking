@@ -67,92 +67,95 @@ export function SupportChat() {
     }
   };
 
-  return (
-    <div className="fixed bottom-4 right-4 z-40 flex flex-col items-end gap-3">
-      {open && (
-        <div
-          className="flex flex-col rounded-2xl border shadow-2xl overflow-hidden"
-          style={{
-            width: 'min(380px, calc(100vw - 2rem))',
-            height: 'min(560px, calc(100vh - 6rem))',
-            backgroundColor: 'var(--color-surface)',
-            borderColor: 'var(--color-border)',
-          }}
-        >
-          <div className="flex items-center justify-between px-4 py-3 border-b" style={{ borderColor: 'var(--color-border)', backgroundColor: 'var(--color-purple)' }}>
-            <p className="text-sm font-semibold text-white">Ventry Support</p>
-            <button onClick={() => setOpen(false)} aria-label="Close" className="text-white/80 hover:text-white">
-              <X size={18} />
-            </button>
-          </div>
-
-          <div className="flex-1 overflow-y-auto px-4 py-4 flex flex-col gap-3">
-            {messages.length === 0 && (
-              <div className="flex flex-col gap-2">
-                <p className="text-sm mb-1" style={{ color: 'var(--color-text-muted)' }}>
-                  Hi! What can I help with?
-                </p>
-                {QUICK_ACTIONS.map(q => (
-                  <button
-                    key={q}
-                    onClick={() => send(q)}
-                    className="text-left text-sm rounded-lg border px-3 py-2 transition-colors hover:border-[var(--color-purple)]"
-                    style={{ borderColor: 'var(--color-border)', color: 'var(--color-text)' }}
-                  >
-                    {q}
-                  </button>
-                ))}
-              </div>
-            )}
-
-            {messages.map((m, i) => {
-              const text = textOf(m.content);
-              if (!text) return null;
-              const isUser = m.role === 'user';
-              return (
-                <div key={i} className={`max-w-[85%] rounded-xl px-3 py-2 text-sm whitespace-pre-wrap ${isUser ? 'self-end' : 'self-start'}`}
-                  style={{
-                    backgroundColor: isUser ? 'var(--color-purple)' : 'var(--color-surface-2)',
-                    color: isUser ? '#fff' : 'var(--color-text)',
-                  }}
-                >
-                  {text}
-                </div>
-              );
-            })}
-            {loading && (
-              <div className="self-start text-sm" style={{ color: 'var(--color-text-dim)' }}>Typing…</div>
-            )}
-            <div ref={bottomRef} />
-          </div>
-
-          <form
-            onSubmit={e => { e.preventDefault(); send(input); }}
-            className="flex items-center gap-2 border-t px-3 py-3"
-            style={{ borderColor: 'var(--color-border)' }}
-          >
-            <input
-              value={input}
-              onChange={e => setInput(e.target.value)}
-              placeholder="Type a message…"
-              className="flex-1 text-sm outline-none bg-transparent"
-              style={{ color: 'var(--color-text)' }}
-            />
-            <button type="submit" disabled={loading || !input.trim()} aria-label="Send" style={{ color: 'var(--color-purple)' }}>
-              <Send size={18} />
-            </button>
-          </form>
-        </div>
-      )}
-
-      <button
-        onClick={() => setOpen(o => !o)}
-        aria-label="Support chat"
-        className="w-14 h-14 rounded-full flex items-center justify-center shadow-lg transition-transform hover:scale-105"
-        style={{ backgroundColor: 'var(--color-purple)', color: '#fff' }}
+  if (open) {
+    return (
+      // Full-height sheet on mobile (inset-0, no rounding, safe-area padding
+      // for the notch/home-indicator), a floating rounded panel from the sm
+      // breakpoint up. This used to be a single fixed-size box shrunk to fit
+      // the viewport width — it stayed anchored bottom-right at every size,
+      // which read as cramped/misplaced on a phone instead of a real sheet.
+      <div
+        className="fixed inset-0 z-40 flex flex-col overflow-hidden sm:inset-auto sm:bottom-24 sm:right-4 sm:h-[560px] sm:w-[380px] sm:rounded-2xl sm:border sm:shadow-2xl"
+        style={{ backgroundColor: 'var(--color-surface)', borderColor: 'var(--color-border)' }}
       >
-        {open ? <X size={22} /> : <MessageCircle size={22} />}
-      </button>
-    </div>
+        <div
+          className="flex items-center justify-between px-4 py-3 border-b flex-shrink-0"
+          style={{ borderColor: 'var(--color-border)', backgroundColor: 'var(--color-purple)', paddingTop: 'max(0.75rem, env(safe-area-inset-top))' }}
+        >
+          <p className="text-sm font-semibold text-white">Ventry Support</p>
+          <button onClick={() => setOpen(false)} aria-label="Close" className="text-white/80 hover:text-white p-1">
+            <X size={20} />
+          </button>
+        </div>
+
+        <div className="flex-1 overflow-y-auto px-4 py-4 flex flex-col gap-3">
+          {messages.length === 0 && (
+            <div className="flex flex-col gap-2">
+              <p className="text-sm mb-1" style={{ color: 'var(--color-text-muted)' }}>
+                Hi! What can I help with?
+              </p>
+              {QUICK_ACTIONS.map(q => (
+                <button
+                  key={q}
+                  onClick={() => send(q)}
+                  className="text-left text-sm rounded-lg border px-3 py-2.5 transition-colors hover:border-[var(--color-purple)]"
+                  style={{ borderColor: 'var(--color-border)', color: 'var(--color-text)' }}
+                >
+                  {q}
+                </button>
+              ))}
+            </div>
+          )}
+
+          {messages.map((m, i) => {
+            const text = textOf(m.content);
+            if (!text) return null;
+            const isUser = m.role === 'user';
+            return (
+              <div key={i} className={`max-w-[85%] rounded-xl px-3 py-2 text-sm whitespace-pre-wrap ${isUser ? 'self-end' : 'self-start'}`}
+                style={{
+                  backgroundColor: isUser ? 'var(--color-purple)' : 'var(--color-surface-2)',
+                  color: isUser ? '#fff' : 'var(--color-text)',
+                }}
+              >
+                {text}
+              </div>
+            );
+          })}
+          {loading && (
+            <div className="self-start text-sm" style={{ color: 'var(--color-text-dim)' }}>Typing…</div>
+          )}
+          <div ref={bottomRef} />
+        </div>
+
+        <form
+          onSubmit={e => { e.preventDefault(); send(input); }}
+          className="flex items-center gap-2 border-t px-3 py-3 flex-shrink-0"
+          style={{ borderColor: 'var(--color-border)', paddingBottom: 'max(0.75rem, env(safe-area-inset-bottom))' }}
+        >
+          <input
+            value={input}
+            onChange={e => setInput(e.target.value)}
+            placeholder="Type a message…"
+            className="flex-1 text-sm outline-none bg-transparent min-w-0"
+            style={{ color: 'var(--color-text)' }}
+          />
+          <button type="submit" disabled={loading || !input.trim()} aria-label="Send" className="flex-shrink-0 p-1" style={{ color: 'var(--color-purple)' }}>
+            <Send size={20} />
+          </button>
+        </form>
+      </div>
+    );
+  }
+
+  return (
+    <button
+      onClick={() => setOpen(true)}
+      aria-label="Support chat"
+      className="fixed bottom-4 right-4 z-40 w-14 h-14 rounded-full flex items-center justify-center shadow-lg transition-transform hover:scale-105"
+      style={{ backgroundColor: 'var(--color-purple)', color: '#fff' }}
+    >
+      <MessageCircle size={22} />
+    </button>
   );
 }

@@ -69,7 +69,7 @@ export function PublicNav() {
           {!buyerLoading && (
             <Link
               href={buyerLoggedIn ? '/account' : '/account/login'}
-              className="hidden sm:flex items-center px-3 py-2 text-sm rounded-lg transition-colors"
+              className="flex items-center px-2 sm:px-3 py-2 text-sm rounded-lg transition-colors"
               style={{ color: 'var(--color-text-muted)' }}
             >
               {buyerLoggedIn ? 'My Tickets' : 'Sign in'}
