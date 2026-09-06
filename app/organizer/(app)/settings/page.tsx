@@ -7,6 +7,7 @@ import { Button } from '@/components/ui/Button';
 import { Input, Textarea } from '@/components/ui/Input';
 import { Modal } from '@/components/ui/Modal';
 import { NIGERIAN_BANKS } from '@/lib/banks';
+import type { Socials } from '@/components/organizer/SocialLinks';
 
 function Toggle({ checked, onChange }: { checked: boolean; onChange: () => void }) {
   return (
@@ -19,7 +20,6 @@ function Toggle({ checked, onChange }: { checked: boolean; onChange: () => void 
   );
 }
 
-interface Socials { instagram?: string; twitter?: string; facebook?: string; snapchat?: string; tiktok?: string; website?: string; }
 interface Me {
   name: string; email: string; phone: string; bio: string;
   bank_name: string; account_number: string; account_name: string;
@@ -248,11 +248,10 @@ export default function OrganizerSettingsPage() {
             helper="Lowercase letters, numbers, and hyphens only."
           />
           <Input label="Instagram" value={me.socials?.instagram || ''} onChange={setSocial('instagram')} placeholder="https://instagram.com/yourname" />
-          <Input label="Twitter / X" value={me.socials?.twitter || ''} onChange={setSocial('twitter')} placeholder="https://x.com/yourname" />
-          <Input label="Facebook" value={me.socials?.facebook || ''} onChange={setSocial('facebook')} placeholder="https://facebook.com/yourpage" />
-          <Input label="Snapchat" value={me.socials?.snapchat || ''} onChange={setSocial('snapchat')} placeholder="https://snapchat.com/add/yourname" />
+          <Input label="X" value={me.socials?.twitter || ''} onChange={setSocial('twitter')} placeholder="https://x.com/yourname" />
           <Input label="TikTok" value={me.socials?.tiktok || ''} onChange={setSocial('tiktok')} placeholder="https://tiktok.com/@yourname" />
-          <Input label="Website" value={me.socials?.website || ''} onChange={setSocial('website')} placeholder="https://yoursite.com" />
+          <Input label="Snapchat" value={me.socials?.snapchat || ''} onChange={setSocial('snapchat')} placeholder="https://snapchat.com/add/yourname" />
+          <Input label="WhatsApp" value={me.socials?.whatsapp || ''} onChange={setSocial('whatsapp')} placeholder="2348012345678" helper="Include the country code, digits only." />
           {storefrontMsg && (
             <p className="text-xs" style={{ color: storefrontMsg.includes('saved') ? 'var(--color-green)' : 'var(--color-red)' }}>
               {storefrontMsg}

@@ -467,6 +467,12 @@ export function EventDetailContent({ identifier }: EventDetailContentProps) {
               )}
             </div>
 
+            {event.organizer?.socials && Object.values(event.organizer.socials).some(Boolean) && (
+              <div className="rounded-xl border p-5" style={{ backgroundColor: 'var(--color-surface)', borderColor: 'var(--color-border)' }}>
+                <SocialLinks socials={event.organizer.socials} organizerName={event.organizer?.name} />
+              </div>
+            )}
+
             <div className="rounded-xl border p-5" style={{ backgroundColor: 'var(--color-surface)', borderColor: 'var(--color-border)' }}>
               <h3 className="font-semibold mb-2" style={{ color: 'var(--color-text)' }}>Refund Policy</h3>
               <p className="text-sm leading-relaxed" style={{ color: 'var(--color-text-muted)' }}>
@@ -504,10 +510,6 @@ export function EventDetailContent({ identifier }: EventDetailContentProps) {
                 </>
               );
               const cardStyle = { backgroundColor: 'var(--color-surface)', borderColor: 'var(--color-border)' } as const;
-              // Social links carry their own <a> tags, so they can't live
-              // inside the profile-link anchor below without nesting one
-              // anchor inside another — kept as a separate row instead.
-              const hasSocials = event.organizer?.socials && Object.values(event.organizer.socials).some(Boolean);
               return (
                 <div className="rounded-xl border p-5" style={cardStyle}>
                   {event.organizer?.handle ? (
@@ -516,11 +518,6 @@ export function EventDetailContent({ identifier }: EventDetailContentProps) {
                     </Link>
                   ) : (
                     <div className="flex items-start gap-4">{organizerBlockInner}</div>
-                  )}
-                  {hasSocials && (
-                    <div className="mt-3 pt-3 border-t" style={{ borderColor: 'var(--color-border)' }}>
-                      <SocialLinks socials={event.organizer?.socials} />
-                    </div>
                   )}
                 </div>
               );

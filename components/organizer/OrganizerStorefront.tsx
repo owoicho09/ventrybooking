@@ -168,7 +168,7 @@ export function OrganizerStorefront({ handle }: { handle: string }) {
               <p className="text-sm mt-2 max-w-xl" style={{ color: 'var(--color-text-muted)' }}>{organizer.bio}</p>
             )}
             <div className="mt-3">
-              <SocialLinks socials={organizer.socials} />
+              <SocialLinks socials={organizer.socials} organizerName={organizer.name} />
             </div>
           </div>
         </div>
