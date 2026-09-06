@@ -3,7 +3,16 @@
 // app/[slug]/opengraph-image.tsx when a slug matches neither an event nor
 // an organiser handle. Kept as a plain JSX factory rather than baked into
 // either file so neither has to import from the other.
-export function SiteOGCard() {
+
+// fetch(new URL(...)) against a local /public asset is a build-time-inlined
+// reference under next/og's edge runtime, not a real network call — the
+// documented way to get a local image into an ImageResponse.
+export async function getLogoDataUri(): Promise<string> {
+  const buf = await fetch(new URL('../../public/logo.jpg', import.meta.url)).then(r => r.arrayBuffer());
+  return `data:image/jpeg;base64,${Buffer.from(buf).toString('base64')}`;
+}
+
+export function SiteOGCard({ logoSrc }: { logoSrc?: string } = {}) {
   return (
     <div
       style={{
@@ -61,12 +70,16 @@ export function SiteOGCard() {
             Nigeria&apos;s trust-first ticketing platform
           </span>
         </div>
-        <div style={{ fontSize: '120px', fontWeight: 800, color: '#7c3aed', lineHeight: 1, letterSpacing: '-0.03em' }}>
-          VENTRY
-        </div>
-        <div style={{ fontSize: '32px', fontWeight: 400, color: 'rgba(255,255,255,0.75)', letterSpacing: '0.01em' }}>
-          Secure Event Ticketing for Nigeria
-        </div>
+        {logoSrc && (
+          // eslint-disable-next-line @next/next/no-img-element
+          <img
+            src={logoSrc}
+            width={360}
+            height={360}
+            alt="Ventry"
+            style={{ borderRadius: '28px', border: '1px solid rgba(124,58,237,0.4)' }}
+          />
+        )}
         <div style={{ display: 'flex', alignItems: 'center', gap: '32px', marginTop: '12px' }}>
           {['Escrow Protected', 'Verified Organizers', 'QR Tickets', 'Auto Refunds'].map((label) => (
             <div

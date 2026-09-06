@@ -1,6 +1,6 @@
 import { ImageResponse } from 'next/og';
 import { getServerSupabase } from '@/lib/supabase/server';
-import { SiteOGCard } from '@/lib/og/siteImage';
+import { SiteOGCard, getLogoDataUri } from '@/lib/og/siteImage';
 
 export const runtime = 'edge';
 export const alt = 'Event on Ventry';
@@ -237,5 +237,6 @@ export default async function EventOGImage({ params }: { params: Promise<{ slug:
     );
   }
 
-  return new ImageResponse(<SiteOGCard />, { ...size });
+  const logoSrc = await getLogoDataUri();
+  return new ImageResponse(<SiteOGCard logoSrc={logoSrc} />, { ...size });
 }

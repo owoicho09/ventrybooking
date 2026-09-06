@@ -277,20 +277,19 @@ export function EventDetailContent({ identifier }: EventDetailContentProps) {
   );
 
   return (
-    <div style={{ backgroundColor: 'var(--color-bg)' }}>
+    <div className="min-h-dvh" style={{ backgroundColor: 'var(--color-bg)' }}>
       {event.headerBannerUrl ? (
-        // Wide header banner (events.header_banner_url), fixed at the top of
-        // the page. Uses position:sticky rather than position:fixed: sticky
-        // is bounded by this wrapper's own height, so once the page content
-        // below it (which has an opaque background and a higher z-index)
-        // has scrolled up to fully cover it, it simply stops being pinned —
-        // there's no way for it to show through past the end of the page,
-        // which is exactly the bug a fixed-position version of this hero hit
-        // previously (see the flyer-hero fallback branch below for that
-        // history). The negative margin on the content wrapper pulls it up
-        // to visually slide over the banner from the first frame.
-        <div className="relative">
-          <div className="sticky top-0 z-0 w-full overflow-hidden h-[220px] sm:h-[300px] lg:h-[400px]">
+        // Wide header banner (events.header_banner_url) — a persistent masthead
+        // pinned to the viewport for the entire page, hero through footer. Page
+        // content below is normal in-flow and scrolls independently underneath
+        // it (the spacer div right after this block reserves its height). The
+        // outer min-h-dvh on this component's root ensures the document is
+        // never shorter than one screen, so there's never empty space below
+        // real content where this fixed banner could "show through" on a short
+        // page — the failure mode that sank an earlier fixed-position attempt
+        // on the flyer-hero fallback below.
+        <>
+          <div className="fixed inset-x-0 top-0 z-0 w-full overflow-hidden h-[220px] sm:h-[300px] lg:h-[400px]">
             <Image
               src={event.headerBannerUrl}
               alt={event.name}
@@ -305,7 +304,8 @@ export function EventDetailContent({ identifier }: EventDetailContentProps) {
             />
             <div className="absolute top-4 left-4 sm:left-6 z-10">{ventryWordmark}</div>
           </div>
-        </div>
+          <div className="h-[220px] sm:h-[300px] lg:h-[400px]" />
+        </>
       ) : (
         <div
           className="relative"
@@ -351,7 +351,7 @@ export function EventDetailContent({ identifier }: EventDetailContentProps) {
       )}
 
       <div
-        className={`max-w-7xl mx-auto px-6 py-8 ${event.headerBannerUrl ? 'relative z-10 -mt-6 sm:-mt-8 rounded-t-3xl' : ''}`}
+        className="max-w-7xl mx-auto px-6 py-8 relative z-10"
         style={{ backgroundColor: 'var(--color-bg)' }}
       >
         <nav className="flex items-center gap-1.5 text-sm mb-8" style={{ color: 'var(--color-text-muted)' }}>
