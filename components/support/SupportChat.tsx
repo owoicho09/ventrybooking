@@ -153,7 +153,12 @@ export function SupportChat() {
                 </p>
               </div>
             </div>
-            <button onClick={() => setOpen(false)} aria-label="Close" className="text-white/80 hover:text-white p-1">
+            <button
+              onClick={() => setOpen(false)}
+              aria-label="Close"
+              className="flex-shrink-0 flex items-center justify-center rounded-full transition-colors"
+              style={{ width: 36, height: 36, backgroundColor: 'rgba(255,255,255,0.15)', color: '#fff' }}
+            >
               <X size={20} />
             </button>
           </div>
@@ -241,16 +246,21 @@ export function SupportChat() {
         </div>
       )}
 
-      {!open && (
-        <button
-          onClick={() => setOpen(true)}
-          aria-label="Support chat"
-          className="fixed bottom-4 right-4 z-40 w-14 h-14 rounded-full flex items-center justify-center shadow-lg transition-transform hover:scale-105"
-          style={{ backgroundColor: 'var(--color-purple)', color: '#fff', boxShadow: '0 4px 20px rgba(124,58,237,0.5)' }}
-        >
-          <MessageCircle size={22} />
-        </button>
-      )}
+      {/* On desktop the panel leaves a gap above this button (sm:bottom-24),
+          so it can stay visible and toggle to an X even while open — the
+          same bottom-right control people expect to tap to close a chat
+          widget, not just the small header X. On mobile the panel is a
+          full-screen sheet with no such gap (this would sit on top of the
+          input bar), so it's hidden there once open and the header close
+          button (made larger below) is the one true control instead. */}
+      <button
+        onClick={() => setOpen(o => !o)}
+        aria-label={open ? 'Close support chat' : 'Support chat'}
+        className={`fixed bottom-4 right-4 z-40 w-14 h-14 rounded-full items-center justify-center shadow-lg transition-transform hover:scale-105 ${open ? 'hidden sm:flex' : 'flex'}`}
+        style={{ backgroundColor: 'var(--color-purple)', color: '#fff', boxShadow: '0 4px 20px rgba(124,58,237,0.5)' }}
+      >
+        {open ? <X size={22} /> : <MessageCircle size={22} />}
+      </button>
     </>
   );
 }
