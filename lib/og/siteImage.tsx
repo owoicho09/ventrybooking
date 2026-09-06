@@ -49,8 +49,7 @@ export function SiteOGCard({ logoSrc }: { logoSrc?: string } = {}) {
           flexDirection: 'column',
           alignItems: 'center',
           justifyContent: 'center',
-          gap: '24px',
-          padding: '0 80px',
+          gap: '20px',
           textAlign: 'center',
         }}
       >
@@ -74,35 +73,15 @@ export function SiteOGCard({ logoSrc }: { logoSrc?: string } = {}) {
           // eslint-disable-next-line @next/next/no-img-element
           <img
             src={logoSrc}
-            width={360}
-            height={360}
+            width={440}
+            height={440}
             alt="Ventry"
             style={{ borderRadius: '28px', border: '1px solid rgba(124,58,237,0.4)' }}
           />
         )}
-        <div style={{ display: 'flex', alignItems: 'center', gap: '32px', marginTop: '12px' }}>
-          {['Escrow Protected', 'Verified Organizers', 'QR Tickets', 'Auto Refunds'].map((label) => (
-            <div
-              key={label}
-              style={{
-                display: 'flex',
-                alignItems: 'center',
-                gap: '8px',
-                backgroundColor: 'rgba(255,255,255,0.06)',
-                border: '1px solid rgba(255,255,255,0.12)',
-                borderRadius: '8px',
-                padding: '8px 16px',
-                color: 'rgba(255,255,255,0.6)',
-                fontSize: '18px',
-              }}
-            >
-              {label}
-            </div>
-          ))}
-        </div>
-      </div>
-      <div style={{ position: 'absolute', bottom: '36px', color: 'rgba(255,255,255,0.3)', fontSize: '20px', letterSpacing: '0.05em' }}>
-        ventrybooking.com
+        <span style={{ color: 'rgba(255,255,255,0.3)', fontSize: '20px', letterSpacing: '0.05em' }}>
+          ventrybooking.com
+        </span>
       </div>
     </div>
   );
