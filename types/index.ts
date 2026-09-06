@@ -91,6 +91,9 @@ export interface Ticket {
   qrData: string;
   qrDataUrl?: string | null;
   banner_url?: string;
+  /** True when the signed-in viewer bought this ticket for a different
+   * recipient email — set only by /api/buyer/tickets. */
+  purchasedByMe?: boolean;
 }
 
 export interface Payout {

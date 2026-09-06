@@ -17,7 +17,7 @@ export async function GET(req: NextRequest) {
 
     if (tx?.status === 'success') {
       const { metadata, amount, customer } = tx;
-      const { eventId, items, buyerEmail, buyerName } = metadata || {};
+      const { eventId, items, buyerEmail, buyerName, purchasedByEmail } = metadata || {};
 
       // See webhook/route.ts — Paystack's `amount` can include a customer-borne
       // processing fee on top of what we charged, so prefer the exact total we
@@ -36,6 +36,7 @@ export async function GET(req: NextRequest) {
           buyerEmail,
           buyerName,
           customerEmail: customer?.email,
+          purchasedByEmail,
         });
 
         if (ticketId) {

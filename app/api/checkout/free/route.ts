@@ -10,7 +10,7 @@ interface CartItem { tierId: string; quantity: number }
 
 export async function POST(req: NextRequest) {
   try {
-    const { eventId, items, buyerEmail, buyerName, marketingConsent, ventryMarketingConsent, ref } = await req.json();
+    const { eventId, items, buyerEmail, buyerName, marketingConsent, ventryMarketingConsent, ref, purchasedByEmail } = await req.json();
 
     if (!eventId || !Array.isArray(items) || items.length === 0 || !buyerEmail) {
       return NextResponse.json({ error: 'Missing required fields' }, { status: 400 });
@@ -71,6 +71,14 @@ export async function POST(req: NextRequest) {
     // Pseudo-reference for free orders (no Paystack transaction)
     const reference   = `FREE-${randomBytes(6).toString('hex').toUpperCase()}`;
 
+    // Only recorded when a signed-in buyer checks out for a different
+    // email than their own — buyer_email (who the ticket belongs to) is
+    // never touched by this, it just lets that buyer's own /account also
+    // surface an order they bought for someone else.
+    const purchasedBy = typeof purchasedByEmail === 'string' && purchasedByEmail.trim().toLowerCase() !== email
+      ? purchasedByEmail.trim().toLowerCase()
+      : null;
+
     const ticketIds: string[]   = [];
     const refundCodes: string[] = [];
     const rows: Record<string, unknown>[] = [];
@@ -96,6 +104,7 @@ export async function POST(req: NextRequest) {
           paystack_reference: reference,
           marketing_consent:  consent,
           ventry_marketing_consent: ventryConsent,
+          purchased_by_email: purchasedBy,
         });
       }
     }

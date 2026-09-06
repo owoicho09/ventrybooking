@@ -41,7 +41,7 @@ export async function POST(req: NextRequest) {
 
     const metadata = verified.metadata || {};
     let { eventId, items, buyerEmail, buyerName } = metadata;
-    const { refCode } = metadata;
+    const { refCode, purchasedByEmail } = metadata;
     let marketingConsent = metadata?.marketingConsent === true;
     let ventryMarketingConsent = metadata?.ventryMarketingConsent === true;
     let declaredTotal = Number(metadata?.total);
@@ -110,6 +110,7 @@ export async function POST(req: NextRequest) {
         marketingConsent,
         ventryMarketingConsent,
         refCode,
+        purchasedByEmail,
       });
     } catch (err) {
       console.error('Webhook: createTicketFromPayment error', err);

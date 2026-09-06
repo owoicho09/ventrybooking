@@ -45,6 +45,14 @@ export function TicketCard({ ticket }: TicketCardProps) {
         {/* Right: Details */}
         <div className="flex-1 p-6 flex flex-col gap-4">
           <div>
+            {ticket.purchasedByMe && (
+              <span
+                className="inline-block text-[10px] font-semibold uppercase tracking-wide px-2 py-0.5 rounded-full mb-2"
+                style={{ backgroundColor: 'var(--color-purple-dim)', color: 'var(--color-purple-light)' }}
+              >
+                Purchased by you &middot; sent to {ticket.buyerEmail}
+              </span>
+            )}
             <h2
               className="text-xl font-bold leading-tight mb-1"
               style={{

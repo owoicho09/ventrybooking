@@ -1,13 +1,34 @@
 'use client';
 
+import { useState, useRef, useEffect } from 'react';
 import Link from 'next/link';
-import { usePathname } from 'next/navigation';
+import { usePathname, useRouter } from 'next/navigation';
+import { ChevronDown } from 'lucide-react';
 import { ThemeToggle } from './ThemeToggle';
 import { useBuyerAuth } from '@/lib/hooks/useBuyerAuth';
 
 export function PublicNav() {
   const pathname = usePathname();
-  const { loggedIn: buyerLoggedIn, loading: buyerLoading } = useBuyerAuth();
+  const router = useRouter();
+  const { loggedIn: buyerLoggedIn, loading: buyerLoading, firstName } = useBuyerAuth();
+  const [menuOpen, setMenuOpen] = useState(false);
+  const menuRef = useRef<HTMLDivElement>(null);
+
+  useEffect(() => {
+    if (!menuOpen) return;
+    const onClick = (e: MouseEvent) => {
+      if (menuRef.current && !menuRef.current.contains(e.target as Node)) setMenuOpen(false);
+    };
+    document.addEventListener('mousedown', onClick);
+    return () => document.removeEventListener('mousedown', onClick);
+  }, [menuOpen]);
+
+  const handleSignOut = async () => {
+    setMenuOpen(false);
+    await fetch('/api/buyer/auth/logout', { method: 'POST' });
+    router.push('/');
+    router.refresh();
+  };
 
   const navLinks = [
     { href: '/events', label: 'Events' },
@@ -66,16 +87,6 @@ export function PublicNav() {
 
         {/* Right Actions */}
         <div className="flex items-center gap-2 shrink-0">
-          {!buyerLoading && (
-            <Link
-              href={buyerLoggedIn ? '/account' : '/account/login'}
-              className="flex items-center px-2 sm:px-3 py-2 text-sm rounded-lg transition-colors"
-              style={{ color: 'var(--color-text-muted)' }}
-            >
-              {buyerLoggedIn ? 'My Tickets' : 'Sign in'}
-            </Link>
-          )}
-          <ThemeToggle />
           <Link
             href="/organizer/register"
             className="hidden sm:flex items-center px-4 py-2 text-sm rounded-lg border transition-colors"
@@ -94,16 +105,49 @@ export function PublicNav() {
           >
             Post an Event
           </Link>
-          <Link
-            href="/organizer/login"
-            className="flex items-center px-4 py-2 text-sm rounded-lg font-medium transition-opacity hover:opacity-90"
-            style={{
-              backgroundColor: 'var(--color-purple)',
-              color: '#fff',
-            }}
-          >
-            Sign In
-          </Link>
+          <ThemeToggle />
+
+          {/* The single public-header auth entry: buyer sign-in, or a small
+              menu once signed in. Organiser/affiliate doors live at /signin
+              instead of competing with this. */}
+          {!buyerLoading && (
+            buyerLoggedIn ? (
+              <div className="relative" ref={menuRef}>
+                <button
+                  onClick={() => setMenuOpen(o => !o)}
+                  className="flex items-center gap-1.5 px-4 py-2 text-sm rounded-lg font-medium transition-opacity hover:opacity-90"
+                  style={{ backgroundColor: 'var(--color-purple)', color: '#fff' }}
+                >
+                  {firstName ? `Hi, ${firstName}` : 'My Tickets'}
+                  <ChevronDown size={14} style={{ transform: menuOpen ? 'rotate(180deg)' : undefined, transition: 'transform 0.15s' }} />
+                </button>
+                {menuOpen && (
+                  <div
+                    className="absolute right-0 mt-2 w-48 rounded-lg border shadow-lg overflow-hidden"
+                    style={{ backgroundColor: 'var(--color-surface)', borderColor: 'var(--color-border)' }}
+                  >
+                    <Link href="/account" onClick={() => setMenuOpen(false)} className="block px-4 py-2.5 text-sm transition-colors hover:bg-[var(--color-surface-2)]" style={{ color: 'var(--color-text)' }}>
+                      My Tickets
+                    </Link>
+                    <Link href="/account/following" onClick={() => setMenuOpen(false)} className="block px-4 py-2.5 text-sm transition-colors hover:bg-[var(--color-surface-2)]" style={{ color: 'var(--color-text)' }}>
+                      Following
+                    </Link>
+                    <button onClick={handleSignOut} className="block w-full text-left px-4 py-2.5 text-sm border-t transition-colors hover:bg-[var(--color-surface-2)]" style={{ color: 'var(--color-text-muted)', borderColor: 'var(--color-border)' }}>
+                      Sign out
+                    </button>
+                  </div>
+                )}
+              </div>
+            ) : (
+              <Link
+                href="/signin"
+                className="flex items-center px-4 py-2 text-sm rounded-lg font-medium transition-opacity hover:opacity-90"
+                style={{ backgroundColor: 'var(--color-purple)', color: '#fff' }}
+              >
+                Sign in
+              </Link>
+            )
+          )}
         </div>
       </div>
     </nav>

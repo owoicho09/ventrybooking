@@ -264,7 +264,7 @@ export default function RetrievePage() {
             </div>
             <div className="mt-3 text-xs text-center" style={{ color: 'var(--color-text-dim)' }}>
               Tired of retrieving?{' '}
-              <Link href="/account/login" className="hover:underline" style={{ color: 'var(--color-purple-light)' }}>
+              <Link href="/signin" className="hover:underline" style={{ color: 'var(--color-purple-light)' }}>
                 Log in instead
               </Link>
             </div>

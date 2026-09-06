@@ -9,7 +9,7 @@ interface CartItem { tierId: string; quantity: number }
 
 export async function POST(req: NextRequest) {
   try {
-    const { eventId, items, buyerEmail, buyerName, marketingConsent, ventryMarketingConsent, ref } = await req.json();
+    const { eventId, items, buyerEmail, buyerName, marketingConsent, ventryMarketingConsent, ref, purchasedByEmail } = await req.json();
 
     if (!eventId || !Array.isArray(items) || items.length === 0 || !buyerEmail) {
       return NextResponse.json({ error: 'Missing required fields' }, { status: 400 });
@@ -109,6 +109,11 @@ export async function POST(req: NextRequest) {
         processingFee,
         total,
         refCode,
+        // Only set when a signed-in buyer checks out for a different email
+        // than their own — see createTicketFromPayment.
+        purchasedByEmail: typeof purchasedByEmail === 'string' && purchasedByEmail.trim().toLowerCase() !== buyerEmail.trim().toLowerCase()
+          ? purchasedByEmail.trim().toLowerCase()
+          : undefined,
       },
     });
 

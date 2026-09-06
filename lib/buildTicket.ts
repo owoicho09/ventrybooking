@@ -29,5 +29,6 @@ export function buildTicket(raw: Record<string, unknown>): Ticket {
     refundCode:   raw.refund_code as string,
     qrData:       (raw.qr_token as string) || (raw.id as string),
     qrDataUrl:    raw.qrDataUrl as string | null,
+    purchasedByMe: raw.purchasedByMe as boolean | undefined,
   };
 }

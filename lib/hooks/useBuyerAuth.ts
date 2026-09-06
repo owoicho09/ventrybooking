@@ -7,15 +7,19 @@ import { useEffect, useState } from 'react';
  * the Follow button's choice between itself and the logged-out Notify Me form. */
 export function useBuyerAuth() {
   const [email, setEmail] = useState<string | null>(null);
+  const [firstName, setFirstName] = useState<string | null>(null);
   const [loading, setLoading] = useState(true);
 
   useEffect(() => {
     fetch('/api/buyer/me')
       .then(r => (r.ok ? r.json() : null))
-      .then(d => setEmail(d?.data?.email ?? null))
+      .then(d => {
+        setEmail(d?.data?.email ?? null);
+        setFirstName(d?.data?.firstName ?? null);
+      })
       .catch(() => setEmail(null))
       .finally(() => setLoading(false));
   }, []);
 
-  return { email, loggedIn: !!email, loading };
+  return { email, firstName, loggedIn: !!email, loading };
 }

@@ -21,6 +21,10 @@ export interface PaymentData {
   marketingConsent?: boolean;
   ventryMarketingConsent?: boolean;
   refCode?: string;
+  /** Set only when a signed-in buyer checked out for a different email than
+   * their own — buyer_email (who the ticket belongs to) is untouched by
+   * this, it just lets that buyer's own /account also surface the order. */
+  purchasedByEmail?: string;
 }
 
 /**
@@ -184,6 +188,7 @@ export async function createTicketFromClaimedPayment(p: PaymentData): Promise<st
       paystack_reference:  p.reference,
       marketing_consent:   consent,
       ventry_marketing_consent: ventryConsent,
+      purchased_by_email:  p.purchasedByEmail && p.purchasedByEmail.toLowerCase() !== email ? p.purchasedByEmail.toLowerCase() : null,
     };
   });
 

@@ -55,8 +55,31 @@ export async function POST(req: NextRequest) {
     // Single-use — burn it immediately on success so it can't be replayed.
     await db.from('buyer_login_otps').delete().eq('id', otpRow.id);
 
+    // "We found your tickets!" needs to know before redirecting; a brand-new
+    // email gets a bare profile row created here so the one-time first-name
+    // prompt has something to PATCH (see /api/buyer/profile).
+    const [{ count: ticketCount }, { data: profile }] = await Promise.all([
+      db.from('tickets').select('id', { count: 'exact', head: true }).ilike('buyer_email', normalized),
+      db.from('buyer_profiles').select('first_name').eq('email', normalized).maybeSingle(),
+    ]);
+
+    if (!profile) {
+      await db.from('buyer_profiles').insert({ email: normalized });
+    }
+    // Prompt for a first name whenever none is on file yet — covers both a
+    // brand-new profile and someone who closed the app before finishing
+    // that one-time step on an earlier login.
+    const needsFirstName = !profile?.first_name;
+
     const token = signAuthToken({ sub: normalized, role: 'buyer', email: normalized });
-    const res = NextResponse.json({ success: true, data: { email: normalized } });
+    const res = NextResponse.json({
+      success: true,
+      data: {
+        email: normalized,
+        hasOrders: (ticketCount ?? 0) > 0,
+        needsFirstName,
+      },
+    });
     res.cookies.set({ ...buyerCookieOptions(30 * 24 * 60 * 60), value: token });
     return res;
   } catch (err) {

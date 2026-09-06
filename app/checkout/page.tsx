@@ -33,6 +33,11 @@ export default function CheckoutPage() {
   const [loading, setLoading]                 = useState(false);
   const [error, setError]                     = useState('');
   const [cart, setCart]                       = useState<Cart | null>(null);
+  // The signed-in buyer's own email, captured once and never mutated by
+  // editing the email field below — if they change it to buy for a friend,
+  // the ticket goes to the typed email (that email owns it, per platform
+  // rule) but the order still needs to be attributable back to this session.
+  const [sessionEmail, setSessionEmail]       = useState<string | null>(null);
 
   useEffect(() => {
     const raw = sessionStorage.getItem('ventry_cart');
@@ -46,7 +51,12 @@ export default function CheckoutPage() {
   useEffect(() => {
     fetch('/api/buyer/me')
       .then(r => (r.ok ? r.json() : null))
-      .then(d => { if (d?.data?.email) setEmail(prev => prev || d.data.email); })
+      .then(d => {
+        if (d?.data?.email) {
+          setEmail(prev => prev || d.data.email);
+          setSessionEmail(d.data.email);
+        }
+      })
       .catch(() => {});
   }, []);
 
@@ -81,6 +91,7 @@ export default function CheckoutPage() {
             marketingConsent,
             ventryMarketingConsent,
             ref: cart.ref,
+            purchasedByEmail: sessionEmail,
           }),
         });
         const data = await res.json();
@@ -102,6 +113,7 @@ export default function CheckoutPage() {
             marketingConsent,
             ventryMarketingConsent,
             ref: cart.ref,
+            purchasedByEmail: sessionEmail,
           }),
         });
         const data = await res.json();

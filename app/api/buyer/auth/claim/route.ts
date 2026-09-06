@@ -14,10 +14,10 @@ export async function GET(req: NextRequest) {
   try {
     payload = verifyTicketLink(token);
   } catch {
-    return NextResponse.redirect(new URL('/account/login', req.url));
+    return NextResponse.redirect(new URL('/signin', req.url));
   }
   if (payload.purpose !== 'buyer_claim') {
-    return NextResponse.redirect(new URL('/account/login', req.url));
+    return NextResponse.redirect(new URL('/signin', req.url));
   }
 
   const db = getServerSupabase();
@@ -28,7 +28,7 @@ export async function GET(req: NextRequest) {
     .maybeSingle();
 
   if (!ticket) {
-    return NextResponse.redirect(new URL('/account/login', req.url));
+    return NextResponse.redirect(new URL('/signin', req.url));
   }
 
   const email = ticket.buyer_email.trim().toLowerCase();
