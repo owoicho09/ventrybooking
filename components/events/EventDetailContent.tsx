@@ -285,14 +285,19 @@ export function EventDetailContent({ identifier }: EventDetailContentProps) {
         // Wide header banner (events.header_banner_url) — a persistent masthead
         // pinned to the viewport for the entire page, hero through footer. Page
         // content below is normal in-flow and scrolls independently underneath
-        // it (the spacer div right after this block reserves its height). The
+        // it (the spacer div right after this block reserves its height). z-20
+        // here is deliberately HIGHER than the content wrapper's z-index below:
+        // as the page scrolls, content moves up into this banner's screen
+        // region, and it must paint BEHIND the fixed banner (hidden under it),
+        // not in front of it — the reverse ordering silently let scrolled
+        // content cover the banner instead of the banner staying on top. The
         // outer min-h-dvh on this component's root ensures the document is
         // never shorter than one screen, so there's never empty space below
         // real content where this fixed banner could "show through" on a short
         // page — the failure mode that sank an earlier fixed-position attempt
         // on the flyer-hero fallback below.
         <>
-          <div className="fixed inset-x-0 top-0 z-0 w-full overflow-hidden h-[220px] sm:h-[300px] lg:h-[400px]">
+          <div className="fixed inset-x-0 top-0 z-20 w-full overflow-hidden h-[220px] sm:h-[300px] lg:h-[400px]">
             <Image
               src={event.headerBannerUrl}
               alt={event.name}
@@ -354,7 +359,7 @@ export function EventDetailContent({ identifier }: EventDetailContentProps) {
       )}
 
       <div
-        className="max-w-7xl mx-auto px-6 py-8 relative z-10"
+        className="max-w-7xl mx-auto px-6 py-8 relative z-0"
         style={{ backgroundColor: 'var(--color-bg)' }}
       >
         <nav className="flex items-center gap-1.5 text-sm mb-8" style={{ color: 'var(--color-text-muted)' }}>
