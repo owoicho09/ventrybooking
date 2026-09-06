@@ -9,8 +9,10 @@ import { Button } from '@/components/ui/Button';
 import { Input } from '@/components/ui/Input';
 import { EventCard } from '@/components/events/EventCard';
 import { SocialLinks, type Socials } from '@/components/organizer/SocialLinks';
+import { FollowButton } from '@/components/organizer/FollowButton';
 import { eventsHostedLabel } from '@/lib/utils';
 import { useToast } from '@/components/ui/Toast';
+import { useBuyerAuth } from '@/lib/hooks/useBuyerAuth';
 import type { Event } from '@/types';
 
 interface Review {
@@ -72,6 +74,7 @@ export function OrganizerStorefront({ handle }: { handle: string }) {
   const [phone, setPhone] = useState('');
   const [subscribing, setSubscribing] = useState(false);
   const [subscribed, setSubscribed] = useState(false);
+  const { loggedIn: buyerLoggedIn, loading: buyerLoading } = useBuyerAuth();
 
   useEffect(() => {
     fetch(`/api/organizers/${handle}`)
@@ -154,6 +157,7 @@ export function OrganizerStorefront({ handle }: { handle: string }) {
               </h1>
               {organizer.verified && <Badge variant="green"><CheckCircle size={11} />Verified</Badge>}
               <Badge variant="purple">{organizer.tier}</Badge>
+              {buyerLoggedIn && <FollowButton handle={handle} />}
             </div>
             <div className="flex items-center gap-3 flex-wrap text-sm" style={{ color: 'var(--color-text-muted)' }}>
               <span>Member since {new Date(organizer.memberSince).getFullYear()} &middot; {eventsHostedLabel(organizer.eventsHosted)}</span>
@@ -226,7 +230,8 @@ export function OrganizerStorefront({ handle }: { handle: string }) {
           </div>
         )}
 
-        {/* Notify Me */}
+        {/* Notify Me — logged-out only; logged-in buyers use the Follow button above */}
+        {!buyerLoading && !buyerLoggedIn && (
         <div className="rounded-xl border p-5" style={{ backgroundColor: 'var(--color-surface)', borderColor: 'var(--color-border)' }}>
           {subscribed ? (
             <p className="text-sm flex items-center gap-2" style={{ color: 'var(--color-green)' }}>
@@ -248,6 +253,7 @@ export function OrganizerStorefront({ handle }: { handle: string }) {
             </form>
           )}
         </div>
+        )}
       </div>
       <Footer />
     </div>

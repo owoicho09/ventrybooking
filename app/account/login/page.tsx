@@ -1,22 +1,16 @@
 'use client';
 
 import { useState, useRef, useEffect } from 'react';
+import { useRouter } from 'next/navigation';
 import Link from 'next/link';
-import { Search, Mail, ShieldCheck } from 'lucide-react';
+import { LogIn, Mail, ShieldCheck } from 'lucide-react';
 import { PublicNav } from '@/components/layout/PublicNav';
 import { Footer } from '@/components/layout/Footer';
 import { Input } from '@/components/ui/Input';
 import { Button } from '@/components/ui/Button';
-import { formatShortDate } from '@/lib/utils';
 
-interface FoundTicket {
-  id: string;
-  status: string;
-  eventName: string;
-  eventDate: string;
-}
-
-export default function RetrievePage() {
+export default function BuyerLoginPage() {
+  const router = useRouter();
   const [step, setStep] = useState<'email' | 'otp'>('email');
   const [email, setEmail] = useState('');
   const [digits, setDigits] = useState(['', '', '', '']);
@@ -24,7 +18,6 @@ export default function RetrievePage() {
   const [resending, setResending] = useState(false);
   const [error, setError] = useState('');
   const [cooldown, setCooldown] = useState(0);
-  const [tickets, setTickets] = useState<FoundTicket[] | null>(null);
   const inputRefs = useRef<(HTMLInputElement | null)[]>([]);
 
   useEffect(() => {
@@ -36,7 +29,7 @@ export default function RetrievePage() {
   const otp = digits.join('');
 
   const requestOtp = async () => {
-    const res = await fetch('/api/tickets/retrieve/request-otp', {
+    const res = await fetch('/api/buyer/auth/request-otp', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({ email: email.trim() }),
@@ -101,10 +94,9 @@ export default function RetrievePage() {
   const handleVerify = async () => {
     if (otp.length < 4) { setError('Enter all 4 digits'); return; }
     setError('');
-    setTickets(null);
     setLoading(true);
     try {
-      const res = await fetch('/api/tickets/retrieve/verify-otp', {
+      const res = await fetch('/api/buyer/auth/verify-otp', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ email: email.trim(), otp }),
@@ -114,7 +106,8 @@ export default function RetrievePage() {
         setError(data.error || 'Verification failed. Please try again.');
         return;
       }
-      setTickets(data.data);
+      router.push('/account');
+      router.refresh();
     } catch {
       setError('Network error. Please try again.');
     } finally {
@@ -125,7 +118,6 @@ export default function RetrievePage() {
   const handleChangeEmail = () => {
     setStep('email');
     setError('');
-    setTickets(null);
     setDigits(['', '', '', '']);
   };
 
@@ -137,16 +129,16 @@ export default function RetrievePage() {
           <div className="text-center mb-8">
             <div className="w-14 h-14 rounded-2xl flex items-center justify-center mx-auto mb-5"
               style={{ backgroundColor: 'var(--color-purple-dim)', color: 'var(--color-purple-light)' }}>
-              {step === 'email' ? <Search size={24} /> : <ShieldCheck size={24} />}
+              {step === 'email' ? <LogIn size={24} /> : <ShieldCheck size={24} />}
             </div>
             <h1 className="text-3xl font-bold mb-2"
               style={{ color: 'var(--color-text)', fontFamily: 'var(--font-syne), sans-serif' }}>
-              {step === 'email' ? 'Find Your Tickets' : 'Confirm It\'s You'}
+              {step === 'email' ? 'Sign In' : 'Confirm It\'s You'}
             </h1>
             <p className="text-sm" style={{ color: 'var(--color-text-muted)' }}>
               {step === 'email'
-                ? 'Enter the email you used at checkout to find your tickets'
-                : <>We sent a 4-digit code to <strong style={{ color: 'var(--color-text)' }}>{email}</strong> — enter it to view your tickets</>}
+                ? 'No password needed — we\'ll email you a code'
+                : <>We sent a 4-digit code to <strong style={{ color: 'var(--color-text)' }}>{email}</strong></>}
             </p>
           </div>
 
@@ -171,10 +163,10 @@ export default function RetrievePage() {
                   required
                 />
                 <Button type="submit" size="lg" fullWidth disabled={!email || loading}>
-                  {loading ? 'Sending code...' : 'Send Verification Code'}
+                  {loading ? 'Sending code...' : 'Send Sign-In Code'}
                 </Button>
                 <p className="text-xs text-center leading-relaxed" style={{ color: 'var(--color-text-dim)' }}>
-                  For your security, we verify it's really you before revealing any ticket details.
+                  Every order you&apos;ve made with this email — past and future — shows up here automatically.
                 </p>
               </form>
             ) : (
@@ -201,7 +193,7 @@ export default function RetrievePage() {
                 </div>
 
                 <Button size="lg" fullWidth onClick={handleVerify} disabled={loading || otp.length < 4}>
-                  {loading ? 'Verifying...' : 'Verify & Find My Tickets'}
+                  {loading ? 'Verifying...' : 'Verify & Sign In'}
                 </Button>
 
                 <div className="flex items-center justify-between text-sm">
@@ -226,46 +218,11 @@ export default function RetrievePage() {
               </div>
             )}
 
-            {tickets && tickets.length > 0 && (
-              <div className="mt-5 pt-5 border-t flex flex-col gap-2" style={{ borderColor: 'var(--color-border)' }}>
-                {tickets.map(t => (
-                  <Link
-                    key={t.id}
-                    href={`/ticket/${t.id}`}
-                    className="flex items-center justify-between gap-3 rounded-lg border px-4 py-3 text-sm transition-colors hover:border-[var(--color-purple)]"
-                    style={{ borderColor: 'var(--color-border)', backgroundColor: 'var(--color-surface-2)' }}
-                  >
-                    <div className="min-w-0">
-                      <p className="font-medium truncate" style={{ color: 'var(--color-text)' }}>{t.eventName}</p>
-                      <p className="text-xs" style={{ color: 'var(--color-text-muted)' }}>
-                        {t.eventDate ? formatShortDate(t.eventDate) : ''} &middot; {t.id}
-                      </p>
-                    </div>
-                    <span
-                      className="flex-shrink-0 text-xs font-medium px-2 py-1 rounded"
-                      style={{
-                        color: t.status === 'valid' ? 'var(--color-green)' : 'var(--color-text-dim)',
-                        backgroundColor: t.status === 'valid' ? 'var(--color-green)15' : 'var(--color-surface)',
-                      }}
-                    >
-                      {t.status}
-                    </span>
-                  </Link>
-                ))}
-              </div>
-            )}
-
             <div className="mt-5 pt-5 border-t text-sm text-center"
               style={{ borderColor: 'var(--color-border)', color: 'var(--color-text-muted)' }}>
-              Need help?{' '}
-              <Link href="/help" className="hover:underline" style={{ color: 'var(--color-purple-light)' }}>
-                Visit Help Center
-              </Link>
-            </div>
-            <div className="mt-3 text-xs text-center" style={{ color: 'var(--color-text-dim)' }}>
-              Tired of retrieving?{' '}
-              <Link href="/account/login" className="hover:underline" style={{ color: 'var(--color-purple-light)' }}>
-                Log in instead
+              Just need one ticket?{' '}
+              <Link href="/retrieve" className="hover:underline" style={{ color: 'var(--color-purple-light)' }}>
+                Retrieve without an account
               </Link>
             </div>
           </div>

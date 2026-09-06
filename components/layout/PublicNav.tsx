@@ -3,9 +3,11 @@
 import Link from 'next/link';
 import { usePathname } from 'next/navigation';
 import { ThemeToggle } from './ThemeToggle';
+import { useBuyerAuth } from '@/lib/hooks/useBuyerAuth';
 
 export function PublicNav() {
   const pathname = usePathname();
+  const { loggedIn: buyerLoggedIn, loading: buyerLoading } = useBuyerAuth();
 
   const navLinks = [
     { href: '/events', label: 'Events' },
@@ -64,6 +66,15 @@ export function PublicNav() {
 
         {/* Right Actions */}
         <div className="flex items-center gap-2 shrink-0">
+          {!buyerLoading && (
+            <Link
+              href={buyerLoggedIn ? '/account' : '/account/login'}
+              className="hidden sm:flex items-center px-3 py-2 text-sm rounded-lg transition-colors"
+              style={{ color: 'var(--color-text-muted)' }}
+            >
+              {buyerLoggedIn ? 'My Tickets' : 'Sign in'}
+            </Link>
+          )}
           <ThemeToggle />
           <Link
             href="/organizer/register"

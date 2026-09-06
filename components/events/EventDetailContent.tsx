@@ -14,7 +14,9 @@ import { ticketUrgency, URGENCY_LABEL } from '@/lib/ticketUrgency';
 import type { Event, TicketTier } from '@/types';
 import { EventReviews } from '@/components/events/EventReviews';
 import { SocialLinks } from '@/components/organizer/SocialLinks';
+import { FollowButton } from '@/components/organizer/FollowButton';
 import { useToast } from '@/components/ui/Toast';
+import { useBuyerAuth } from '@/lib/hooks/useBuyerAuth';
 
 // Most organiser banners are portrait flyers, not wide landscape photos —
 // at 25vh/220px a cover-crop only ever revealed roughly the top 12% of a
@@ -31,6 +33,7 @@ export function EventDetailContent({ identifier }: EventDetailContentProps) {
   const router = useRouter();
   const searchParams = useSearchParams();
   const { toast } = useToast();
+  const { loggedIn: buyerLoggedIn } = useBuyerAuth();
   const [event, setEvent] = useState<Event | null>(null);
   const [loading, setLoading] = useState(true);
   const [quantities, setQuantities] = useState<Record<string, number>>({});
@@ -518,6 +521,11 @@ export function EventDetailContent({ identifier }: EventDetailContentProps) {
                     </Link>
                   ) : (
                     <div className="flex items-start gap-4">{organizerBlockInner}</div>
+                  )}
+                  {buyerLoggedIn && event.organizer?.handle && (
+                    <div className="mt-3 pt-3 border-t" style={{ borderColor: 'var(--color-border)' }}>
+                      <FollowButton handle={event.organizer.handle} />
+                    </div>
                   )}
                 </div>
               );

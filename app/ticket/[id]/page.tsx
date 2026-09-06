@@ -1,15 +1,16 @@
 'use client';
 
-import { useEffect, useState } from 'react';
-import { useParams } from 'next/navigation';
+import { useEffect, useState, Suspense } from 'react';
+import { useParams, useSearchParams } from 'next/navigation';
 import Link from 'next/link';
-import { Printer, Mail, AlertTriangle } from 'lucide-react';
+import { Printer, Mail, AlertTriangle, Sparkles, X } from 'lucide-react';
 import { PublicNav } from '@/components/layout/PublicNav';
 import { TicketCard } from '@/components/tickets/TicketCard';
 import { Button } from '@/components/ui/Button';
 
-export default function TicketPage() {
+function TicketContent() {
   const { id } = useParams<{ id: string }>();
+  const isNew = useSearchParams().get('new') === '1';
   const [ticket,    setTicket]    = useState<Parameters<typeof TicketCard>[0]['ticket'] | null>(null);
   const [txRef,     setTxRef]     = useState<string>('');
   const [txCount,   setTxCount]   = useState(1);
@@ -17,6 +18,16 @@ export default function TicketPage() {
   const [notFound,  setNotFound]  = useState(false);
   const [resending, setResending] = useState(false);
   const [resendMsg, setResendMsg] = useState('');
+  const [claimUrl,  setClaimUrl]  = useState('');
+  const [dismissedSave, setDismissedSave] = useState(false);
+
+  useEffect(() => {
+    if (!isNew || !id) return;
+    fetch(`/api/tickets/${id}/claim-link`)
+      .then(r => r.json())
+      .then(d => { if (d.success) setClaimUrl(d.data.url); })
+      .catch(() => {});
+  }, [isNew, id]);
 
   useEffect(() => {
     if (!id) return;
@@ -127,6 +138,22 @@ export default function TicketPage() {
           </p>
         </div>
 
+        {isNew && claimUrl && !dismissedSave && (
+          <div className="mb-4 rounded-xl border px-4 py-3 flex items-center gap-3 print:hidden"
+            style={{ backgroundColor: 'var(--color-purple-dim)', borderColor: 'var(--color-purple)' }}>
+            <Sparkles size={16} className="flex-shrink-0" style={{ color: 'var(--color-purple-light)' }} />
+            <p className="text-sm flex-1" style={{ color: 'var(--color-purple-light)' }}>
+              Save your tickets — create your Ventry profile
+            </p>
+            <a href={claimUrl} className="text-sm font-bold hover:underline flex-shrink-0" style={{ color: 'var(--color-purple-light)' }}>
+              One tap →
+            </a>
+            <button onClick={() => setDismissedSave(true)} aria-label="Dismiss" className="flex-shrink-0">
+              <X size={14} style={{ color: 'var(--color-purple-light)' }} />
+            </button>
+          </div>
+        )}
+
         {txCount > 1 && (
           <div className="mb-4 rounded-xl border px-4 py-3 flex items-center justify-between print:hidden"
             style={{ backgroundColor: 'var(--color-purple-dim)', borderColor: 'var(--color-purple)' }}>
@@ -192,5 +219,20 @@ export default function TicketPage() {
         }
       `}</style>
     </div>
+  );
+}
+
+export default function TicketPage() {
+  return (
+    <Suspense fallback={
+      <div style={{ backgroundColor: 'var(--color-bg)', minHeight: '100vh' }}>
+        <PublicNav />
+        <div className="pt-24 flex items-center justify-center">
+          <p style={{ color: 'var(--color-text-muted)' }}>Loading ticket…</p>
+        </div>
+      </div>
+    }>
+      <TicketContent />
+    </Suspense>
   );
 }

@@ -41,6 +41,15 @@ export default function CheckoutPage() {
     }
   }, []);
 
+  // Convenience pre-fill for a logged-in buyer session — guest checkout
+  // (no session) is completely unaffected, and this never blocks submission.
+  useEffect(() => {
+    fetch('/api/buyer/me')
+      .then(r => (r.ok ? r.json() : null))
+      .then(d => { if (d?.data?.email) setEmail(prev => prev || d.data.email); })
+      .catch(() => {});
+  }, []);
+
   const { subtotal, serviceFee, processingFee, total } = cart
     ? buyerTotalForItems(cart.items.map(i => ({ price: i.tierPrice, quantity: i.quantity })))
     : { subtotal: 0, serviceFee: 0, processingFee: 0, total: 0 };
@@ -80,7 +89,7 @@ export default function CheckoutPage() {
           return;
         }
         sessionStorage.removeItem('ventry_cart');
-        window.location.href = `/ticket/${data.data.ticketId}`;
+        window.location.href = `/ticket/${data.data.ticketId}?new=1`;
       } else {
         const res = await fetch('/api/checkout', {
           method: 'POST',

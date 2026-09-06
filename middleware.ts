@@ -4,6 +4,7 @@ import { jwtVerify } from 'jose';
 const ORGANIZER_LOGIN = '/organizer/login';
 const ADMIN_LOGIN = '/admin/login';
 const AFFILIATE_LOGIN = '/affiliate/login';
+const BUYER_LOGIN = '/account/login';
 
 const ORGANIZER_AUTH_PATHS = [
   '/organizer/login',
@@ -31,6 +32,31 @@ async function verifyToken(token: string): Promise<{ role: string } | null> {
 export async function middleware(req: NextRequest) {
   const { pathname } = req.nextUrl;
   const token = req.cookies.get('ventry_token')?.value;
+
+  // Buyer account routes — separate cookie (ventry_buyer_token) from the
+  // organizer/admin/affiliate session above, so the two never collide.
+  if (pathname.startsWith('/account')) {
+    const buyerToken = req.cookies.get('ventry_buyer_token')?.value;
+
+    if (pathname === BUYER_LOGIN) {
+      if (buyerToken) {
+        const payload = await verifyToken(buyerToken);
+        if (payload?.role === 'buyer') {
+          return NextResponse.redirect(new URL('/account', req.url));
+        }
+      }
+      return NextResponse.next();
+    }
+
+    if (!buyerToken) {
+      return NextResponse.redirect(new URL(BUYER_LOGIN, req.url));
+    }
+    const payload = await verifyToken(buyerToken);
+    if (!payload || payload.role !== 'buyer') {
+      return NextResponse.redirect(new URL(BUYER_LOGIN, req.url));
+    }
+    return NextResponse.next();
+  }
 
   // Admin routes
   if (pathname.startsWith('/admin')) {
@@ -99,5 +125,5 @@ export async function middleware(req: NextRequest) {
 }
 
 export const config = {
-  matcher: ['/organizer/:path*', '/admin/:path*', '/affiliate/:path*'],
+  matcher: ['/organizer/:path*', '/admin/:path*', '/affiliate/:path*', '/account/:path*'],
 };

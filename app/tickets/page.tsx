@@ -7,36 +7,9 @@ import { Printer, Mail, AlertTriangle } from 'lucide-react';
 import { PublicNav } from '@/components/layout/PublicNav';
 import { TicketCard } from '@/components/tickets/TicketCard';
 import { Button } from '@/components/ui/Button';
+import { buildTicket } from '@/lib/buildTicket';
 
 type RawTicket = Parameters<typeof TicketCard>[0]['ticket'];
-
-function buildTicket(raw: Record<string, unknown>): RawTicket {
-  const event = raw.event as Record<string, unknown> | null;
-  const tier  = raw.tier  as Record<string, unknown> | null;
-  return {
-    id:          raw.id as string,
-    eventId:     (event?.id as string) || '',
-    event: {
-      ...(event as object),
-      name:        (event?.event_name as string) || (event?.name as string) || '',
-      organizer:   (event?.organizer as object) || {},
-      tiers:       [],
-      status:      'approved' as const,
-      totalSold:   0,
-      bannerColor: (event?.banner_color as string) || 'from-purple-900 to-indigo-900',
-    } as unknown as RawTicket['event'],
-    tier:         (tier as unknown as RawTicket['tier']) || {} as unknown as RawTicket['tier'],
-    quantity:     (raw.quantity as number) ?? 1,
-    buyerName:    raw.buyer_name as string,
-    buyerEmail:   raw.buyer_email as string,
-    totalPaid:    raw.total_paid as number,
-    status:       raw.status as RawTicket['status'],
-    purchasedAt:  raw.purchased_at as string,
-    refundCode:   raw.refund_code as string,
-    qrData:       (raw.qr_token as string) || (raw.id as string),
-    qrDataUrl:    raw.qrDataUrl as string | null,
-  };
-}
 
 function TicketsContent() {
   const searchParams = useSearchParams();

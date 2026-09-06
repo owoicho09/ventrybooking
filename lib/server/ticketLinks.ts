@@ -2,7 +2,7 @@ import jwt from 'jsonwebtoken';
 
 const SECRET = process.env.JWT_SECRET!;
 
-export type TicketLinkPurpose = 'refund_opt_out' | 'review';
+export type TicketLinkPurpose = 'refund_opt_out' | 'review' | 'buyer_claim';
 
 export interface TicketLinkPayload {
   ticketId: string;

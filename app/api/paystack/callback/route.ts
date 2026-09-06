@@ -39,7 +39,7 @@ export async function GET(req: NextRequest) {
         });
 
         if (ticketId) {
-          return NextResponse.redirect(new URL(`/ticket/${ticketId}`, req.url));
+          return NextResponse.redirect(new URL(`/ticket/${ticketId}?new=1`, req.url));
         }
       }
 

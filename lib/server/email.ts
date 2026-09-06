@@ -1,6 +1,7 @@
 import { Resend } from 'resend';
 import { getOrganizerSenderName } from '@/lib/server/senderIdentity';
 import { getServerSupabase } from '@/lib/supabase/server';
+import { signTicketLink } from '@/lib/server/ticketLinks';
 
 const resend = new Resend(process.env.RESEND_API_KEY!);
 const FROM    = process.env.RESEND_FROM_EMAIL!;
@@ -177,6 +178,11 @@ export async function sendTicketEmail(params: {
     ${viewAllBtn}
 
     <p class="footer">Your payment is held in escrow by Ventry and only released to the organizer after the event occurs.</p>
+    <p class="footer">
+      <a href="${APP_URL}/api/buyer/auth/claim?token=${signTicketLink({ ticketId: tickets[0].ticketId, purpose: 'buyer_claim' }, 30 * 24 * 60 * 60)}" style="color:#a855f7;">
+        View all your tickets anytime
+      </a>
+    </p>
   `);
 
   await sendEmail({ to: params.to, subject, html, fromName: params.eventName, purpose: 'ticket' });
@@ -208,6 +214,21 @@ export async function sendTicketLookupOTPEmail(to: string, otp: string) {
         <span style="font-size:40px;font-weight:700;letter-spacing:0.3em;color:#a855f7;font-family:monospace;">${otp}</span>
       </div>
       <p style="color:#9ca3af;font-size:13px;margin:0;">Expires in <strong style="color:#f1f0ff;">10 minutes</strong>. If this wasn't you, ignore this email — your tickets are safe and no one can view them without this code.</p>
+    `),
+  });
+}
+
+export async function sendBuyerLoginOTPEmail(to: string, otp: string) {
+  await sendEmail({
+    to,
+    subject: `Your Ventry sign-in code: ${otp}`,
+    html: emailShell(`
+      <h1 style="color:#a855f7;font-size:22px;margin:0 0 12px;">Confirm it's you</h1>
+      <p style="color:#f1f0ff;margin:0 0 24px;">Enter this code to sign in to your Ventry account:</p>
+      <div style="text-align:center;background:#12121a;border:1px solid #2d2d3d;border-radius:12px;padding:28px;margin-bottom:24px;">
+        <span style="font-size:40px;font-weight:700;letter-spacing:0.3em;color:#a855f7;font-family:monospace;">${otp}</span>
+      </div>
+      <p style="color:#9ca3af;font-size:13px;margin:0;">Expires in <strong style="color:#f1f0ff;">10 minutes</strong>. If this wasn't you, ignore this email — no one can sign in without this code.</p>
     `),
   });
 }
