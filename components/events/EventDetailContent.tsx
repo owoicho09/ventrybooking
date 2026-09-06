@@ -18,12 +18,6 @@ import { FollowButton } from '@/components/organizer/FollowButton';
 import { useToast } from '@/components/ui/Toast';
 import { useBuyerAuth } from '@/lib/hooks/useBuyerAuth';
 
-// Most organiser banners are portrait flyers, not wide landscape photos —
-// at 25vh/220px a cover-crop only ever revealed roughly the top 12% of a
-// typical portrait flyer's height, i.e. one line of text and nothing else
-// useful, no matter how it was cropped. This taller strip fixes that.
-const BANNER_HEIGHT = 'max(46vh, 380px)';
-
 interface EventDetailContentProps {
   /** The event's slug (or, for the legacy /events/[id] shim, its UUID) — whatever was fetched to resolve this page. */
   identifier: string;
@@ -279,84 +273,55 @@ export function EventDetailContent({ identifier }: EventDetailContentProps) {
     </Link>
   );
 
+  // Every event page gets the same persistent masthead now, regardless of
+  // whether an organiser uploaded the new dedicated wide header banner —
+  // fall back to the existing flyer image, then to the category-gradient
+  // placeholder, so this isn't an opt-in-only feature. object-position
+  // "center top" only applies to the flyer fallback: most organiser flyers
+  // are portrait images, and a top-biased crop keeps the part that actually
+  // carries the title (almost always near the top) instead of letterboxing
+  // a tall image into a tiny sliver inside this short, wide strip.
+  const bannerSrc = event.headerBannerUrl || event.banner_url || null;
+  const isFlyerFallback = !event.headerBannerUrl && !!event.banner_url;
+
   return (
     <div className="min-h-dvh" style={{ backgroundColor: 'var(--color-bg)' }}>
-      {event.headerBannerUrl ? (
-        // Wide header banner (events.header_banner_url) — a persistent masthead
-        // pinned to the viewport for the entire page, hero through footer. Page
-        // content below is normal in-flow and scrolls independently underneath
-        // it (the spacer div right after this block reserves its height). z-20
-        // here is deliberately HIGHER than the content wrapper's z-index below:
-        // as the page scrolls, content moves up into this banner's screen
-        // region, and it must paint BEHIND the fixed banner (hidden under it),
-        // not in front of it — the reverse ordering silently let scrolled
-        // content cover the banner instead of the banner staying on top. The
-        // outer min-h-dvh on this component's root ensures the document is
-        // never shorter than one screen, so there's never empty space below
-        // real content where this fixed banner could "show through" on a short
-        // page — the failure mode that sank an earlier fixed-position attempt
-        // on the flyer-hero fallback below.
-        <>
-          <div className="fixed inset-x-0 top-0 z-20 w-full overflow-hidden h-[220px] sm:h-[300px] lg:h-[400px]">
-            <Image
-              src={event.headerBannerUrl}
-              alt={event.name}
-              fill
-              className="object-cover"
-              sizes="100vw"
-              priority
-            />
-            <div
-              className="absolute inset-0 pointer-events-none"
-              style={{ background: 'linear-gradient(to bottom, rgba(0,0,0,0.5), transparent 45%)' }}
-            />
-            <div className="absolute top-4 left-4 sm:left-6 z-10">{ventryWordmark}</div>
-          </div>
-          <div className="h-[220px] sm:h-[300px] lg:h-[400px]" />
-        </>
-      ) : (
-        <div
-          className="relative"
-          style={{
-            // Normal, static top banner — it scrolls away with the rest of
-            // the page like any other content. An earlier version pinned this
-            // with position:fixed so it stayed put while content scrolled
-            // over it, but that made the banner read as a page background:
-            // once you scrolled past the actual page content, the still-fixed
-            // image kept showing through the gap at the bottom/edges. A plain
-            // in-flow block avoids that entirely.
-            height: BANNER_HEIGHT,
-          }}
-        >
-          {event.banner_url ? (
-            // object-contain looked "off" in practice: most organiser banners
-            // are portrait flyers, and letterboxing a tall image inside this
-            // short, full-bleed, wide strip leaves it a tiny sliver surrounded
-            // by dead space on anything wider than a phone. object-cover with
-            // a top-biased crop instead fills the strip cleanly on every
-            // screen size and keeps the part of the flyer that actually
-            // carries the title (almost always near the top).
-            <Image
-              src={event.banner_url}
-              alt={event.name}
-              fill
-              className="object-cover"
-              style={{ objectPosition: 'center top' }}
-              sizes="100vw"
-              priority
-            />
-          ) : (
-            <div className={`w-full h-full bg-gradient-to-br ${event.bannerColor} flex items-center justify-center`}>
-              <p className="text-6xl opacity-20" style={{ color: '#fff', fontFamily: 'var(--font-syne), sans-serif' }}>{event.category[0]}</p>
-            </div>
-          )}
-          <div
-            className="absolute inset-x-0 top-0 h-24 pointer-events-none"
-            style={{ background: 'linear-gradient(to bottom, rgba(0,0,0,0.55), transparent)' }}
+      {/* Persistent masthead, pinned to the viewport for the entire page,
+          hero through footer. Page content below is normal in-flow and
+          scrolls independently underneath it (the spacer div right after
+          this block reserves its height). z-20 here is deliberately HIGHER
+          than the content wrapper's z-index below: as the page scrolls,
+          content moves up into this banner's screen region, and it must
+          paint BEHIND the fixed banner (hidden under it), not in front of
+          it — the reverse ordering silently let scrolled content cover the
+          banner instead of the banner staying on top. The outer min-h-dvh
+          on this component's root ensures the document is never shorter
+          than one screen, so there's never empty space below real content
+          where this fixed banner could "show through" on a short page — the
+          failure mode that sank an earlier fixed-position attempt here. */}
+      <div className="fixed inset-x-0 top-0 z-20 w-full overflow-hidden h-[220px] sm:h-[300px] lg:h-[400px]">
+        {bannerSrc ? (
+          <Image
+            src={bannerSrc}
+            alt={event.name}
+            fill
+            className="object-cover"
+            style={isFlyerFallback ? { objectPosition: 'center top' } : undefined}
+            sizes="100vw"
+            priority
           />
-          <div className="absolute top-4 left-4 sm:left-6 z-10">{ventryWordmark}</div>
-        </div>
-      )}
+        ) : (
+          <div className={`w-full h-full bg-gradient-to-br ${event.bannerColor} flex items-center justify-center`}>
+            <p className="text-6xl opacity-20" style={{ color: '#fff', fontFamily: 'var(--font-syne), sans-serif' }}>{event.category[0]}</p>
+          </div>
+        )}
+        <div
+          className="absolute inset-0 pointer-events-none"
+          style={{ background: 'linear-gradient(to bottom, rgba(0,0,0,0.5), transparent 45%)' }}
+        />
+        <div className="absolute top-4 left-4 sm:left-6 z-10">{ventryWordmark}</div>
+      </div>
+      <div className="h-[220px] sm:h-[300px] lg:h-[400px]" />
 
       <div
         className="max-w-7xl mx-auto px-6 py-8 relative z-0"
