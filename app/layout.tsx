@@ -5,6 +5,7 @@ import './globals.css';
 import { ThemeProvider } from '@/components/layout/ThemeProvider';
 import { ToastProvider } from '@/components/ui/Toast';
 import { AffiliateAttributionCapture } from '@/components/AffiliateAttributionCapture';
+import { SupportChat } from '@/components/support/SupportChat';
 
 const syne = Syne({
   subsets: ['latin'],
@@ -79,6 +80,7 @@ export default function RootLayout({ children }: { children: React.ReactNode }) 
       <body>
         <ThemeProvider><ToastProvider>{children}</ToastProvider></ThemeProvider>
         <AffiliateAttributionCapture />
+        <SupportChat />
         <Analytics />
       </body>
     </html>

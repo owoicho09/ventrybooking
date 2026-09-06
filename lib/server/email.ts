@@ -431,6 +431,36 @@ export async function sendRefundConfirmationEmail(to: string, ticketId: string, 
   });
 }
 
+export async function sendComplaintFiledEmail(to: string, reference: string, eventName: string) {
+  await sendEmail({
+    to,
+    subject: `We've received your complaint — ${reference}`,
+    html: emailShell(`
+      <h1 style="color:#a855f7;font-size:22px;margin:0 0 12px;">We're on it</h1>
+      <p style="color:#f1f0ff;">Your complaint about <strong>${esc(eventName)}</strong> has been passed to our support team.</p>
+      <p style="color:#f1f0ff;">Reference code: <span class="mono">${reference}</span></p>
+      <p style="color:#9ca3af;font-size:13px;">Keep this code — you can quote it any time to check on your complaint's status.</p>
+    `),
+    purpose: 'complaint_filed',
+  });
+}
+
+export async function sendComplaintStatusEmail(to: string, reference: string, status: string, eventName: string) {
+  const label = status === 'investigating' ? 'is being looked into'
+    : status === 'resolved' ? 'has been resolved'
+    : status === 'rejected' ? 'was reviewed and could not be approved'
+    : status;
+  await sendEmail({
+    to,
+    subject: `Update on your complaint — ${reference}`,
+    html: emailShell(`
+      <h1 style="color:#a855f7;font-size:22px;margin:0 0 12px;">Complaint update</h1>
+      <p style="color:#f1f0ff;">Your complaint about <strong>${esc(eventName)}</strong> (${reference}) ${label}.</p>
+    `),
+    purpose: 'complaint_status',
+  });
+}
+
 export async function sendPayoutReleasedEmail(params: {
   to: string;
   organizerName: string;

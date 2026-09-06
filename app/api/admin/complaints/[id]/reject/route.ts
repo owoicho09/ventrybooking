@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { getAuthUser } from '@/lib/server/auth';
 import { getServerSupabase } from '@/lib/supabase/server';
+import { sendComplaintStatusEmail } from '@/lib/server/email';
 
 export async function POST(
   req: NextRequest,
@@ -16,12 +17,20 @@ export async function POST(
     const { notes } = await req.json();
 
     const db = getServerSupabase();
+    const { data: complaint } = await db.from('complaints').select('buyer_email, event_name').eq('id', id).maybeSingle();
+
     const { error } = await db
       .from('complaints')
       .update({ status: 'rejected', notes: notes || '' })
       .eq('id', id);
 
     if (error) throw error;
+
+    if (complaint?.buyer_email && complaint.buyer_email !== 'unknown@ventrybooking.com') {
+      sendComplaintStatusEmail(complaint.buyer_email, id, 'rejected', complaint.event_name || '')
+        .catch(err => console.error('sendComplaintStatusEmail error', err));
+    }
+
     return NextResponse.json({ success: true });
   } catch (err) {
     console.error('reject complaint error', err);

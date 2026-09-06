@@ -1,6 +1,5 @@
 import { NextRequest, NextResponse } from 'next/server';
-import { getServerSupabase } from '@/lib/supabase/server';
-import { sendTicketEmail } from '@/lib/server/email';
+import { resendTicketByReference } from '@/lib/server/ticket';
 
 export async function POST(
   req: NextRequest,
@@ -10,66 +9,10 @@ export async function POST(
     const { id } = await params;
     const { email } = await req.json();
 
-    const db = getServerSupabase();
-
-    // Fetch the requested ticket to verify the email address and get the reference
-    const { data: anchor, error } = await db
-      .from('tickets')
-      .select(`
-        id, buyer_name, buyer_email, paystack_reference, total_paid,
-        event:events!tickets_event_id_fkey(event_name, date, venue, event_mode, banner_url),
-        tier:ticket_tiers!tickets_tier_id_fkey(name)
-      `)
-      .eq('id', id)
-      .ilike('buyer_email', (email || '').trim())
-      .maybeSingle();
-
-    if (error) {
-      console.error('POST /api/tickets/[id]/resend error:', error);
-      return NextResponse.json({ error: 'Failed to find ticket' }, { status: 500 });
+    const result = await resendTicketByReference(id, (email || '').trim());
+    if (!result.ok) {
+      return NextResponse.json({ error: result.reason }, { status: 404 });
     }
-    if (!anchor) {
-      return NextResponse.json({ error: 'Ticket not found or email mismatch' }, { status: 404 });
-    }
-
-    type EvRow   = { event_name: string; date: string; venue: string; event_mode?: 'physical' | 'online'; banner_url: string | null };
-    type TierRow = { name: string };
-    const evRaw   = anchor.event   as EvRow[]   | EvRow   | null | undefined;
-    const tierRaw = anchor.tier    as TierRow[] | TierRow | null | undefined;
-    const ev   = (Array.isArray(evRaw)   ? evRaw[0]   : evRaw)   ?? null;
-    const anchorTier = (Array.isArray(tierRaw) ? tierRaw[0] : tierRaw) ?? null;
-
-    // Fetch all tickets that belong to the same Paystack transaction so the
-    // resent email contains every QR code the buyer paid for — each with its
-    // own tier name, since one order can now span multiple ticket tiers.
-    const { data: siblings } = await db
-      .from('tickets')
-      .select('id, refund_code, total_paid, tier:ticket_tiers!tickets_tier_id_fkey(name)')
-      .eq('paystack_reference', anchor.paystack_reference)
-      .order('purchased_at', { ascending: true });
-
-    const tickets = (siblings && siblings.length > 0 ? siblings : [{ id: anchor.id, refund_code: anchor.id, total_paid: anchor.total_paid, tier: anchorTier }])
-      .map(t => {
-        const tRaw = t.tier as TierRow[] | TierRow | null | undefined;
-        const tierName = ((Array.isArray(tRaw) ? tRaw[0] : tRaw) ?? anchorTier)?.name || '';
-        return { ticketId: t.id, refundCode: t.refund_code, tierName };
-      });
-
-    const totalPaid = (siblings || []).reduce((s, t) => s + (t.total_paid ?? 0), 0) || anchor.total_paid;
-
-    await sendTicketEmail({
-      to:          anchor.buyer_email,
-      buyerName:   anchor.buyer_name || '',
-      tickets,
-      paystackRef: anchor.paystack_reference,
-      eventName:   ev?.event_name || '',
-      eventDate:   ev?.date || '',
-      eventVenue:  ev?.venue || '',
-      eventMode:   ev?.event_mode,
-      totalPaid,
-      bannerUrl:   ev?.banner_url ?? null,
-    });
-
     return NextResponse.json({ success: true });
   } catch (err) {
     console.error('POST /api/tickets/[id]/resend error:', err);

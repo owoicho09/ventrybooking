@@ -318,3 +318,75 @@ async function upsertPayout(
     p_net:            net,
   });
 }
+
+/**
+ * Resends the ticket confirmation email for one ticket (and every sibling
+ * ticket from the same Paystack transaction) to the buyer_email on file.
+ * `email` must match (case-insensitive) the ticket's buyer_email — this is
+ * the shared body behind the buyer-facing resend endpoint and the support
+ * agent's resend_ticket_email tool, so both enforce the same check.
+ */
+export async function resendTicketByReference(
+  ticketId: string,
+  email: string,
+): Promise<{ ok: true } | { ok: false; reason: string }> {
+  const db = getServerSupabase();
+
+  const { data: anchor, error } = await db
+    .from('tickets')
+    .select(`
+      id, buyer_name, buyer_email, paystack_reference, total_paid,
+      event:events!tickets_event_id_fkey(event_name, date, venue, event_mode, banner_url),
+      tier:ticket_tiers!tickets_tier_id_fkey(name)
+    `)
+    .eq('id', ticketId)
+    .ilike('buyer_email', email.trim())
+    .maybeSingle();
+
+  if (error) {
+    console.error('resendTicketByReference error:', error);
+    return { ok: false, reason: 'Failed to find ticket' };
+  }
+  if (!anchor) {
+    return { ok: false, reason: 'Ticket not found or email mismatch' };
+  }
+
+  type EvRow   = { event_name: string; date: string; venue: string; event_mode?: 'physical' | 'online'; banner_url: string | null };
+  type TierRow = { name: string };
+  const evRaw   = anchor.event as EvRow[]   | EvRow   | null | undefined;
+  const tierRaw = anchor.tier  as TierRow[] | TierRow | null | undefined;
+  const ev         = (Array.isArray(evRaw)   ? evRaw[0]   : evRaw)   ?? null;
+  const anchorTier = (Array.isArray(tierRaw) ? tierRaw[0] : tierRaw) ?? null;
+
+  // Fetch all tickets that belong to the same Paystack transaction so the
+  // resent email contains every QR code the buyer paid for.
+  const { data: siblings } = await db
+    .from('tickets')
+    .select('id, refund_code, total_paid, tier:ticket_tiers!tickets_tier_id_fkey(name)')
+    .eq('paystack_reference', anchor.paystack_reference)
+    .order('purchased_at', { ascending: true });
+
+  const tickets = (siblings && siblings.length > 0 ? siblings : [{ id: anchor.id, refund_code: anchor.id, total_paid: anchor.total_paid, tier: anchorTier }])
+    .map(t => {
+      const tRaw = t.tier as TierRow[] | TierRow | null | undefined;
+      const tierName = ((Array.isArray(tRaw) ? tRaw[0] : tRaw) ?? anchorTier)?.name || '';
+      return { ticketId: t.id, refundCode: t.refund_code, tierName };
+    });
+
+  const totalPaid = (siblings || []).reduce((s, t) => s + (t.total_paid ?? 0), 0) || anchor.total_paid;
+
+  await sendTicketEmail({
+    to:          anchor.buyer_email,
+    buyerName:   anchor.buyer_name || '',
+    tickets,
+    paystackRef: anchor.paystack_reference,
+    eventName:   ev?.event_name || '',
+    eventDate:   ev?.date || '',
+    eventVenue:  ev?.venue || '',
+    eventMode:   ev?.event_mode,
+    totalPaid,
+    bannerUrl:   ev?.banner_url ?? null,
+  });
+
+  return { ok: true };
+}
