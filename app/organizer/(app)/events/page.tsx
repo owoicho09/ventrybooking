@@ -70,7 +70,7 @@ export default function OrganizerEventsPage() {
   const [platformFeeRate, setPlatformFeeRate] = useState(PLATFORM_FEE_RATE);
 
   useEffect(() => {
-    fetch('/api/organizer/events')
+    fetch('/api/organizer/events', { cache: 'no-store' })
       .then(r => r.json())
       .then(d => {
         if (d.success) {

@@ -46,7 +46,10 @@ export async function GET(req: NextRequest) {
     totalSold: ((ev.tiers as RawTier[]) ?? []).reduce((sum, t) => sum + (t.sold ?? 0), 0),
   }));
 
-  return NextResponse.json({ success: true, data: mapped, platformFeeRate: org?.platform_fee_rate ?? PLATFORM_FEE_RATE });
+  return NextResponse.json(
+    { success: true, data: mapped, platformFeeRate: org?.platform_fee_rate ?? PLATFORM_FEE_RATE },
+    { headers: { 'Cache-Control': 'no-store' } },
+  );
 }
 
 export async function POST(req: NextRequest) {

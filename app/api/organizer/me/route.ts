@@ -22,5 +22,8 @@ export async function GET() {
   }
   if (!data) return NextResponse.json({ error: 'User not found' }, { status: 404 });
   const counts = await getEventsHostedCounts(db, [data.id]);
-  return NextResponse.json({ success: true, data: { ...data, events_hosted: counts[data.id] ?? 0 } });
+  return NextResponse.json(
+    { success: true, data: { ...data, events_hosted: counts[data.id] ?? 0 } },
+    { headers: { 'Cache-Control': 'no-store' } },
+  );
 }

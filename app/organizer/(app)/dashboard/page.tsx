@@ -29,9 +29,9 @@ export default function OrganizerDashboardPage() {
 
   useEffect(() => {
     Promise.all([
-      fetch('/api/organizer/stats').then(r => r.json()),
-      fetch('/api/organizer/events').then(r => r.json()),
-      fetch('/api/organizer/me').then(r => r.json()),
+      fetch('/api/organizer/stats', { cache: 'no-store' }).then(r => r.json()),
+      fetch('/api/organizer/events', { cache: 'no-store' }).then(r => r.json()),
+      fetch('/api/organizer/me', { cache: 'no-store' }).then(r => r.json()),
     ]).then(([statsRes, eventsRes, meRes]) => {
       if (statsRes.success) setStats(statsRes.data);
       if (eventsRes.success) setEvents(eventsRes.data.slice(0, 5));

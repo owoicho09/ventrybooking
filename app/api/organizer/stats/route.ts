@@ -27,8 +27,8 @@ export async function GET() {
   const activeEvents    = events.filter(e => e.status === 'approved').length;
   const payoutDue       = payouts.filter(p => p.status === 'pending').reduce((s, p) => s + p.net, 0);
 
-  return NextResponse.json({
-    success: true,
-    data: { ticketsSold, revenueInEscrow, activeEvents, payoutDue },
-  });
+  return NextResponse.json(
+    { success: true, data: { ticketsSold, revenueInEscrow, activeEvents, payoutDue } },
+    { headers: { 'Cache-Control': 'no-store' } },
+  );
 }
