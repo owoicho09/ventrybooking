@@ -75,7 +75,7 @@ export default async function HomePage() {
     .from('events')
     .select(`
       id, slug, event_name, category, description, date, time, event_mode, venue, address, city, landmark, location_hidden,
-      status, total_sold, banner_color, banner_url,
+      status, total_sold, banner_color, banner_url, header_banner_url,
       organizer:users!events_organizer_id_fkey(id, name, tier, verified, member_since, events_hosted, handle),
       tiers:ticket_tiers(id, name, price, available, sold)
     `)
@@ -127,6 +127,7 @@ export default async function HomePage() {
       status:      row.status,
       bannerColor: row.banner_color,
       banner_url:  row.banner_url ?? null,
+      headerBannerUrl: row.header_banner_url ?? null,
       totalSold:   row.total_sold,
       badge,
       organizer,

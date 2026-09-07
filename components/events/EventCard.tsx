@@ -31,6 +31,10 @@ const tierColors: Record<string, string> = {
 
 export function EventCard({ event, variant = 'default' }: EventCardProps) {
   const compact = variant === 'compact';
+  // Cards always prefer the flyer (banner_url) — the header banner is for
+  // the event page masthead only — and fall back to it purely so events
+  // without a flyer show something real instead of the gradient placeholder.
+  const cardImage = event.banner_url || event.headerBannerUrl || null;
   const minPrice  = event.tiers.length ? Math.min(...event.tiers.map((t) => t.price)) : 0;
   const freeTier  = minPrice === 0 ? (event.tiers.find(t => t.price === 0) ?? null) : null;
   const locationText = event.event_mode === 'online'
@@ -58,9 +62,9 @@ export function EventCard({ event, variant = 'default' }: EventCardProps) {
 
       {/* Banner */}
       <div className={`relative ${compact ? 'h-24' : 'h-40'} bg-gradient-to-br ${event.bannerColor} flex items-center justify-center overflow-hidden`}>
-        {event.banner_url ? (
+        {cardImage ? (
           <Image
-            src={event.banner_url}
+            src={cardImage}
             alt={event.name}
             fill
             className="object-cover"

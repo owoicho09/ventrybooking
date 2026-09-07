@@ -33,6 +33,7 @@ function shapeEvent(row: any, organizer: unknown) {
     status: row.status,
     bannerColor: row.banner_color,
     banner_url: row.banner_url ?? null,
+    headerBannerUrl: row.header_banner_url ?? null,
     totalSold: row.total_sold,
     badge: computeBadge(row.tiers ?? []),
     organizer,
@@ -42,7 +43,7 @@ function shapeEvent(row: any, organizer: unknown) {
 
 const EVENT_SELECT = `
   id, slug, event_name, category, description, date, time, event_mode, venue, address, city, landmark, location_hidden,
-  status, total_sold, banner_color, banner_url,
+  status, total_sold, banner_color, banner_url, header_banner_url,
   tiers:ticket_tiers(id, name, price, available, sold)
 `;
 
