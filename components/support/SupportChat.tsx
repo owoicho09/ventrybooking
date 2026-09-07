@@ -130,15 +130,27 @@ export function SupportChat() {
   return (
     <>
       {open && (
-        <div
-          className="fixed inset-0 z-40 flex flex-col overflow-hidden rounded-t-2xl sm:inset-auto sm:bottom-24 sm:right-4 sm:h-[560px] sm:w-[380px] sm:rounded-2xl sm:border sm:shadow-2xl transition-all duration-200 ease-out"
-          style={{
-            backgroundColor: 'var(--color-surface)',
-            borderColor: 'var(--color-border)',
-            opacity: visible ? 1 : 0,
-            transform: visible ? 'translateY(0) scale(1)' : 'translateY(16px) scale(0.98)',
-          }}
-        >
+        <>
+          {/* Dim backdrop, mobile only — tapping it is an obvious, easy way
+              to dismiss, matching how a modal is expected to behave. Desktop
+              keeps the non-blocking floating-widget feel (no backdrop) since
+              the panel there is small and clearly off to one side. */}
+          <div
+            className="fixed inset-0 z-30 sm:hidden transition-opacity duration-200"
+            style={{ backgroundColor: 'rgba(0,0,0,0.5)', opacity: visible ? 1 : 0 }}
+            onClick={() => setOpen(false)}
+          />
+          <div
+            className="fixed z-40 flex flex-col overflow-hidden rounded-2xl border shadow-2xl inset-x-3 bottom-3 sm:inset-auto sm:bottom-24 sm:right-4 sm:w-[380px] transition-all duration-200 ease-out"
+            style={{
+              backgroundColor: 'var(--color-surface)',
+              borderColor: 'var(--color-border)',
+              height: 'min(600px, calc(100dvh - 5.5rem))',
+              maxHeight: 560,
+              opacity: visible ? 1 : 0,
+              transform: visible ? 'translateY(0) scale(1)' : 'translateY(16px) scale(0.98)',
+            }}
+          >
           <div
             className="flex items-center justify-between px-4 py-3 border-b flex-shrink-0"
             style={{ borderColor: 'var(--color-border)', backgroundColor: 'var(--color-purple)', paddingTop: 'max(0.75rem, env(safe-area-inset-top))' }}
@@ -243,16 +255,18 @@ export function SupportChat() {
               <Send size={16} />
             </button>
           </form>
-        </div>
+          </div>
+        </>
       )}
 
       {/* On desktop the panel leaves a gap above this button (sm:bottom-24),
           so it can stay visible and toggle to an X even while open — the
           same bottom-right control people expect to tap to close a chat
-          widget, not just the small header X. On mobile the panel is a
-          full-screen sheet with no such gap (this would sit on top of the
-          input bar), so it's hidden there once open and the header close
-          button (made larger below) is the one true control instead. */}
+          widget, not just the small header X. On mobile the popup now sits
+          inset from the edges with a backdrop instead of the corner this
+          button occupies, so it's hidden there once open (no room to share)
+          and the backdrop tap / header close button are the mobile controls
+          instead. */}
       <button
         onClick={() => setOpen(o => !o)}
         aria-label={open ? 'Close support chat' : 'Support chat'}
