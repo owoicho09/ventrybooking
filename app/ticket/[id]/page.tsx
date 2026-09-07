@@ -1,6 +1,6 @@
 'use client';
 
-import { useEffect, useState, Suspense } from 'react';
+import { useEffect, useState, useRef, Suspense } from 'react';
 import { useParams, useSearchParams } from 'next/navigation';
 import Link from 'next/link';
 import { Printer, Mail, AlertTriangle, Sparkles, X } from 'lucide-react';
@@ -10,7 +10,9 @@ import { Button } from '@/components/ui/Button';
 
 function TicketContent() {
   const { id } = useParams<{ id: string }>();
-  const isNew = useSearchParams().get('new') === '1';
+  const searchParams = useSearchParams();
+  const isNew = searchParams.get('new') === '1';
+  const autoPrint = searchParams.get('autoprint') === '1';
   const [ticket,    setTicket]    = useState<Parameters<typeof TicketCard>[0]['ticket'] | null>(null);
   const [txRef,     setTxRef]     = useState<string>('');
   const [txCount,   setTxCount]   = useState(1);
@@ -20,6 +22,7 @@ function TicketContent() {
   const [resendMsg, setResendMsg] = useState('');
   const [claimUrl,  setClaimUrl]  = useState('');
   const [dismissedSave, setDismissedSave] = useState(false);
+  const printedRef = useRef(false);
 
   useEffect(() => {
     if (!isNew || !id) return;
@@ -71,6 +74,17 @@ function TicketContent() {
       .catch(() => setNotFound(true))
       .finally(() => setLoading(false));
   }, [id]);
+
+  // "Download" from the buyer profile links here with ?autoprint=1 so the
+  // browser's print dialog (Save as PDF) opens immediately once the ticket
+  // — QR code included — has actually rendered, instead of requiring a
+  // second click on "Print / Save PDF" below.
+  useEffect(() => {
+    if (!autoPrint || !ticket || printedRef.current) return;
+    printedRef.current = true;
+    const t = setTimeout(() => window.print(), 400);
+    return () => clearTimeout(t);
+  }, [autoPrint, ticket]);
 
   const handleResend = async () => {
     if (!ticket || resending) return;

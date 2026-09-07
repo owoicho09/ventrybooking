@@ -1,9 +1,26 @@
 'use client';
 
 import { useEffect, useState } from 'react';
+import Link from 'next/link';
+import { Download } from 'lucide-react';
 import { TicketCard } from '@/components/tickets/TicketCard';
 import { buildTicket } from '@/lib/buildTicket';
 import type { Ticket } from '@/types';
+
+function TicketWithActions({ ticket }: { ticket: Ticket }) {
+  return (
+    <div className="flex flex-col gap-2">
+      <TicketCard ticket={ticket} />
+      <Link
+        href={`/ticket/${ticket.id}?autoprint=1`}
+        className="self-end flex items-center gap-1.5 text-sm font-medium hover:underline"
+        style={{ color: 'var(--color-purple-light)' }}
+      >
+        <Download size={14} />Download ticket
+      </Link>
+    </div>
+  );
+}
 
 export default function MyTicketsPage() {
   const [tickets, setTickets] = useState<Ticket[] | null>(null);
@@ -41,7 +58,7 @@ export default function MyTicketsPage() {
           <p className="text-sm" style={{ color: 'var(--color-text-dim)' }}>No upcoming events.</p>
         ) : (
           <div className="flex flex-col gap-4">
-            {upcoming.map(t => <TicketCard key={t.id} ticket={t} />)}
+            {upcoming.map(t => <TicketWithActions key={t.id} ticket={t} />)}
           </div>
         )}
       </section>
@@ -54,7 +71,7 @@ export default function MyTicketsPage() {
           <p className="text-sm" style={{ color: 'var(--color-text-dim)' }}>No past events yet.</p>
         ) : (
           <div className="flex flex-col gap-4">
-            {past.map(t => <TicketCard key={t.id} ticket={t} />)}
+            {past.map(t => <TicketWithActions key={t.id} ticket={t} />)}
           </div>
         )}
       </section>
