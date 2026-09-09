@@ -16,7 +16,7 @@ export async function GET(req: NextRequest) {
     const tx = await verifyTransaction(reference);
 
     if (tx?.status === 'success') {
-      const { metadata, amount, customer } = tx;
+      const { metadata, amount, customer, paid_at: paidAt } = tx;
       const { eventId, items, buyerEmail, buyerName, purchasedByEmail } = metadata || {};
 
       // See webhook/route.ts — Paystack's `amount` can include a customer-borne
@@ -37,6 +37,7 @@ export async function GET(req: NextRequest) {
           buyerName,
           customerEmail: customer?.email,
           purchasedByEmail,
+          paidAt,
         });
 
         if (ticketId) {

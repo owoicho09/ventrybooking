@@ -49,6 +49,7 @@ async function recoverOrder(order: PendingOrderRow, alreadyClaimed: boolean): Pr
     customerEmail:     result.customer?.email,
     marketingConsent:  order.marketing_consent,
     ventryMarketingConsent: order.ventry_marketing_consent,
+    paidAt:            result.paid_at,
   };
 
   return alreadyClaimed
@@ -69,11 +70,15 @@ export async function reconcilePendingOrders() {
   const db = getServerSupabase();
   const staleBefore = new Date(Date.now() - STALE_MINUTES * 60 * 1000).toISOString();
 
+  // Oldest-stale-first: if checkout volume ever outpaces what one sweep can
+  // verify, newest-first would let a constant trickle of new stale rows keep
+  // pushing the oldest ones out of every 200-row window indefinitely — which
+  // is exactly how the 2026-09-08 WildOut backlog went unrecovered for weeks.
   const { data: pending } = await db
     .from('pending_orders')
     .select('*')
     .lt('created_at', staleBefore)
-    .order('created_at', { ascending: false })
+    .order('created_at', { ascending: true })
     .limit(200);
 
   if (!pending || pending.length === 0) {
@@ -81,10 +86,19 @@ export async function reconcilePendingOrders() {
   }
 
   const references = pending.map(p => p.reference);
-  const [{ data: claimed }, { data: ticketed }] = await Promise.all([
+  const [{ data: claimed, error: claimedErr }, { data: ticketed, error: ticketedErr }] = await Promise.all([
     db.from('purchases').select('paystack_reference').in('paystack_reference', references),
     db.from('tickets').select('paystack_reference').in('paystack_reference', references),
   ]);
+  // A failed query here must NOT be treated as "nothing is claimed/ticketed
+  // yet" — createTicketFromClaimedPayment (used below for "stuck claim"
+  // references) re-checks for an existing ticket itself now, but bailing out
+  // of the whole sweep on a query error is still cheaper than reprocessing
+  // 200 references against Paystack for nothing.
+  if (claimedErr || ticketedErr) {
+    console.error('reconcilePendingOrders: claimed/ticketed lookup failed, aborting sweep', { claimedErr, ticketedErr });
+    return { checked: 0, recovered: [] as string[] };
+  }
   const claimedSet  = new Set((claimed  ?? []).map(c => c.paystack_reference));
   const ticketedSet = new Set((ticketed ?? []).map(t => t.paystack_reference));
 

@@ -25,6 +25,12 @@ export interface PaymentData {
    * their own — buyer_email (who the ticket belongs to) is untouched by
    * this, it just lets that buyer's own /account also surface the order. */
   purchasedByEmail?: string;
+  /** Paystack's `paid_at` for this transaction, when known. The ticket row
+   * is often created well after the charge actually completed — a delayed
+   * webhook, or reconcile.ts recovering a stuck checkout days later — so
+   * this is preferred over "now" for purchased_at wherever the caller has
+   * it, keeping the buyer-facing purchase time accurate to when they paid. */
+  paidAt?: string;
 }
 
 /**
@@ -79,11 +85,28 @@ export async function createTicketFromPayment(p: PaymentData): Promise<string | 
  * claim already exists — either because createTicketFromPayment just made it,
  * or because reconcilePendingOrders() is retrying a "stuck claim" (a prior
  * attempt claimed the reference then failed before any ticket was inserted).
- * Callers retrying a stuck claim must first confirm no ticket already exists
- * for the reference, since this function performs no idempotency check itself.
+ *
+ * Callers are expected to have already confirmed no ticket exists for this
+ * reference, but this re-checks it directly rather than trusting that: the
+ * 2026-09-08 incident showed reconcilePendingOrders()'s own exclusion check
+ * (querying `tickets` for already-recovered references) can silently come
+ * back empty — e.g. a transient query failure on a large `.in()` batch — and
+ * without a check here that reprocesses every "stuck claim" reference as if
+ * it were genuinely missing, duplicating tickets (and double-counting the
+ * organizer's payout and tier sold-count) for orders that had already been
+ * fulfilled days earlier.
  */
 export async function createTicketFromClaimedPayment(p: PaymentData): Promise<string | null> {
   const db = getServerSupabase();
+
+  const { data: existing } = await db
+    .from('tickets')
+    .select('id')
+    .eq('paystack_reference', p.reference)
+    .order('purchased_at', { ascending: true })
+    .limit(1)
+    .maybeSingle();
+  if (existing) return existing.id;
 
   const items = (p.items ?? []).filter(i => i.tierId && i.quantity > 0);
   if (items.length === 0) {
@@ -123,9 +146,17 @@ export async function createTicketFromClaimedPayment(p: PaymentData): Promise<st
     .maybeSingle();
 
   const email        = (p.buyerEmail || p.customerEmail || '').toLowerCase().trim();
-  const purchasedAt  = new Date().toISOString();
+  const purchasedAt  = p.paidAt || new Date().toISOString();
   const consent      = p.marketingConsent === true;
   const ventryConsent = p.ventryMarketingConsent === true;
+  // A stale checkout recovered by reconcile.ts can surface days or weeks after
+  // the event happened (see the 2026-09-08 WildOut incident: a 5-day gap in
+  // the recovery cron let ~130 paid-but-ticketless orders pile up, then one
+  // sweep created and emailed all of them at once for an event already over).
+  // Still record the ticket — the buyer did pay and may be owed a refund —
+  // but don't send them a "here's your ticket" email for an event they can
+  // no longer attend; flag it for admin follow-up instead.
+  const isPastEvent = new Date(`${eventRow.date}T${eventRow.time || '23:59:59'}`).getTime() < Date.now();
 
   // Flatten items into one row per individual ticket, each carrying its own
   // tier's subtotal/service fee. The processing fee is order-level (Paystack's
@@ -258,33 +289,45 @@ export async function createTicketFromClaimedPayment(p: PaymentData): Promise<st
     },
   ).catch(err => console.error('createTicketFromPayment: notify error', err));
 
-  try {
-    await sendTicketEmail({
-      to:          email,
-      buyerName:   p.buyerName || '',
-      tickets:     rows.map((r, i) => ({ ticketId: r.id, refundCode: refundCodes[i], tierName: units[i].tierName })),
-      paystackRef: p.reference,
-      eventName:   eventRow.event_name,
-      eventDate:   eventRow.date,
-      eventVenue:  eventRow.venue,
-      eventMode:   eventRow.event_mode,
-      subtotal:      subtotal,
-      serviceFee:    totalServiceFee,
-      processingFee: (p.totalPaidKobo / 100) - subtotal - totalServiceFee,
-      totalPaid:   p.totalPaidKobo / 100,
-      bannerUrl:   eventRow.banner_url,
-    });
-  } catch (err) {
-    console.error('createTicketFromPayment: email error (ticket created)', { ticketId: ticketIds[0], email, err });
+  if (isPastEvent) {
     notify(
       { type: 'admin' },
       {
-        notifType: 'email_failed',
-        title:     `Ticket email failed — ${eventRow.event_name}`,
-        body:      `${p.buyerName || email} (${email}) bought ${totalQty} ticket(s) but the confirmation email failed to send. Ticket: ${ticketIds[0]}. Resend it from the ticket's admin page.`,
+        notifType: 'past_event_recovery',
+        title:     `Recovered payment for a past event — ${eventRow.event_name}`,
+        body:      `${p.buyerName || email} (${email}) paid for ${totalQty} ticket(s) to "${eventRow.event_name}" (${eventRow.date}), but the charge was only recovered after the event already happened. No ticket email was sent — review for a refund. Ticket: ${ticketIds[0]}.`,
         link:      `/admin/buyers?search=${encodeURIComponent(email)}`,
       },
-    ).catch(notifyErr => console.error('createTicketFromPayment: notify-admin error', notifyErr));
+    ).catch(err => console.error('createTicketFromPayment: notify-admin error', err));
+  } else {
+    try {
+      await sendTicketEmail({
+        to:          email,
+        buyerName:   p.buyerName || '',
+        tickets:     rows.map((r, i) => ({ ticketId: r.id, refundCode: refundCodes[i], tierName: units[i].tierName })),
+        paystackRef: p.reference,
+        eventName:   eventRow.event_name,
+        eventDate:   eventRow.date,
+        eventVenue:  eventRow.venue,
+        eventMode:   eventRow.event_mode,
+        subtotal:      subtotal,
+        serviceFee:    totalServiceFee,
+        processingFee: (p.totalPaidKobo / 100) - subtotal - totalServiceFee,
+        totalPaid:   p.totalPaidKobo / 100,
+        bannerUrl:   eventRow.banner_url,
+      });
+    } catch (err) {
+      console.error('createTicketFromPayment: email error (ticket created)', { ticketId: ticketIds[0], email, err });
+      notify(
+        { type: 'admin' },
+        {
+          notifType: 'email_failed',
+          title:     `Ticket email failed — ${eventRow.event_name}`,
+          body:      `${p.buyerName || email} (${email}) bought ${totalQty} ticket(s) but the confirmation email failed to send. Ticket: ${ticketIds[0]}. Resend it from the ticket's admin page.`,
+          link:      `/admin/buyers?search=${encodeURIComponent(email)}`,
+        },
+      ).catch(notifyErr => console.error('createTicketFromPayment: notify-admin error', notifyErr));
+    }
   }
 
   return ticketIds[0];

@@ -111,6 +111,7 @@ export async function POST(req: NextRequest) {
         ventryMarketingConsent,
         refCode,
         purchasedByEmail,
+        paidAt: verified.paid_at,
       });
     } catch (err) {
       console.error('Webhook: createTicketFromPayment error', err);
