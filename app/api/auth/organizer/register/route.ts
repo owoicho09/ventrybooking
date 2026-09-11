@@ -9,10 +9,13 @@ import { notify } from '@/lib/server/notify';
 
 export async function POST(req: NextRequest) {
   try {
-    const { name, email, phone, password, confirmPassword, referralCode } = await req.json();
+    const { name, email, phone, password, confirmPassword, referralCode, termsVersion } = await req.json();
 
     if (!name || !email || !phone || !password) {
       return NextResponse.json({ error: 'All fields are required' }, { status: 400 });
+    }
+    if (!termsVersion) {
+      return NextResponse.json({ error: 'You must agree to the Organiser Terms' }, { status: 400 });
     }
     if (password !== confirmPassword) {
       return NextResponse.json({ error: 'Passwords do not match' }, { status: 400 });
@@ -46,6 +49,8 @@ export async function POST(req: NextRequest) {
         email_notifications: true,
         sms_alerts: false,
         created_at: now,
+        terms_version: String(termsVersion),
+        terms_accepted_at: now,
       })
       .select('id, email, name')
       .single();

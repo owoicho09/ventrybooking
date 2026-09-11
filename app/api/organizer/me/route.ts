@@ -12,7 +12,7 @@ export async function GET() {
   const db = getServerSupabase();
   const { data, error } = await db
     .from('users')
-    .select('id, name, email, phone, tier, verified, kyc_status, member_since, events_hosted, bio, bank_name, account_number, account_name, email_notifications, sms_alerts, handle, avatar_url, cover_image_url, socials')
+    .select('id, name, email, phone, tier, verified, kyc_status, member_since, events_hosted, bio, bank_name, account_number, account_name, legal_name, email_notifications, sms_alerts, handle, avatar_url, cover_image_url, socials')
     .eq('id', user.sub)
     .maybeSingle();
 

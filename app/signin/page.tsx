@@ -3,11 +3,12 @@
 import { useState, useRef, useEffect } from 'react';
 import { useRouter } from 'next/navigation';
 import Link from 'next/link';
-import { LogIn, Mail, ShieldCheck, PartyPopper, User, ChevronRight } from 'lucide-react';
+import { LogIn, Mail, ShieldCheck, PartyPopper, User, ChevronRight, CheckCircle } from 'lucide-react';
 import { PublicNav } from '@/components/layout/PublicNav';
 import { Footer } from '@/components/layout/Footer';
 import { Input } from '@/components/ui/Input';
 import { Button } from '@/components/ui/Button';
+import { LEGAL_VERSIONS } from '@/lib/legalVersions';
 
 type Step = 'email' | 'otp' | 'name' | 'welcome';
 
@@ -16,6 +17,7 @@ export default function SignInPage() {
   const [step, setStep] = useState<Step>('email');
   const [email, setEmail] = useState('');
   const [firstName, setFirstName] = useState('');
+  const [agreed, setAgreed] = useState(false);
   const [digits, setDigits] = useState(['', '', '', '']);
   const [loading, setLoading] = useState(false);
   const [resending, setResending] = useState(false);
@@ -132,14 +134,14 @@ export default function SignInPage() {
 
   const handleSaveName = async (e: React.FormEvent) => {
     e.preventDefault();
-    if (!firstName.trim()) return;
+    if (!firstName.trim() || !agreed) return;
     setError('');
     setLoading(true);
     try {
       const res = await fetch('/api/buyer/profile', {
         method: 'PATCH',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ firstName: firstName.trim() }),
+        body: JSON.stringify({ firstName: firstName.trim(), termsVersion: LEGAL_VERSIONS.buyerTerms.version }),
       });
       const data = await res.json();
       if (!res.ok || !data.success) {
@@ -279,7 +281,24 @@ export default function SignInPage() {
                     autoFocus
                     required
                   />
-                  <Button type="submit" size="lg" fullWidth disabled={!firstName.trim() || loading}>
+                  <label className="flex items-start gap-3 cursor-pointer">
+                    <div className="relative mt-0.5">
+                      <input type="checkbox" checked={agreed} onChange={(e) => setAgreed(e.target.checked)} className="sr-only" />
+                      <div className="w-4 h-4 rounded border-2 flex items-center justify-center transition-colors"
+                        style={{ backgroundColor: agreed ? 'var(--color-purple)' : 'transparent', borderColor: agreed ? 'var(--color-purple)' : 'var(--color-border)' }}>
+                        {agreed && <CheckCircle size={10} color="#fff" />}
+                      </div>
+                    </div>
+                    <span className="text-sm" style={{ color: 'var(--color-text-muted)' }}>
+                      I agree to the{' '}
+                      <Link href="/terms/buyers" style={{ color: 'var(--color-purple-light)' }} className="hover:underline">Buyer Terms</Link>
+                      {', '}
+                      <Link href="/refund-policy" style={{ color: 'var(--color-purple-light)' }} className="hover:underline">Refund Policy</Link>
+                      {' and '}
+                      <Link href="/privacy" style={{ color: 'var(--color-purple-light)' }} className="hover:underline">Privacy Policy</Link>
+                    </span>
+                  </label>
+                  <Button type="submit" size="lg" fullWidth disabled={!firstName.trim() || !agreed || loading}>
                     {loading ? 'Saving...' : 'Continue'}
                   </Button>
                 </form>

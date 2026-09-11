@@ -8,14 +8,20 @@ export async function PATCH(req: NextRequest) {
   const buyer = await getBuyerAuth();
   if (!buyer) return NextResponse.json({ error: 'Not signed in' }, { status: 401 });
 
-  const { firstName } = await req.json();
+  const { firstName, termsVersion } = await req.json();
   const trimmed = String(firstName ?? '').trim().slice(0, 60);
   if (!trimmed) return NextResponse.json({ error: 'First name is required' }, { status: 400 });
+  if (!termsVersion) return NextResponse.json({ error: 'You must agree to the Buyer Terms' }, { status: 400 });
 
   const db = getServerSupabase();
   const { error } = await db
     .from('buyer_profiles')
-    .upsert({ email: buyer.email, first_name: trimmed }, { onConflict: 'email' });
+    .upsert({
+      email: buyer.email,
+      first_name: trimmed,
+      terms_version: String(termsVersion),
+      terms_accepted_at: new Date().toISOString(),
+    }, { onConflict: 'email' });
   if (error) {
     console.error('PATCH /api/buyer/profile error', error);
     return NextResponse.json({ error: 'Failed to save name' }, { status: 500 });

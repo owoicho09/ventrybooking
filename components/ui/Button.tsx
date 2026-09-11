@@ -21,7 +21,7 @@ export const Button = forwardRef<HTMLButtonElement, ButtonProps>(
     const variantStyles: Record<string, React.CSSProperties> = {
       primary: {
         backgroundColor: 'var(--color-purple)',
-        color: '#fff',
+        color: 'var(--color-purple-text, #fff)',
       },
       outline: {
         backgroundColor: 'transparent',

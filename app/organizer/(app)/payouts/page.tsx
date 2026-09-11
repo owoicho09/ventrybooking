@@ -7,6 +7,7 @@ import { Button } from '@/components/ui/Button';
 import { Input } from '@/components/ui/Input';
 import { Table, Thead, Tbody, Th, Tr, Td } from '@/components/ui/Table';
 import { formatNGN, formatShortDate } from '@/lib/utils';
+import { NIGERIAN_BANKS } from '@/lib/banks';
 
 interface Payout { id: string; event_name: string; date: string; gross: number; fee: number; net: number; status: string; reference: string; }
 
@@ -23,7 +24,7 @@ export default function PayoutsPage() {
   const [payouts, setPayouts] = useState<Payout[]>([]);
   const [payoutDue, setPayoutDue] = useState(0);
   const [editingBank, setEditingBank] = useState(false);
-  const [bank, setBank] = useState({ bankName: '', accountNumber: '', accountName: '' });
+  const [bank, setBank] = useState({ bankName: '', accountNumber: '', accountName: '', legalName: '' });
   const [bankMsg, setBankMsg] = useState('');
   const [saving, setSaving] = useState(false);
 
@@ -35,7 +36,12 @@ export default function PayoutsPage() {
     ]).then(([p, s, m]) => {
       if (p.success) setPayouts(p.data);
       if (s.success) setPayoutDue(s.data.payoutDue);
-      if (m.success) setBank({ bankName: m.data.bank_name || '', accountNumber: m.data.account_number || '', accountName: m.data.account_name || '' });
+      if (m.success) setBank({
+        bankName: m.data.bank_name || '',
+        accountNumber: m.data.account_number || '',
+        accountName: m.data.account_name || '',
+        legalName: m.data.legal_name || '',
+      });
     }).catch(console.error);
   }, []);
 
@@ -112,13 +118,35 @@ export default function PayoutsPage() {
           <div className="flex flex-col gap-3">
             <div className="flex justify-between text-sm"><span style={{ color: 'var(--color-text-muted)' }}>Bank Name</span><span className="font-medium" style={{ color: 'var(--color-text)' }}>{bank.bankName || '—'}</span></div>
             <div className="flex justify-between text-sm"><span style={{ color: 'var(--color-text-muted)' }}>Account Number</span><span className="font-mono font-medium" style={{ color: 'var(--color-text)' }}>{bank.accountNumber ? `****${bank.accountNumber.slice(-4)}` : '—'}</span></div>
+            <div className="flex justify-between text-sm"><span style={{ color: 'var(--color-text-muted)' }}>Legal Name</span><span className="font-medium" style={{ color: 'var(--color-text)' }}>{bank.legalName || '—'}</span></div>
             {bank.accountNumber && <div className="flex items-center gap-2 mt-1"><CheckCircle size={14} style={{ color: 'var(--color-green)' }} /><span className="text-xs" style={{ color: 'var(--color-green)' }}>Verified account</span></div>}
           </div>
         ) : (
           <form onSubmit={saveBank} className="flex flex-col gap-4">
-            <Input label="Bank Name" value={bank.bankName} onChange={e => setBank(b => ({ ...b, bankName: e.target.value }))} placeholder="e.g. Zenith Bank" />
-            <Input label="Account Number" value={bank.accountNumber} onChange={e => setBank(b => ({ ...b, accountNumber: e.target.value }))} placeholder="10-digit account number" />
+            <div className="flex flex-col gap-1.5">
+              <label className="text-sm font-medium" style={{ color: 'var(--color-text)' }}>Bank Name</label>
+              <select
+                value={bank.bankName}
+                onChange={e => setBank(b => ({ ...b, bankName: e.target.value }))}
+                required
+                className="w-full rounded-lg border px-3 py-2.5 text-sm outline-none focus:border-[var(--color-purple)]"
+                style={{ backgroundColor: 'var(--color-surface-2)', borderColor: 'var(--color-border)', color: 'var(--color-text)' }}
+              >
+                <option value="" disabled>Select your bank</option>
+                {NIGERIAN_BANKS.map(b => (
+                  <option key={b.code} value={b.name}>{b.name}</option>
+                ))}
+              </select>
+            </div>
+            <Input label="Account Number" value={bank.accountNumber} onChange={e => setBank(b => ({ ...b, accountNumber: e.target.value }))} placeholder="10-digit account number" maxLength={10} />
             <Input label="Account Name" value={bank.accountName} onChange={e => setBank(b => ({ ...b, accountName: e.target.value }))} placeholder="Name as on bank account" />
+            <Input
+              label="Legal Name"
+              value={bank.legalName}
+              onChange={e => setBank(b => ({ ...b, legalName: e.target.value }))}
+              placeholder="Your legal name exactly as it appears on your bank account"
+              helper="This is never shown to buyers — your display name is what they see. It's used to match your settlement bank account."
+            />
             {bankMsg && <p className="text-xs" style={{ color: bankMsg.includes('saved') ? 'var(--color-green)' : 'var(--color-red)' }}>{bankMsg}</p>}
             <Button type="submit" disabled={saving}>{saving ? 'Saving...' : 'Save Bank Details'}</Button>
           </form>

@@ -17,6 +17,13 @@ import { SocialLinks } from '@/components/organizer/SocialLinks';
 import { FollowButton } from '@/components/organizer/FollowButton';
 import { useToast } from '@/components/ui/Toast';
 import { useBuyerAuth } from '@/lib/hooks/useBuyerAuth';
+import { useTheme } from '@/components/layout/ThemeProvider';
+import { getContrastText, accentForBackground } from '@/lib/accentColors';
+
+// The app's two fixed theme backgrounds (app/globals.css --color-bg) — not
+// user input, so safe to hardcode here for the contrast walk.
+const BG_DARK  = '#0a0a0f';
+const BG_LIGHT = '#f8f7ff';
 
 interface EventDetailContentProps {
   /** The event's slug (or, for the legacy /events/[id] shim, its UUID) — whatever was fetched to resolve this page. */
@@ -28,6 +35,7 @@ export function EventDetailContent({ identifier }: EventDetailContentProps) {
   const searchParams = useSearchParams();
   const { toast } = useToast();
   const { loggedIn: buyerLoggedIn } = useBuyerAuth();
+  const { theme } = useTheme();
   const [event, setEvent] = useState<Event | null>(null);
   const [loading, setLoading] = useState(true);
   const [quantities, setQuantities] = useState<Record<string, number>>({});
@@ -168,8 +176,20 @@ export function EventDetailContent({ identifier }: EventDetailContentProps) {
     </div>
   );
 
-  const accentStyle = event.accentColor
-    ? ({ '--color-purple': event.accentColor } as React.CSSProperties)
+  // Contrast safety is never left to the raw pick: the accent used for
+  // icons/borders/text is walked toward the active theme's background until
+  // it clears a safe floor (accentForBackground), and the button label
+  // colour is chosen from the accent's own luminance rather than assumed
+  // white (getContrastText) — a deliberately awful colour stays legible in
+  // both themes instead of just contrasting with a white button fill.
+  const safeAccent = event.accentColor
+    ? accentForBackground(event.accentColor, theme === 'light' ? BG_LIGHT : BG_DARK)
+    : null;
+  const accentStyle = safeAccent
+    ? ({
+        '--color-purple': safeAccent,
+        '--color-purple-text': getContrastText(safeAccent),
+      } as React.CSSProperties)
     : undefined;
 
   // Defined once, rendered twice via responsive display utilities below: inline
@@ -210,7 +230,7 @@ export function EventDetailContent({ identifier }: EventDetailContentProps) {
                 <div className="flex items-center justify-between mb-2">
                   <div>
                     <p className="font-medium text-sm" style={{ color: 'var(--color-text)' }}>{tier.name}</p>
-                    <p className="text-base font-bold" style={{ color: tier.price === 0 ? 'var(--color-green)' : 'var(--color-text)' }}>
+                    <p className="text-base font-bold" style={{ color: tier.price === 0 ? 'var(--color-green)' : 'var(--color-purple)' }}>
                       {tier.price === 0 ? 'Free' : formatNGN(tier.price)}
                     </p>
                     {urgency && urgency !== 'sold_out' && (
@@ -299,7 +319,14 @@ export function EventDetailContent({ identifier }: EventDetailContentProps) {
           than one screen, so there's never empty space below real content
           where this fixed banner could "show through" on a short page — the
           failure mode that sank an earlier fixed-position attempt here. */}
-      <div className="fixed inset-x-0 top-0 z-20 w-full overflow-hidden h-[220px] sm:h-[300px] lg:h-[400px]">
+      {/* box-shadow, not border-bottom: gives the banner a finished edge
+          against both themes without adding to its box height, so the fixed
+          strip and the spacer div below stay pixel-identical and nothing
+          shifts on scroll. */}
+      <div
+        className="fixed inset-x-0 top-0 z-20 w-full overflow-hidden h-[220px] sm:h-[300px] lg:h-[400px]"
+        style={{ boxShadow: 'inset 0 -1px 0 var(--color-border)' }}
+      >
         {bannerSrc ? (
           <Image
             src={bannerSrc}
@@ -323,9 +350,15 @@ export function EventDetailContent({ identifier }: EventDetailContentProps) {
       </div>
       <div className="h-[220px] sm:h-[300px] lg:h-[400px]" />
 
+      {/* Brand colour is threaded through the whole content column — buy
+          button, tier cards, price emphasis, section icons and badges — but
+          never the fixed masthead/wordmark above (brand identity, always
+          Ventry purple) and never checkout (a separate route that doesn't
+          read accentColor at all): still Ventry's design language wearing
+          the organiser's colour, not a full repaint. */}
       <div
         className="max-w-7xl mx-auto px-6 py-8 relative z-0"
-        style={{ backgroundColor: 'var(--color-bg)' }}
+        style={{ backgroundColor: 'var(--color-bg)', ...accentStyle }}
       >
         <nav className="flex items-center gap-1.5 text-sm mb-8" style={{ color: 'var(--color-text-muted)' }}>
           <Link href="/" className="hover:text-[var(--color-text)] transition-colors">Home</Link>
@@ -383,8 +416,10 @@ export function EventDetailContent({ identifier }: EventDetailContentProps) {
               </div>
             )}
 
-            {/* Ticket panel, mobile position: inline between lineup and map, per the target section order. */}
-            <div className="lg:hidden" style={accentStyle}>{ticketCard}</div>
+            {/* Ticket panel, mobile position: inline between lineup and map, per the target section order.
+                Accent colour already applies from the content column wrapper above — CSS custom
+                properties inherit — so no style override is needed here. */}
+            <div className="lg:hidden">{ticketCard}</div>
 
             <div className="rounded-xl border p-5" style={{ backgroundColor: 'var(--color-surface)', borderColor: 'var(--color-border)' }}>
               <h3 className="font-semibold mb-3" style={{ color: 'var(--color-text)' }}>Event Details</h3>
@@ -509,7 +544,7 @@ export function EventDetailContent({ identifier }: EventDetailContentProps) {
           </div>
 
           {/* Ticket panel, desktop position: sticky right-hand sidebar. */}
-          <div className="hidden lg:block lg:col-span-2" style={accentStyle}>
+          <div className="hidden lg:block lg:col-span-2">
             <div className="sticky top-24">{ticketCard}</div>
           </div>
         </div>

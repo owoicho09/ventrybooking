@@ -6,6 +6,7 @@ import Link from 'next/link';
 import { CheckCircle, Shield, Zap, Users } from 'lucide-react';
 import { Input } from '@/components/ui/Input';
 import { Button } from '@/components/ui/Button';
+import { LEGAL_VERSIONS } from '@/lib/legalVersions';
 
 const benefits = [
   { icon: Zap, text: 'Instant access after email verification — no waiting' },
@@ -36,7 +37,7 @@ export default function OrganizerRegisterPage() {
       const res = await fetch('/api/auth/organizer/register', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify(form),
+        body: JSON.stringify({ ...form, termsVersion: LEGAL_VERSIONS.organiserTerms.version }),
       });
       const data = await res.json();
       if (!res.ok) {
@@ -123,7 +124,11 @@ export default function OrganizerRegisterPage() {
               </div>
               <span className="text-sm" style={{ color: 'var(--color-text-muted)' }}>
                 I agree to the{' '}
-                <Link href="/terms" style={{ color: 'var(--color-purple-light)' }} className="hover:underline">Organizer Terms</Link>
+                <Link href="/terms/organisers" style={{ color: 'var(--color-purple-light)' }} className="hover:underline">Organiser Terms</Link>
+                {', '}
+                <Link href="/refund-policy" style={{ color: 'var(--color-purple-light)' }} className="hover:underline">Refund Policy</Link>
+                {' and '}
+                <Link href="/privacy" style={{ color: 'var(--color-purple-light)' }} className="hover:underline">Privacy Policy</Link>
               </span>
             </label>
 

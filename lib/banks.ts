@@ -7,6 +7,7 @@ export const NIGERIAN_BANKS = [
   { name: 'Heritage Bank',     code: '030' },
   { name: 'Keystone Bank',     code: '082' },
   { name: 'Kuda Bank',         code: '090267' },
+  { name: 'Moniepoint',        code: '50515' },
   { name: 'Opay',              code: '100004' },
   { name: 'Palmpay',           code: '100033' },
   { name: 'Polaris Bank',      code: '076' },
@@ -51,6 +52,8 @@ const ALIASES: Record<string, string> = {
   'alat by wema':               'Wema Bank',
   'kuda':                       'Kuda Bank',
   'fidelity':                   'Fidelity Bank',
+  'moniepoint mfb':             'Moniepoint',
+  'moniepoint microfinance bank': 'Moniepoint',
 };
 
 export function getBankCode(bankName: string): string | undefined {

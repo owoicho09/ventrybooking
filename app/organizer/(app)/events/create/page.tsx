@@ -179,7 +179,7 @@ export default function CreateEventPage() {
         </div>
         <div>
           <label className="text-sm font-medium block mb-1.5" style={{ color: 'var(--color-text)' }}>Accent Colour</label>
-          <p className="text-xs mb-3" style={{ color: 'var(--color-text-dim)' }}>Applied to your ticket panel — tier cards, purchase button, and quantity steppers. Everything else stays Ventry purple.</p>
+          <p className="text-xs mb-3" style={{ color: 'var(--color-text-dim)' }}>Threaded through your event page — the buy button, ticket tiers, prices and section icons. Auto-adjusted for readability in both themes. The Ventry masthead and checkout always stay Ventry purple.</p>
           {accentAutoDetected && accentColor && (
             <p className="text-xs mb-2 flex items-center gap-1.5" style={{ color: 'var(--color-purple-light)' }}>
               <span className="w-3 h-3 rounded-full inline-block" style={{ backgroundColor: accentColor }} />

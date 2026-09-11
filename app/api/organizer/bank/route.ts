@@ -9,7 +9,7 @@ export async function POST(req: NextRequest) {
   }
 
   try {
-    const { bankName, accountNumber, accountName } = await req.json();
+    const { bankName, accountNumber, accountName, legalName } = await req.json();
     if (!bankName || !accountNumber || !accountName) {
       return NextResponse.json({ error: 'All bank fields are required' }, { status: 400 });
     }
@@ -18,11 +18,15 @@ export async function POST(req: NextRequest) {
     }
 
     const db = getServerSupabase();
-    await db.from('users').update({
+    const update: Record<string, string> = {
       bank_name: bankName,
       account_number: accountNumber,
       account_name: accountName,
-    }).eq('id', user.sub);
+    };
+    if (typeof legalName === 'string' && legalName.trim()) {
+      update.legal_name = legalName.trim().slice(0, 200);
+    }
+    await db.from('users').update(update).eq('id', user.sub);
 
     return NextResponse.json({ success: true, data: { message: 'Bank details saved' } });
   } catch (err) {

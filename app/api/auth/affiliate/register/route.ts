@@ -7,10 +7,13 @@ import { generatePlatformReferralCode } from '@/lib/server/ids';
 
 export async function POST(req: NextRequest) {
   try {
-    const { name, email, password, confirmPassword } = await req.json();
+    const { name, email, password, confirmPassword, termsVersion } = await req.json();
 
     if (!name || !email || !password) {
       return NextResponse.json({ error: 'All fields are required' }, { status: 400 });
+    }
+    if (!termsVersion) {
+      return NextResponse.json({ error: 'You must agree to the Affiliate Policy' }, { status: 400 });
     }
     if (password !== confirmPassword) {
       return NextResponse.json({ error: 'Passwords do not match' }, { status: 400 });
@@ -30,10 +33,14 @@ export async function POST(req: NextRequest) {
     // unique constraint backs this up regardless — retry once on conflict.
     let code = generatePlatformReferralCode();
     let affiliate;
+    const now = new Date().toISOString();
     for (let attempt = 0; attempt < 3; attempt++) {
       const { data, error } = await db
         .from('platform_affiliates')
-        .insert({ name, email, password_hash: hashPassword(password), referral_code: code })
+        .insert({
+          name, email, password_hash: hashPassword(password), referral_code: code,
+          terms_version: String(termsVersion), terms_accepted_at: now,
+        })
         .select('id, name, email, referral_code')
         .single();
       if (!error) { affiliate = data; break; }

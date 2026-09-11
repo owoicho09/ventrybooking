@@ -22,7 +22,7 @@ function Toggle({ checked, onChange }: { checked: boolean; onChange: () => void 
 
 interface Me {
   name: string; email: string; phone: string; bio: string;
-  bank_name: string; account_number: string; account_name: string;
+  bank_name: string; account_number: string; account_name: string; legal_name: string;
   email_notifications: boolean; sms_alerts: boolean;
   handle: string; avatar_url: string | null; cover_image_url: string | null; socials: Socials;
 }
@@ -138,6 +138,7 @@ export default function OrganizerSettingsPage() {
         bankName: me.bank_name,
         accountNumber: me.account_number,
         accountName: me.account_name,
+        legalName: me.legal_name,
       }),
     });
     const d = await res.json();
@@ -287,6 +288,10 @@ export default function OrganizerSettingsPage() {
               <span style={{ color: 'var(--color-text-muted)' }}>Account Name</span>
               <span style={{ color: 'var(--color-text)' }}>{me.account_name || '—'}</span>
             </div>
+            <div className="flex justify-between">
+              <span style={{ color: 'var(--color-text-muted)' }}>Legal Name</span>
+              <span style={{ color: 'var(--color-text)' }}>{me.legal_name || '—'}</span>
+            </div>
           </div>
         ) : (
           <form onSubmit={saveBank} className="flex flex-col gap-4">
@@ -318,6 +323,13 @@ export default function OrganizerSettingsPage() {
               value={me.account_name || ''}
               onChange={set('account_name')}
               placeholder="Exact name as registered with the bank"
+            />
+            <Input
+              label="Legal Name"
+              value={me.legal_name || ''}
+              onChange={set('legal_name')}
+              placeholder="Your legal name exactly as it appears on your bank account"
+              helper="This is never shown to buyers — your display name is what they see. It's used to match your settlement bank account."
             />
             {bankMsg && (
               <p className="text-xs" style={{ color: bankMsg.includes('saved') ? 'var(--color-green)' : 'var(--color-red)' }}>

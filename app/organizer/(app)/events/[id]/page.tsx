@@ -670,7 +670,7 @@ export default function OrganizerEventDetailPage() {
 
         <div>
           <p className="text-sm font-medium mb-1.5" style={{ color: 'var(--color-text)' }}>Accent Colour</p>
-          <p className="text-xs mb-3" style={{ color: 'var(--color-text-dim)' }}>Applied to your ticket panel — tier cards, purchase button, and quantity steppers.</p>
+          <p className="text-xs mb-3" style={{ color: 'var(--color-text-dim)' }}>Threaded through your event page — the buy button, ticket tiers, prices and section icons. Auto-adjusted for readability in both themes.</p>
           <div className="flex flex-wrap gap-2.5">
             <button
               type="button"
