@@ -10,6 +10,7 @@ import { Button } from '@/components/ui/Button';
 import { useToast } from '@/components/ui/Toast';
 import { ACCENT_COLOR_PRESETS } from '@/lib/accentColors';
 import { BannerCropInput } from '@/components/organizer/BannerCropInput';
+import { compressImageFile } from '@/lib/compressImage';
 
 interface Tier { id: string; name: string; price: string; quantity: string; }
 type LineupLiability = 'headliner' | 'guest' | 'surprise';
@@ -112,7 +113,7 @@ export default function CreateEventPage() {
         fd.append('city', city);
         fd.append('landmark', landmark);
         fd.append('locationHidden', String(locationHidden));
-        if (venueProof) fd.append('venueProof', venueProof);
+        if (venueProof) fd.append('venueProof', await compressImageFile(venueProof));
       } else {
         fd.append('meetingLink', meetingLink);
         fd.append('meetingPasscode', meetingPasscode);
@@ -124,13 +125,38 @@ export default function CreateEventPage() {
       const validLineup = lineup.filter(a => a.name.trim() || a.liability === 'surprise');
       if (validLineup.length) {
         fd.append('lineup', JSON.stringify(validLineup.map(a => ({ name: a.name, role: a.role, liability: a.liability }))));
-        validLineup.forEach((a, i) => { if (a.photoFile) fd.append(`lineupPhoto${i}`, a.photoFile); });
+        for (let i = 0; i < validLineup.length; i++) {
+          const a = validLineup[i];
+          if (a.photoFile) fd.append(`lineupPhoto${i}`, await compressImageFile(a.photoFile));
+        }
       }
       if (banner) fd.append('banner', banner);
       if (headerBanner) fd.append('headerBanner', headerBanner);
 
+      // Vercel hard-caps the function request body at 4.5MB regardless of the
+      // app's own per-file limits — this request can carry a flyer, header
+      // banner, venue proof, and several lineup photos at once, so warn
+      // before a doomed round trip instead of surfacing a bare network error.
+      let totalBytes = 0;
+      fd.forEach(v => { if (v instanceof File) totalBytes += v.size; });
+      if (totalBytes > 4 * 1024 * 1024) {
+        toast('Your images are too large to upload together — try smaller files for the venue proof or lineup photos.', 'error');
+        return;
+      }
+
       const res = await fetch('/api/organizer/events', { method: 'POST', body: fd });
-      const data = await res.json();
+      let data: { error?: string; data?: { eventId: string } };
+      try {
+        data = await res.json();
+      } catch {
+        toast(
+          res.status === 413
+            ? 'Your images are too large to upload together — try smaller files and try again.'
+            : 'Something went wrong on our end. Please try again.',
+          'error',
+        );
+        return;
+      }
       if (!res.ok) {
         toast(data.error || 'Failed to create event', 'error');
         return;
