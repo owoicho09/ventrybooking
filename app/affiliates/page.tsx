@@ -17,8 +17,8 @@ const steps = [
   },
   {
     icon: Wallet,
-    title: 'Earn on their first 2 events',
-    body: "When someone signs up through your link and runs an event, you earn 30% of Ventry's service fee on their first two events.",
+    title: 'Earn on their first 3 events',
+    body: "When someone signs up through your link and runs an event, you earn 30% of Ventry's service fee on their first three events.",
   },
 ];
 
@@ -56,7 +56,7 @@ export default function AffiliatesLandingPage() {
             Bring in organisers. Earn on every ticket they sell.
           </h1>
           <p className="text-base sm:text-lg max-w-2xl mx-auto mb-10" style={{ color: 'var(--color-text-muted)' }}>
-            Know an event organiser who isn&apos;t on Ventry yet? Refer them, and earn <strong style={{ color: 'var(--color-text)' }}>30% of Ventry&apos;s service fee</strong> — on their first two events. No cap on how many organisers you refer.
+            Know an event organiser who isn&apos;t on Ventry yet? Refer them, and earn <strong style={{ color: 'var(--color-text)' }}>30% of Ventry&apos;s service fee</strong> — on their first three events. No cap on how many organisers you refer.
           </p>
           <div className="flex flex-col sm:flex-row items-center justify-center gap-3">
             <Link href="/affiliate/register"><Button size="lg">Become an Affiliate</Button></Link>

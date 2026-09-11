@@ -51,7 +51,7 @@ export default function AffiliateRegisterPage() {
             Become a Ventry Affiliate
           </h1>
           <p className="text-sm mt-1" style={{ color: 'var(--color-text-muted)' }}>
-            Refer organisers, earn 30% of Ventry&apos;s service fee on their first two events.
+            Refer organisers, earn 30% of Ventry&apos;s service fee on their first three events.
           </p>
         </div>
 

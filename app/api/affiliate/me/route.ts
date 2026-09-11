@@ -11,7 +11,7 @@ export async function GET() {
   const db = getServerSupabase();
   const { data: affiliate } = await db
     .from('platform_affiliates')
-    .select('id, name, email, referral_code, created_at')
+    .select('id, name, email, referral_code, created_at, phone, bank_name, account_number, account_name')
     .eq('id', user.sub)
     .maybeSingle();
   if (!affiliate) return NextResponse.json({ error: 'Affiliate not found' }, { status: 404 });
@@ -35,6 +35,10 @@ export async function GET() {
       referralCount: referralCount ?? 0,
       pendingCommission,
       paidCommission,
+      phone: affiliate.phone,
+      bankName: affiliate.bank_name,
+      accountNumber: affiliate.account_number,
+      accountName: affiliate.account_name,
     },
   });
 }

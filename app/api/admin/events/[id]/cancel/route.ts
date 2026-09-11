@@ -4,6 +4,7 @@ import { getServerSupabase } from '@/lib/supabase/server';
 import { refundTransaction } from '@/lib/server/paystack';
 import { notify } from '@/lib/server/notify';
 import { calculateFees, basePriceFromTotalPaid } from '@/lib/server/fees';
+import { voidAffiliateCommissionsForEvent } from '@/lib/server/affiliateCommission';
 
 // GET — preview: count of refundable tickets + total refund amount (no side effects)
 export async function GET(
@@ -89,6 +90,9 @@ export async function POST(
     console.error('cancel event: failed to update event status', cancelErr);
     return NextResponse.json({ error: 'Failed to cancel event — database error' }, { status: 500 });
   }
+
+  voidAffiliateCommissionsForEvent(db, id).catch(err =>
+    console.error('cancel event: failed to void affiliate commissions', err));
 
   const { data: tickets } = await db
     .from('tickets')

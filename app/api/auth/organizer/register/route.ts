@@ -90,11 +90,16 @@ export async function POST(req: NextRequest) {
     if (refCode) {
       const { data: affiliate } = await db
         .from('platform_affiliates')
-        .select('id, email')
+        .select('id, email, phone')
         .eq('referral_code', refCode)
         .maybeSingle();
-      // Guard against the most obvious gaming: an affiliate can't credit themselves.
-      if (affiliate && affiliate.email.toLowerCase() !== user.email.toLowerCase()) {
+      // Guard against the most obvious gaming: an affiliate can't credit
+      // themselves, by email or by phone (normalized to digits only, so
+      // "+234 801..." and "0801..." formatting differences don't slip past).
+      const digitsOnly = (s: string) => s.replace(/\D/g, '');
+      const samePhone = !!affiliate?.phone && digitsOnly(affiliate.phone) === digitsOnly(phone);
+      const sameEmail = !!affiliate && affiliate.email.toLowerCase() === user.email.toLowerCase();
+      if (affiliate && !sameEmail && !samePhone) {
         const { error: refErr } = await db
           .from('platform_affiliate_referrals')
           .insert({ affiliate_id: affiliate.id, organizer_id: user.id });

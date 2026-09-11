@@ -38,16 +38,20 @@ export async function GET() {
     const orgRaw = r.organizer as { name: string; handle: string | null }[] | { name: string; handle: string | null } | null;
     const org = Array.isArray(orgRaw) ? orgRaw[0] : orgRaw;
     const mine = (commissions ?? []).filter(c => c.organizer_id === r.organizer_id);
-    const qualifyingEvents = new Set(mine.map(c => c.event_sequence_number)).size;
+    // Voided rows (event cancelled) don't occupy a slot and never pay out —
+    // exclude them from the cap count and the commission totals, but still
+    // list them below so an affiliate can see why a sale isn't paying.
+    const active = mine.filter(c => c.status !== 'void');
+    const qualifyingEvents = new Set(active.map(c => c.event_sequence_number)).size;
 
     return {
       organizerName: org?.name ?? 'Organiser',
       organizerHandle: org?.handle ?? null,
       referredAt: r.referred_at,
       qualifyingEventsSoFar: qualifyingEvents,
-      capReached: qualifyingEvents >= 2,
-      totalCommission: mine.reduce((s, c) => s + c.commission_amount, 0),
-      pendingCommission: mine.filter(c => c.status === 'pending').reduce((s, c) => s + c.commission_amount, 0),
+      capReached: qualifyingEvents >= 3,
+      totalCommission: active.reduce((s, c) => s + c.commission_amount, 0),
+      pendingCommission: active.filter(c => c.status === 'pending').reduce((s, c) => s + c.commission_amount, 0),
       sales: mine.map(c => ({
         eventName: c.event_name,
         grossAmount: c.gross_amount,

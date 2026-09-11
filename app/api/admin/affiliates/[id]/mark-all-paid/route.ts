@@ -17,11 +17,33 @@ export async function POST(
   const { id } = await params;
   const db = getServerSupabase();
 
+  const { data: pending, error: fetchErr } = await db
+    .from('platform_affiliate_commissions')
+    .select('id, event:events!platform_affiliate_commissions_event_id_fkey(status)')
+    .eq('affiliate_id', id)
+    .eq('status', 'pending');
+
+  if (fetchErr) {
+    console.error('POST /api/admin/affiliates/[id]/mark-all-paid fetch error', fetchErr);
+    return NextResponse.json({ error: 'Failed to fetch commissions' }, { status: 500 });
+  }
+
+  const payableIds = (pending ?? [])
+    .filter(c => {
+      const eventRaw = c.event as { status: string }[] | { status: string } | null;
+      return (Array.isArray(eventRaw) ? eventRaw[0] : eventRaw)?.status === 'completed';
+    })
+    .map(c => c.id);
+  const skipped = (pending?.length ?? 0) - payableIds.length;
+
+  if (payableIds.length === 0) {
+    return NextResponse.json({ success: true, data: { marked: 0, skippedNotConfirmed: skipped } });
+  }
+
   const { data, error } = await db
     .from('platform_affiliate_commissions')
     .update({ status: 'paid', paid_at: new Date().toISOString(), paid_by: user.email })
-    .eq('affiliate_id', id)
-    .eq('status', 'pending')
+    .in('id', payableIds)
     .select('id');
 
   if (error) {
@@ -29,5 +51,5 @@ export async function POST(
     return NextResponse.json({ error: 'Failed to mark commissions paid' }, { status: 500 });
   }
 
-  return NextResponse.json({ success: true, data: { marked: data?.length ?? 0 } });
+  return NextResponse.json({ success: true, data: { marked: data?.length ?? 0, skippedNotConfirmed: skipped } });
 }

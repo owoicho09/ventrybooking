@@ -20,13 +20,21 @@ export async function POST(
 
   const { data: commission } = await db
     .from('platform_affiliate_commissions')
-    .select('id, status')
+    .select('id, status, event_id, event:events!platform_affiliate_commissions_event_id_fkey(status)')
     .eq('id', id)
     .maybeSingle();
 
   if (!commission) return NextResponse.json({ error: 'Commission not found' }, { status: 404 });
   if (commission.status === 'paid') {
     return NextResponse.json({ error: 'Already marked paid' }, { status: 400 });
+  }
+  if (commission.status === 'void') {
+    return NextResponse.json({ error: 'This commission was voided — its event was cancelled' }, { status: 400 });
+  }
+  const eventRaw = commission.event as { status: string }[] | { status: string } | null;
+  const eventStatus = (Array.isArray(eventRaw) ? eventRaw[0] : eventRaw)?.status;
+  if (eventStatus !== 'completed') {
+    return NextResponse.json({ error: 'This event hasn\'t happened yet — commission is only payable once it\'s confirmed complete' }, { status: 400 });
   }
 
   const { error } = await db

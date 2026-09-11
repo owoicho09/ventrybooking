@@ -56,6 +56,23 @@ const ALIASES: Record<string, string> = {
   'moniepoint microfinance bank': 'Moniepoint',
 };
 
+/**
+ * Loose match between a registered name and a bank-resolved account name —
+ * true if every word of the shorter name appears in the longer one. Not
+ * exact-string equality: Paystack often resolves to a fuller legal name
+ * (e.g. "JOHN ADEYEMI DOE") than what someone typed at signup ("John Doe"),
+ * and that's still a real match, not a mismatch to reject.
+ */
+export function namesLikelyMatch(a: string, b: string): boolean {
+  const words = (s: string) => s.toLowerCase().replace(/[^a-z0-9\s]/g, '').split(/\s+/).filter(Boolean);
+  const wa = words(a);
+  const wb = words(b);
+  if (wa.length === 0 || wb.length === 0) return false;
+  const [shorter, longer] = wa.length <= wb.length ? [wa, wb] : [wb, wa];
+  const longerSet = new Set(longer);
+  return shorter.every(w => longerSet.has(w));
+}
+
 export function getBankCode(bankName: string): string | undefined {
   const normalized = bankName.trim().toLowerCase();
   // Exact case-insensitive match first

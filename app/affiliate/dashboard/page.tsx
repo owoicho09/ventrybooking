@@ -5,7 +5,9 @@ import Link from 'next/link';
 import { Copy, LogOut, Users, Wallet } from 'lucide-react';
 import { Badge } from '@/components/ui/Badge';
 import { Button } from '@/components/ui/Button';
+import { Input } from '@/components/ui/Input';
 import { useToast } from '@/components/ui/Toast';
+import { NIGERIAN_BANKS } from '@/lib/banks';
 
 interface Me {
   name: string;
@@ -15,6 +17,10 @@ interface Me {
   referralCount: number;
   pendingCommission: number;
   paidCommission: number;
+  phone: string | null;
+  bankName: string | null;
+  accountNumber: string | null;
+  accountName: string | null;
 }
 
 interface Sale {
@@ -22,7 +28,7 @@ interface Sale {
   grossAmount: number;
   commissionAmount: number;
   eventSequenceNumber: number;
-  status: 'pending' | 'paid';
+  status: 'pending' | 'paid' | 'void';
   createdAt: string;
 }
 
@@ -44,19 +50,46 @@ export default function AffiliateDashboardPage() {
   const [me, setMe] = useState<Me | null>(null);
   const [referrals, setReferrals] = useState<Referral[]>([]);
   const [loading, setLoading] = useState(true);
+  const [editingBank, setEditingBank] = useState(false);
+  const [bank, setBank] = useState({ phone: '', bankName: '', accountNumber: '' });
+  const [bankMsg, setBankMsg] = useState('');
+  const [bankSaving, setBankSaving] = useState(false);
 
-  useEffect(() => {
+  const loadMe = () => {
     Promise.all([
       fetch('/api/affiliate/me').then(r => r.json()),
       fetch('/api/affiliate/referrals').then(r => r.json()),
     ])
       .then(([meRes, refRes]) => {
-        if (meRes.success) setMe(meRes.data);
+        if (meRes.success) {
+          setMe(meRes.data);
+          setBank({
+            phone: meRes.data.phone || '',
+            bankName: meRes.data.bankName || '',
+            accountNumber: meRes.data.accountNumber || '',
+          });
+        }
         if (refRes.success) setReferrals(refRes.data);
       })
       .catch(console.error)
       .finally(() => setLoading(false));
-  }, []);
+  };
+
+  useEffect(() => { loadMe(); }, []);
+
+  const saveBank = async (e: React.FormEvent) => {
+    e.preventDefault();
+    setBankSaving(true); setBankMsg('');
+    const res = await fetch('/api/affiliate/bank', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(bank),
+    });
+    const d = await res.json();
+    setBankMsg(d.success ? 'Bank details saved.' : (d.error ?? 'Failed to save bank details'));
+    setBankSaving(false);
+    if (d.success) { setEditingBank(false); loadMe(); }
+  };
 
   const handleLogout = async () => {
     await fetch('/api/auth/logout', { method: 'POST' });
@@ -104,8 +137,82 @@ export default function AffiliateDashboardPage() {
             <Button size="sm" onClick={copyLink}><Copy size={13} />Copy</Button>
           </div>
           <p className="text-xs mt-2" style={{ color: 'var(--color-text-dim)' }}>
-            Share this with organisers. You earn 30% of Ventry&apos;s service fee on their first two events.
+            Share this with organisers. You earn 30% of Ventry&apos;s service fee on their first three events.
           </p>
+        </div>
+
+        {/* Bank Details */}
+        <div className="rounded-xl border p-5" style={{ backgroundColor: 'var(--color-surface)', borderColor: 'var(--color-border)' }}>
+          <div className="flex items-center justify-between mb-4">
+            <p className="text-sm font-medium" style={{ color: 'var(--color-text)' }}>Bank details</p>
+            <button onClick={() => setEditingBank(!editingBank)} className="text-sm font-medium" style={{ color: 'var(--color-purple-light)' }}>
+              {editingBank ? 'Cancel' : me?.accountNumber ? 'Edit' : 'Add'}
+            </button>
+          </div>
+          {!editingBank ? (
+            <div className="flex flex-col gap-3 text-sm">
+              <div className="flex justify-between">
+                <span style={{ color: 'var(--color-text-muted)' }}>Bank</span>
+                <span style={{ color: 'var(--color-text)' }}>{me?.bankName || '—'}</span>
+              </div>
+              <div className="flex justify-between">
+                <span style={{ color: 'var(--color-text-muted)' }}>Account</span>
+                <span className="font-mono" style={{ color: 'var(--color-text)' }}>
+                  {me?.accountNumber ? `****${me.accountNumber.slice(-4)}` : '—'}
+                </span>
+              </div>
+              <div className="flex justify-between">
+                <span style={{ color: 'var(--color-text-muted)' }}>Account Name</span>
+                <span style={{ color: 'var(--color-text)' }}>{me?.accountName || '—'}</span>
+              </div>
+              {!me?.accountNumber && (
+                <p className="text-xs" style={{ color: 'var(--color-text-dim)' }}>Add your bank details so commission can be paid to you.</p>
+              )}
+            </div>
+          ) : (
+            <form onSubmit={saveBank} className="flex flex-col gap-4">
+              <Input
+                label="Phone Number"
+                type="tel"
+                value={bank.phone}
+                onChange={e => setBank(b => ({ ...b, phone: e.target.value }))}
+                placeholder="+234 801 234 5678"
+                required
+              />
+              <div className="flex flex-col gap-1.5">
+                <label className="text-sm font-medium" style={{ color: 'var(--color-text)' }}>Bank</label>
+                <select
+                  value={bank.bankName}
+                  onChange={e => setBank(b => ({ ...b, bankName: e.target.value }))}
+                  required
+                  className="w-full rounded-lg border px-3 py-2.5 text-sm outline-none focus:border-[var(--color-purple)]"
+                  style={{ backgroundColor: 'var(--color-surface-2)', borderColor: 'var(--color-border)', color: 'var(--color-text)' }}
+                >
+                  <option value="" disabled>Select your bank</option>
+                  {NIGERIAN_BANKS.map(b => (
+                    <option key={b.code} value={b.name}>{b.name}</option>
+                  ))}
+                </select>
+              </div>
+              <Input
+                label="Account Number"
+                value={bank.accountNumber}
+                onChange={e => setBank(b => ({ ...b, accountNumber: e.target.value }))}
+                placeholder="10-digit account number"
+                maxLength={10}
+                required
+              />
+              <p className="text-xs" style={{ color: 'var(--color-text-dim)' }}>
+                Must be an account in your own name — we verify this against the bank before saving.
+              </p>
+              {bankMsg && (
+                <p className="text-xs" style={{ color: bankMsg.includes('saved') ? 'var(--color-green)' : 'var(--color-red)' }}>
+                  {bankMsg}
+                </p>
+              )}
+              <Button type="submit" disabled={bankSaving}>{bankSaving ? 'Saving…' : 'Save Bank Details'}</Button>
+            </form>
+          )}
         </div>
 
         {/* Summary stats */}
@@ -149,7 +256,7 @@ export default function AffiliateDashboardPage() {
                     </div>
                     <div className="text-right">
                       <p className="text-sm font-semibold" style={{ color: 'var(--color-text)' }}>{fmt(r.totalCommission)}</p>
-                      {r.capReached && <Badge variant="gray">Cap reached (2 events)</Badge>}
+                      {r.capReached && <Badge variant="gray">Cap reached (3 events)</Badge>}
                     </div>
                   </div>
                   {r.sales.length > 0 && (
@@ -161,7 +268,9 @@ export default function AffiliateDashboardPage() {
                           </span>
                           <span className="flex items-center gap-2">
                             <span style={{ color: 'var(--color-text)' }}>{fmt(s.commissionAmount)}</span>
-                            {s.status === 'paid' ? <Badge variant="green">Paid</Badge> : <Badge variant="amber">Pending</Badge>}
+                            {s.status === 'paid' ? <Badge variant="green">Paid</Badge>
+                              : s.status === 'void' ? <Badge variant="gray">Voided</Badge>
+                              : <Badge variant="amber">Pending</Badge>}
                           </span>
                         </div>
                       ))}

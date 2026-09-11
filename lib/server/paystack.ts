@@ -38,6 +38,15 @@ export async function refundTransaction(params: {
   return paystackRequest('POST', '/refund', params);
 }
 
+/** Resolves the bank-registered account name for a number + bank code — used to catch a mistyped account or a name mismatch before it's trusted. */
+export async function resolveAccountName(params: { accountNumber: string; bankCode: string }): Promise<string> {
+  const data = await paystackRequest(
+    'GET',
+    `/bank/resolve?account_number=${encodeURIComponent(params.accountNumber)}&bank_code=${encodeURIComponent(params.bankCode)}`,
+  );
+  return (data as { account_name: string }).account_name;
+}
+
 export async function createTransferRecipient(params: {
   type: string;
   name: string;

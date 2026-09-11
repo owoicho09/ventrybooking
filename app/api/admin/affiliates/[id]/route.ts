@@ -37,7 +37,7 @@ export async function GET(
 
   const { data: commissions } = await db
     .from('platform_affiliate_commissions')
-    .select('id, organizer_id, event_name, gross_amount, commission_amount, event_sequence_number, status, created_at, paid_at, paid_by')
+    .select('id, organizer_id, event_name, gross_amount, commission_amount, event_sequence_number, status, created_at, paid_at, paid_by, event:events!platform_affiliate_commissions_event_id_fkey(status)')
     .eq('affiliate_id', id)
     .order('created_at', { ascending: false });
 
@@ -46,18 +46,23 @@ export async function GET(
     data: {
       affiliate,
       referralCount: referrals?.length ?? 0,
-      commissions: (commissions ?? []).map(c => ({
-        id: c.id,
-        organizerName: organizerNames.get(c.organizer_id) ?? 'Organiser',
-        eventName: c.event_name,
-        grossAmount: c.gross_amount,
-        commissionAmount: c.commission_amount,
-        eventSequenceNumber: c.event_sequence_number,
-        status: c.status,
-        createdAt: c.created_at,
-        paidAt: c.paid_at,
-        paidBy: c.paid_by,
-      })),
+      commissions: (commissions ?? []).map(c => {
+        const eventRaw = c.event as { status: string }[] | { status: string } | null;
+        const eventStatus = (Array.isArray(eventRaw) ? eventRaw[0] : eventRaw)?.status ?? null;
+        return {
+          id: c.id,
+          organizerName: organizerNames.get(c.organizer_id) ?? 'Organiser',
+          eventName: c.event_name,
+          grossAmount: c.gross_amount,
+          commissionAmount: c.commission_amount,
+          eventSequenceNumber: c.event_sequence_number,
+          status: c.status,
+          eventStatus,
+          createdAt: c.created_at,
+          paidAt: c.paid_at,
+          paidBy: c.paid_by,
+        };
+      }),
     },
   });
 }

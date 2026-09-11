@@ -8,6 +8,7 @@ import { Badge } from '@/components/ui/Badge';
 import { Button } from '@/components/ui/Button';
 import { Table, Thead, Tbody, Th, Tr, Td } from '@/components/ui/Table';
 import { formatShortDate } from '@/lib/utils';
+import { useToast } from '@/components/ui/Toast';
 
 interface Commission {
   id: string;
@@ -16,7 +17,8 @@ interface Commission {
   grossAmount: number;
   commissionAmount: number;
   eventSequenceNumber: number;
-  status: 'pending' | 'paid';
+  status: 'pending' | 'paid' | 'void';
+  eventStatus: string | null;
   createdAt: string;
   paidAt: string | null;
   paidBy: string | null;
@@ -32,6 +34,7 @@ const fmt = (n: number) => new Intl.NumberFormat('en-NG', { style: 'currency', c
 
 export default function AdminAffiliateDetailPage() {
   const { id } = useParams<{ id: string }>();
+  const { toast } = useToast();
   const [data, setData] = useState<Detail | null>(null);
   const [loading, setLoading] = useState(true);
   const [actingId, setActingId] = useState<string | null>(null);
@@ -51,7 +54,9 @@ export default function AdminAffiliateDetailPage() {
   const markPaid = async (commissionId: string) => {
     setActingId(commissionId);
     try {
-      await fetch(`/api/admin/affiliates/commissions/${commissionId}/mark-paid`, { method: 'POST' });
+      const res = await fetch(`/api/admin/affiliates/commissions/${commissionId}/mark-paid`, { method: 'POST' });
+      const d = await res.json();
+      if (!res.ok) { toast(d.error ?? 'Failed to mark paid', 'error'); return; }
       load();
     } finally {
       setActingId(null);
@@ -61,7 +66,16 @@ export default function AdminAffiliateDetailPage() {
   const markAllPaid = async () => {
     setMarkingAll(true);
     try {
-      await fetch(`/api/admin/affiliates/${id}/mark-all-paid`, { method: 'POST' });
+      const res = await fetch(`/api/admin/affiliates/${id}/mark-all-paid`, { method: 'POST' });
+      const d = await res.json();
+      if (!res.ok) { toast(d.error ?? 'Failed to mark commissions paid', 'error'); return; }
+      const { marked, skippedNotConfirmed } = d.data;
+      toast(
+        skippedNotConfirmed > 0
+          ? `Marked ${marked} paid — ${skippedNotConfirmed} skipped (event not yet confirmed)`
+          : `Marked ${marked} paid`,
+        'success',
+      );
       load();
     } finally {
       setMarkingAll(false);
@@ -71,8 +85,9 @@ export default function AdminAffiliateDetailPage() {
   if (loading) return <p className="text-sm" style={{ color: 'var(--color-text-muted)' }}>Loading…</p>;
   if (!data) return null;
 
-  const pendingCount = data.commissions.filter(c => c.status === 'pending').length;
-  const pendingTotal = data.commissions.filter(c => c.status === 'pending').reduce((s, c) => s + c.commissionAmount, 0);
+  const payable = data.commissions.filter(c => c.status === 'pending' && c.eventStatus === 'completed');
+  const pendingCount = payable.length;
+  const pendingTotal = payable.reduce((s, c) => s + c.commissionAmount, 0);
 
   return (
     <div className="flex flex-col gap-6">
@@ -118,12 +133,21 @@ export default function AdminAffiliateDetailPage() {
                   <Td>{fmt(c.grossAmount)}</Td>
                   <Td>{fmt(c.commissionAmount)}</Td>
                   <Td>{formatShortDate(c.createdAt)}</Td>
-                  <Td>{c.status === 'paid' ? <Badge variant="green">Paid</Badge> : <Badge variant="amber">Pending</Badge>}</Td>
                   <Td>
-                    {c.status === 'pending' ? (
+                    {c.status === 'paid' ? <Badge variant="green">Paid</Badge>
+                      : c.status === 'void' ? <Badge variant="gray">Voided</Badge>
+                      : c.eventStatus === 'completed' ? <Badge variant="amber">Pending</Badge>
+                      : <Badge variant="gray">Awaiting event</Badge>}
+                  </Td>
+                  <Td>
+                    {c.status === 'pending' && c.eventStatus === 'completed' ? (
                       <Button size="sm" variant="outline" disabled={actingId === c.id} onClick={() => markPaid(c.id)}>
                         {actingId === c.id ? 'Marking…' : 'Mark Paid'}
                       </Button>
+                    ) : c.status === 'pending' ? (
+                      <span className="text-xs" style={{ color: 'var(--color-text-dim)' }}>Not confirmed yet</span>
+                    ) : c.status === 'void' ? (
+                      <span className="text-xs" style={{ color: 'var(--color-text-dim)' }}>Event cancelled</span>
                     ) : (
                       <span className="text-xs" style={{ color: 'var(--color-text-dim)' }}>{c.paidBy}</span>
                     )}

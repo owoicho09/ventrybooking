@@ -34,7 +34,7 @@ export default function AdminAffiliatesPage() {
       <div>
         <h1 className="text-2xl font-bold" style={{ color: 'var(--color-text)', fontFamily: 'var(--font-syne), sans-serif' }}>Affiliates</h1>
         <p className="text-sm mt-0.5" style={{ color: 'var(--color-text-muted)' }}>
-          Marketers who refer organisers to Ventry, earning 30% of Ventry&apos;s service fee on each referral&apos;s first two events.
+          Marketers who refer organisers to Ventry, earning 30% of Ventry&apos;s service fee on each referral&apos;s first three events.
         </p>
       </div>
 
