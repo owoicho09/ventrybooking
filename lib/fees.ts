@@ -8,10 +8,10 @@ export const SERVICE_FEE_FLAT      = 3_000;
 /** Organizer-facing platform fee: 3% of gross ticket revenue, deducted before payout. */
 export const PLATFORM_FEE_RATE = 0.03;
 
-// Processing fee: the payment processor charges 1.5% of the final total,
-// plus a flat ₦100 once the total reaches ₦2,500, capped at ₦2,000. Since
-// the fee is charged on the final total (not the pre-fee amount), the total
-// must be grossed up rather than having the fee simply added on top.
+// Processing fee: 1.5% of the pre-processing amount (ticket subtotal plus
+// service fee), plus a flat ₦100 once that amount exceeds ₦2,500, capped at
+// ₦2,000 and rounded up to the next whole naira. Not a gross-up — the rate
+// applies directly to the pre-processing amount, not to the final total.
 export const PROCESSING_FEE_RATE      = 0.015;
 export const PROCESSING_FEE_FLAT      = 100;
 export const PROCESSING_FEE_THRESHOLD = 2_500;
@@ -24,15 +24,14 @@ export function serviceFeePerTicket(ticketPrice: number) {
 
 /**
  * Processing fee owed on a pre-processing amount (ticket subtotal + service
- * fee), solved so the processor's cut of the *grossed-up* total equals this
- * fee exactly. Returns the unrounded fee — round only the final total.
+ * fee): 1.5% of that amount, plus a flat ₦100 above the ₦2,500 threshold,
+ * capped at ₦2,000, rounded up to the next whole naira.
  */
 export function processingFee(preProcessingAmount: number): number {
   if (preProcessingAmount <= 0) return 0;
-  const grossed = preProcessingAmount < PROCESSING_FEE_THRESHOLD
-    ? preProcessingAmount / (1 - PROCESSING_FEE_RATE)
-    : (preProcessingAmount + PROCESSING_FEE_FLAT) / (1 - PROCESSING_FEE_RATE);
-  return Math.min(grossed - preProcessingAmount, PROCESSING_FEE_CAP);
+  const raw = preProcessingAmount * PROCESSING_FEE_RATE
+    + (preProcessingAmount > PROCESSING_FEE_THRESHOLD ? PROCESSING_FEE_FLAT : 0);
+  return Math.ceil(Math.min(raw, PROCESSING_FEE_CAP));
 }
 
 /**
