@@ -293,62 +293,85 @@ export function EventDetailContent({ identifier }: EventDetailContentProps) {
     </Link>
   );
 
-  // Every event page gets the same persistent masthead now, regardless of
-  // whether an organiser uploaded the new dedicated wide header banner —
-  // fall back to the existing flyer image, then to the category-gradient
-  // placeholder, so this isn't an opt-in-only feature. object-position
-  // "center top" only applies to the flyer fallback: most organiser flyers
-  // are portrait images, and a top-biased crop keeps the part that actually
-  // carries the title (almost always near the top) instead of letterboxing
-  // a tall image into a tiny sliver inside this short, wide strip.
+  // Only a real, dedicated header banner gets the pinned masthead treatment
+  // (see below) — everything else (flyer fallback, or the category-gradient
+  // placeholder) scrolls with the page instead. object-position "center top"
+  // only applies to the flyer fallback: most organiser flyers are portrait
+  // images, and a top-biased crop keeps the part that actually carries the
+  // title (almost always near the top) instead of letterboxing a tall image
+  // into a tiny sliver inside this short, wide strip.
   const bannerSrc = event.headerBannerUrl || event.banner_url || null;
   const isFlyerFallback = !event.headerBannerUrl && !!event.banner_url;
 
+  const heroMedia = bannerSrc ? (
+    <Image
+      src={bannerSrc}
+      alt={event.name}
+      fill
+      className="object-cover"
+      style={isFlyerFallback ? { objectPosition: 'center top' } : undefined}
+      sizes="100vw"
+      priority
+    />
+  ) : (
+    <div className={`w-full h-full bg-gradient-to-br ${event.bannerColor} flex items-center justify-center`}>
+      <p className="text-6xl opacity-20" style={{ color: '#fff', fontFamily: 'var(--font-syne), sans-serif' }}>{event.category[0]}</p>
+    </div>
+  );
+
+  const heroOverlay = (
+    <>
+      <div
+        className="absolute inset-0 pointer-events-none"
+        style={{ background: 'linear-gradient(to bottom, rgba(0,0,0,0.5), transparent 45%)' }}
+      />
+      <div className="absolute top-4 left-4 sm:left-6 z-10">{ventryWordmark}</div>
+    </>
+  );
+
   return (
     <div className="min-h-dvh" style={{ backgroundColor: 'var(--color-bg)' }}>
-      {/* Persistent masthead, pinned to the viewport for the entire page,
-          hero through footer. Page content below is normal in-flow and
-          scrolls independently underneath it (the spacer div right after
-          this block reserves its height). z-20 here is deliberately HIGHER
-          than the content wrapper's z-index below: as the page scrolls,
-          content moves up into this banner's screen region, and it must
-          paint BEHIND the fixed banner (hidden under it), not in front of
-          it — the reverse ordering silently let scrolled content cover the
-          banner instead of the banner staying on top. The outer min-h-dvh
-          on this component's root ensures the document is never shorter
-          than one screen, so there's never empty space below real content
-          where this fixed banner could "show through" on a short page — the
-          failure mode that sank an earlier fixed-position attempt here. */}
-      {/* box-shadow, not border-bottom: gives the banner a finished edge
-          against both themes without adding to its box height, so the fixed
-          strip and the spacer div below stay pixel-identical and nothing
-          shifts on scroll. */}
-      <div
-        className="fixed inset-x-0 top-0 z-20 w-full overflow-hidden h-[220px] sm:h-[300px] lg:h-[400px]"
-        style={{ boxShadow: 'inset 0 -1px 0 var(--color-border)' }}
-      >
-        {bannerSrc ? (
-          <Image
-            src={bannerSrc}
-            alt={event.name}
-            fill
-            className="object-cover"
-            style={isFlyerFallback ? { objectPosition: 'center top' } : undefined}
-            sizes="100vw"
-            priority
-          />
-        ) : (
-          <div className={`w-full h-full bg-gradient-to-br ${event.bannerColor} flex items-center justify-center`}>
-            <p className="text-6xl opacity-20" style={{ color: '#fff', fontFamily: 'var(--font-syne), sans-serif' }}>{event.category[0]}</p>
+      {event.headerBannerUrl ? (
+        // A real, dedicated header banner is a wide strip designed to sit
+        // pinned behind the page — persistent masthead, hero through footer.
+        // Page content below is normal in-flow and scrolls independently
+        // underneath it (the spacer div right after this block reserves its
+        // height). z-20 here is deliberately HIGHER than the content
+        // wrapper's z-index below: as the page scrolls, content moves up
+        // into this banner's screen region, and it must paint BEHIND the
+        // fixed banner (hidden under it), not in front of it — the reverse
+        // ordering silently let scrolled content cover the banner instead of
+        // the banner staying on top. The outer min-h-dvh on this component's
+        // root ensures the document is never shorter than one screen, so
+        // there's never empty space below real content where this fixed
+        // banner could "show through" on a short page — the failure mode
+        // that sank an earlier fixed-position attempt here.
+        // box-shadow, not border-bottom: gives the banner a finished edge
+        // against both themes without adding to its box height, so the fixed
+        // strip and the spacer div below stay pixel-identical and nothing
+        // shifts on scroll.
+        <>
+          <div
+            className="fixed inset-x-0 top-0 z-20 w-full overflow-hidden h-[220px] sm:h-[300px] lg:h-[400px]"
+            style={{ boxShadow: 'inset 0 -1px 0 var(--color-border)' }}
+          >
+            {heroMedia}
+            {heroOverlay}
           </div>
-        )}
-        <div
-          className="absolute inset-0 pointer-events-none"
-          style={{ background: 'linear-gradient(to bottom, rgba(0,0,0,0.5), transparent 45%)' }}
-        />
-        <div className="absolute top-4 left-4 sm:left-6 z-10">{ventryWordmark}</div>
-      </div>
-      <div className="h-[220px] sm:h-[300px] lg:h-[400px]" />
+          <div className="h-[220px] sm:h-[300px] lg:h-[400px]" />
+        </>
+      ) : (
+        // No dedicated header banner — the flyer (or the category-gradient
+        // placeholder) fills this same spot but scrolls away with the page
+        // like a normal hero image instead of staying pinned. Flyers are
+        // typically portrait posters, not wide strips designed to be pinned,
+        // so forcing them into the fixed masthead just kept the least
+        // relevant crop of the image permanently on screen.
+        <div className="relative w-full overflow-hidden h-[220px] sm:h-[300px] lg:h-[400px]" style={{ boxShadow: 'inset 0 -1px 0 var(--color-border)' }}>
+          {heroMedia}
+          {heroOverlay}
+        </div>
+      )}
 
       {/* Brand colour is threaded through the whole content column — buy
           button, tier cards, price emphasis, section icons and badges — but
