@@ -1,0 +1,29 @@
+Urgent batch for Ventry (Next.js 14 App Router, Supabase, Paystack, Resend). A live event is coming, so these ship today. Explore the codebase first — organiser registration and profile, the settlement/payout page, event creation/edit, the event detail page, and the banner implementation — and flag contradictions rather than guessing. Design system: dark, premium, purple accent, both light and dark themes, mobile-first (most traffic is cheap Android on slow data).
+
+Context for why these matter: Ventry is moving to a new model (next-working-day settlement, organiser-paid refunds, identity verification). These four items are the pieces needed before the next event goes on sale.
+
+── 1. Display name vs legal name ──
+Right now organisers effectively have one name. Split it properly into two distinct fields that never get confused:
+- DISPLAY NAME — the brand shown publicly: event pages, organiser profile, share cards, email sender names, discovery cards. This is what buyers see everywhere.
+- LEGAL NAME — the organiser's real personal name (or registered business name), private, never shown to buyers. It exists to match their settlement bank account and, later, their identity verification.
+Legal name is captured on the payout/settlement page alongside bank details, not at signup — signup stays light. Make the UI state the distinction plainly so organisers don't put their brand name in the legal field: e.g. "Your legal name exactly as it appears on your bank account. This is never shown to buyers — your display name is what they see."
+Existing organisers: don't break them. Keep their current name as display name; leave legal name empty and prompt for it on the payout page. Nothing public should change for anyone today.
+Note: automatic bank account name-matching against the legal name is coming in a later batch with the verification provider — build the field and store it cleanly now so that check can be added without rework.
+
+── 2. Terms acceptance at account creation ──
+A required, unticked checkbox on organiser account creation, buyer account creation, and affiliate account creation — the account cannot be created without it. Wording links to the relevant documents already live on the site (Organiser Terms, Buyer Terms, Refund Policy, Privacy Policy; Affiliate Policy for affiliates).
+Store, per account: the terms version accepted and the timestamp. Version must be a maintainable constant we can bump when documents update — not hardcoded in twenty places. This matters legally: the version in force when someone agreed is the one that governs them, so we must be able to prove which it was.
+(Purchase-time acceptance at checkout is coming in the next batch — structure the version/timestamp storage so an order can carry the same fields.)
+
+── 3. Brand colour on the event detail page ──
+Organisers can already pick a brand/accent colour. Make it actually show on the event detail page: the buy/purchase button, ticket tier cards (borders, selected/highlight states), price emphasis, section accents and active states. Thread it tastefully through the page — it should still read as Ventry's design language wearing the organiser's colour, not a full repaint.
+Contrast safety is mandatory, never trust the raw pick: compute button text colour from the accent's luminance so labels stay readable, and auto-derive a lighter/darker variant per theme when the chosen colour has poor contrast against the page background — keep their hue, adjust lightness. Never apply the accent to body text. Events with no colour set render exactly as they do today.
+Checkout payment steps stay Ventry-styled: totals, fee breakdown and the pay button keep platform styling so buyers always feel they're paying Ventry's secure checkout.
+
+── 4. Banner border ──
+The event page banner currently renders with no border/edge definition, so it bleeds into the page. Give it a proper finished edge consistent with the design system — a subtle border or divider beneath it (and rounded corners if that suits the layout), correct in both light and dark themes, no layout shift, and correct against the fixed-position scroll behaviour. Banner remains optional: events without one are unchanged.
+
+── Done means ──
+On a phone: an organiser sets a legal name on the payout page and sees it clearly labelled as private while their display name still appears on their event page; a new organiser cannot create an account without ticking terms, and the accepted version + timestamp is stored; an event with a brand colour shows that colour on its buy button and tiers, readable in both themes, with a deliberately awful colour still legible; the banner has a clean defined edge and events without banners look unchanged.
+
+Verify typecheck + build. Report what shipped, any migration for me to run in Supabase SQL Editor, and any decisions you made.
