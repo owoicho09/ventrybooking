@@ -125,7 +125,7 @@ export function EventDetailContent({ identifier }: EventDetailContentProps) {
     : '';
 
   const handlePurchase = async () => {
-    if (!event || !hasSelection) return;
+    if (!event || !hasSelection || event.status === 'completed') return;
     if (selectedTiers.length === 0) return;
     const ref = sessionStorage.getItem(`ventry_ref_${event.id}`) || undefined;
     sessionStorage.setItem('ventry_cart', JSON.stringify({
@@ -196,6 +196,8 @@ export function EventDetailContent({ identifier }: EventDetailContentProps) {
   // colour is chosen from the accent's own luminance rather than assumed
   // white (getContrastText) — a deliberately awful colour stays legible in
   // both themes instead of just contrasting with a white button fill.
+  const isCompleted = event.status === 'completed';
+
   const safeAccent = event.accentColor
     ? accentForBackground(event.accentColor, theme === 'light' ? BG_LIGHT : BG_DARK)
     : null;
@@ -211,7 +213,31 @@ export function EventDetailContent({ identifier }: EventDetailContentProps) {
   // target section order), and pulled into a sticky right-hand sidebar on
   // desktop. This avoids CSS grid-order tricks that would otherwise put it
   // ahead of the title/description on mobile too, not just ahead of the map.
-  const ticketCard = (
+  const ticketCard = isCompleted ? (
+    <div className="rounded-xl border overflow-hidden" style={{ backgroundColor: 'var(--color-surface)', borderColor: 'var(--color-border)' }}>
+      <div className="p-5 flex flex-col gap-4">
+        <h3 className="font-semibold text-base" style={{ color: 'var(--color-text)' }}>Tickets</h3>
+        <div className="rounded-lg border p-4 flex items-start gap-3 text-sm" style={{ borderColor: 'var(--color-border)', backgroundColor: 'var(--color-surface-2)' }}>
+          <Shield size={16} className="flex-shrink-0 mt-0.5" style={{ color: 'var(--color-text-dim)' }} />
+          <div>
+            <p className="font-medium" style={{ color: 'var(--color-text)' }}>This event has ended</p>
+            <p className="mt-0.5" style={{ color: 'var(--color-text-muted)' }}>Ticket sales are closed and checkout is no longer available.</p>
+          </div>
+        </div>
+        <div className="flex flex-col gap-3">
+          {[...event.tiers].sort((a, b) => a.price - b.price).map(tier => (
+            <div key={tier.id} className="rounded-lg border p-4 flex items-center justify-between" style={{ borderColor: 'var(--color-border)', backgroundColor: 'var(--color-surface-2)' }}>
+              <p className="font-medium text-sm" style={{ color: 'var(--color-text)' }}>{tier.name}</p>
+              <p className="text-base font-bold" style={{ color: tier.price === 0 ? 'var(--color-green)' : 'var(--color-purple)' }}>
+                {tier.price === 0 ? 'Free' : formatNGN(tier.price)}
+              </p>
+            </div>
+          ))}
+        </div>
+        <Button fullWidth size="lg" disabled>Ticket Sales Closed</Button>
+      </div>
+    </div>
+  ) : (
     <div className="rounded-xl border overflow-hidden" style={{ backgroundColor: 'var(--color-surface)', borderColor: 'var(--color-border)' }}>
       <div className="p-5 flex flex-col gap-4">
         <h3 className="font-semibold text-base" style={{ color: 'var(--color-text)' }}>Select Tickets</h3>
@@ -346,8 +372,11 @@ export function EventDetailContent({ identifier }: EventDetailContentProps) {
         <div className="grid grid-cols-1 lg:grid-cols-5 gap-8">
           <div className="lg:col-span-3 flex flex-col gap-8">
             <div>
-              {event.organizer?.verified && (
-                <div className="mb-3"><Badge variant="green"><CheckCircle size={11} />Ventry Verified Event</Badge></div>
+              {(event.organizer?.verified || isCompleted) && (
+                <div className="flex flex-wrap items-center gap-2 mb-3">
+                  {isCompleted && <Badge variant="blue">Completed</Badge>}
+                  {event.organizer?.verified && <Badge variant="green"><CheckCircle size={11} />Ventry Verified Event</Badge>}
+                </div>
               )}
               <h1 className="text-3xl md:text-4xl font-bold mb-4" style={{ color: 'var(--color-text)', fontFamily: 'var(--font-syne), sans-serif' }}>{event.name}</h1>
               <div className="flex flex-wrap gap-4 text-sm mb-6" style={{ color: 'var(--color-text-muted)' }}>

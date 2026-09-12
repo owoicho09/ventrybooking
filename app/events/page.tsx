@@ -109,6 +109,16 @@ export default function EventsPage() {
     [events, date, sort]
   );
 
+  // Completed events are kept on the browse page (so it doesn't look scanty
+  // once an organiser's events wrap up), but split into their own section
+  // below the upcoming ones rather than interleaved by date, and shown most
+  // recent first — the same convention as the organiser storefront page.
+  const upcomingEvents = useMemo(() => visibleEvents.filter(e => e.status !== 'completed'), [visibleEvents]);
+  const pastEvents = useMemo(
+    () => [...visibleEvents.filter(e => e.status === 'completed')].sort((a, b) => new Date(b.date).getTime() - new Date(a.date).getTime()),
+    [visibleEvents]
+  );
+
   return (
     <div style={{ backgroundColor: 'var(--color-bg)' }}>
       <PublicNav />
@@ -162,7 +172,14 @@ export default function EventsPage() {
                 : <><span className="font-semibold" style={{ color: 'var(--color-text)' }}>{visibleEvents.length}</span> events found</>}
             </p>
           </div>
-          <EventGrid events={visibleEvents} />
+          {(upcomingEvents.length > 0 || pastEvents.length === 0) && <EventGrid events={upcomingEvents} />}
+
+          {pastEvents.length > 0 && (
+            <div className="mt-12">
+              <h2 className="text-lg font-semibold mb-4" style={{ color: 'var(--color-text)' }}>Past Events</h2>
+              <EventGrid events={pastEvents} />
+            </div>
+          )}
         </div>
       </div>
       <Footer />

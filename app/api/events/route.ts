@@ -5,8 +5,10 @@ import { ticketUrgency } from '@/lib/ticketUrgency';
 
 type RawTier = { id: string; name: string; price: number; available: number; sold: number };
 
-function computeBadge(tiers: RawTier[]) {
-  if (!tiers?.length) return undefined;
+function computeBadge(tiers: RawTier[], status: string) {
+  // Sales urgency (few left / sold out) is meaningless once the event is
+  // over — the card shows a "Completed" badge instead.
+  if (status === 'completed' || !tiers?.length) return undefined;
   const totalAvailable = tiers.reduce((s, t) => s + t.available, 0);
   const totalSold = tiers.reduce((s, t) => s + t.sold, 0);
   return ticketUrgency(totalAvailable, totalSold);
@@ -35,7 +37,7 @@ function shapeEvent(row: any) {
     banner_url: row.banner_url ?? null,
     headerBannerUrl: row.header_banner_url ?? null,
     totalSold: row.total_sold,
-    badge: computeBadge(row.tiers ?? []),
+    badge: computeBadge(row.tiers ?? [], row.status),
     organizer: row.organizer,
     tiers: row.tiers ?? [],
   };
@@ -61,7 +63,7 @@ export async function GET(req: NextRequest) {
     let qb = db
       .from('events')
       .select(EVENT_SELECT)
-      .eq('status', 'approved')
+      .in('status', ['approved', 'completed'])
       .order('date', { ascending: true });
 
     // Populated alongside events when there's a search query, so an

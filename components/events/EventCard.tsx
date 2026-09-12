@@ -31,6 +31,7 @@ const tierColors: Record<string, string> = {
 
 export function EventCard({ event, variant = 'default' }: EventCardProps) {
   const compact = variant === 'compact';
+  const isCompleted = event.status === 'completed';
   // Cards always prefer the flyer (banner_url) — the header banner is for
   // the event page masthead only — and fall back to it purely so events
   // without a flyer show something real instead of the gradient placeholder.
@@ -93,25 +94,33 @@ export function EventCard({ event, variant = 'default' }: EventCardProps) {
             )}
 
             {/* Status badge */}
-            {event.badge === 'few_left' && (
+            {isCompleted ? (
               <div className="absolute top-3 right-3 z-10">
-                <Badge variant="amber">{URGENCY_LABEL.few_left}</Badge>
+                <Badge variant="blue">Completed</Badge>
               </div>
-            )}
-            {event.badge === 'very_few_left' && (
-              <div className="absolute top-3 right-3 z-10">
-                <Badge variant="amber">{URGENCY_LABEL.very_few_left}</Badge>
-              </div>
-            )}
-            {event.badge === 'almost_gone' && (
-              <div className="absolute top-3 right-3 z-10">
-                <Badge variant="red">{URGENCY_LABEL.almost_gone}</Badge>
-              </div>
-            )}
-            {event.badge === 'sold_out' && (
-              <div className="absolute top-3 right-3 z-10">
-                <Badge variant="gray">{URGENCY_LABEL.sold_out}</Badge>
-              </div>
+            ) : (
+              <>
+                {event.badge === 'few_left' && (
+                  <div className="absolute top-3 right-3 z-10">
+                    <Badge variant="amber">{URGENCY_LABEL.few_left}</Badge>
+                  </div>
+                )}
+                {event.badge === 'very_few_left' && (
+                  <div className="absolute top-3 right-3 z-10">
+                    <Badge variant="amber">{URGENCY_LABEL.very_few_left}</Badge>
+                  </div>
+                )}
+                {event.badge === 'almost_gone' && (
+                  <div className="absolute top-3 right-3 z-10">
+                    <Badge variant="red">{URGENCY_LABEL.almost_gone}</Badge>
+                  </div>
+                )}
+                {event.badge === 'sold_out' && (
+                  <div className="absolute top-3 right-3 z-10">
+                    <Badge variant="gray">{URGENCY_LABEL.sold_out}</Badge>
+                  </div>
+                )}
+              </>
             )}
 
             {/* Category tag */}
@@ -182,21 +191,21 @@ export function EventCard({ event, variant = 'default' }: EventCardProps) {
 
         {/* Price + CTA */}
         <div className="flex items-center justify-between mt-auto pt-3 border-t" style={{ borderColor: 'var(--color-border)' }}>
-          <div>
-            {freeTier ? (
-              <>
-                <p className="text-[10px] uppercase tracking-wider" style={{ color: 'var(--color-text-dim)' }}>{freeTier.name}</p>
-                <p className="text-base font-bold" style={{ color: 'var(--color-green)' }}>Free</p>
-              </>
-            ) : (
-              <>
-                <p className="text-[10px] uppercase tracking-wider" style={{ color: 'var(--color-text-dim)' }}>From</p>
-                <p className="text-base font-bold" style={{ color: 'var(--color-text)' }}>{formatNGN(minPrice)}</p>
-              </>
-            )}
-          </div>
+          {isCompleted ? (
+            <p className="text-xs" style={{ color: 'var(--color-text-dim)' }}>Ticket sales closed</p>
+          ) : freeTier ? (
+            <div>
+              <p className="text-[10px] uppercase tracking-wider" style={{ color: 'var(--color-text-dim)' }}>{freeTier.name}</p>
+              <p className="text-base font-bold" style={{ color: 'var(--color-green)' }}>Free</p>
+            </div>
+          ) : (
+            <div>
+              <p className="text-[10px] uppercase tracking-wider" style={{ color: 'var(--color-text-dim)' }}>From</p>
+              <p className="text-base font-bold" style={{ color: 'var(--color-text)' }}>{formatNGN(minPrice)}</p>
+            </div>
+          )}
           <Link href={`/${event.slug || event.id}`} className="relative z-10">
-            <Button size="sm">Get Tickets</Button>
+            <Button size="sm" variant={isCompleted ? 'outline' : 'primary'}>{isCompleted ? 'View Event' : 'Get Tickets'}</Button>
           </Link>
         </div>
       </div>
