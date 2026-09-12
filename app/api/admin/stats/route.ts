@@ -14,7 +14,7 @@ export async function GET() {
     db.from('events').select('id, status'),
     db.from('tickets').select('quantity').in('status', ['valid', 'used']),
     // Every non-refunded ticket, event_id'd — the base data for both revenue
-    // (service fee) and escrow (full ticket price), split out below.
+    // (service fee) and unsettled funds (full ticket price), split out below.
     db.from('tickets').select('event_id, total_paid, service_fee').neq('status', 'refunded'),
     db.from('payouts').select('event_id, fee, status'),
     db.from('users').select('id').eq('kyc_status', 'pending'),
@@ -40,10 +40,10 @@ export async function GET() {
     .filter(p => p.status === 'otp_pending' || p.status === 'completed')
     .reduce((s, p) => s + (p.fee ?? 0), 0);
 
-  // Escrow = full ticket price for every non-refunded ticket on an event whose
-  // payout hasn't released yet — the money currently sitting with Ventry that
-  // still needs to be there to cover organizer payouts.
-  const fundsInEscrow = activeTickets
+  // Unsettled funds = full ticket price for every non-refunded ticket on an
+  // event whose payout hasn't released yet — the money currently sitting with
+  // Ventry that still needs to be there to cover organizer payouts.
+  const unsettledFunds = activeTickets
     .filter(t => !releasedEventIds.has(t.event_id))
     .reduce((s, t) => s + (t.total_paid ?? 0), 0);
 
@@ -54,7 +54,7 @@ export async function GET() {
       activeEvents:     events.filter(e => e.status === 'approved').length,
       totalTicketsSold: tickets.reduce((s, t) => s + t.quantity, 0),
       totalRevenue:     serviceFeeRevenue + payoutFeeRevenue,
-      fundsInEscrow,
+      unsettledFunds,
       pendingKYC:       kycRes.data?.length  || 0,
       openComplaints:   complaintsRes.data?.length || 0,
     },

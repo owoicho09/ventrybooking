@@ -36,7 +36,7 @@ export async function POST(
     .maybeSingle();
   if (!event) return NextResponse.json({ error: 'Event not found' }, { status: 404 });
 
-  // Escrow gate — once the payout has been released (or is mid-transfer),
+  // Held-funds gate — once the payout has been released (or is mid-transfer),
   // the funds are no longer under Ventry's control for this event.
   const { data: payout } = await db
     .from('payouts')
@@ -46,7 +46,7 @@ export async function POST(
 
   if (payout && (payout.status === 'completed' || payout.status === 'otp_pending')) {
     return NextResponse.json(
-      { error: 'Payout for this event has already been released — funds are no longer held in escrow. Refund manually via the Paystack dashboard.' },
+      { error: 'Payout for this event has already been released — funds are no longer held by Ventry. Refund manually via the Paystack dashboard.' },
       { status: 400 },
     );
   }

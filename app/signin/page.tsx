@@ -292,8 +292,6 @@ export default function SignInPage() {
                     <span className="text-sm" style={{ color: 'var(--color-text-muted)' }}>
                       I agree to the{' '}
                       <Link href="/terms/buyers" style={{ color: 'var(--color-purple-light)' }} className="hover:underline">Buyer Terms</Link>
-                      {', '}
-                      <Link href="/refund-policy" style={{ color: 'var(--color-purple-light)' }} className="hover:underline">Refund Policy</Link>
                       {' and '}
                       <Link href="/privacy" style={{ color: 'var(--color-purple-light)' }} className="hover:underline">Privacy Policy</Link>
                     </span>

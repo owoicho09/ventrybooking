@@ -11,7 +11,6 @@ export function Footer() {
     { href: '/terms/buyers', label: 'Buyer Terms' },
     { href: '/terms/organisers', label: 'Organiser Terms' },
     { href: '/terms/affiliates', label: 'Affiliate Policy' },
-    { href: '/refund-policy', label: 'Refund Policy' },
     { href: '/privacy', label: 'Privacy Policy' },
   ];
 

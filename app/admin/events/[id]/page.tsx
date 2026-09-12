@@ -168,7 +168,7 @@ export default function AdminEventDetailPage() {
         {[
           { label: 'Tickets Sold', value: event.totalSold.toLocaleString() },
           { label: 'Revenue', value: formatNGN(event.totalRevenue) },
-          { label: 'Payout Status', value: event.payoutReleased ? 'Released' : 'In Escrow' },
+          { label: 'Payout Status', value: event.payoutReleased ? 'Released' : 'Pending' },
         ].map(({ label, value }) => (
           <div key={label} className="rounded-xl border p-4"
             style={{ backgroundColor: 'var(--color-surface)', borderColor: 'var(--color-border)' }}>
@@ -199,8 +199,8 @@ export default function AdminEventDetailPage() {
         <div className="flex items-start gap-3 rounded-xl border px-4 py-3 text-sm"
           style={{ borderColor: '#f59e0b30', backgroundColor: '#f59e0b10', color: 'var(--color-amber)' }}>
           <AlertTriangle size={15} className="flex-shrink-0 mt-0.5" />
-          The payout for this event has already been released to the organiser. Funds are no longer held in
-          escrow, so refunds can&apos;t be issued here — process any refund manually via the Paystack dashboard.
+          The payout for this event has already been released to the organiser. Funds are no longer held by
+          Ventry, so refunds can&apos;t be issued here — process any refund manually via the Paystack dashboard.
         </div>
       )}
 

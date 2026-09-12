@@ -196,14 +196,14 @@ export default function CheckoutPage() {
 
             {!isFree && (
               <p className="text-[10px] leading-snug mb-4" style={{ color: 'var(--color-text-dim)' }}>
-                The service fee (2%, capped at ₦3,000 per ticket for tickets above ₦150,000) and processing fee are non-refundable under any circumstances. Only the base ticket price is refunded if an event is cancelled.
+                The service fee (2%, capped at ₦3,000 per ticket for tickets above ₦150,000) and processing fee are non-refundable under any circumstances.
               </p>
             )}
 
             <div className="flex items-center gap-2 rounded-lg px-3 py-2.5 text-sm"
               style={{ backgroundColor: 'var(--color-purple-dim)', color: 'var(--color-purple-light)' }}>
               <Shield size={15} />
-              {isFree ? 'Free ticket — no payment required' : 'Your payment is held in escrow until the event happens'}
+              {isFree ? 'Free ticket — no payment required' : 'Secure payment — your ticket is issued immediately'}
             </div>
           </div>
 
@@ -274,8 +274,7 @@ export default function CheckoutPage() {
 
               <p className="text-[11px] leading-relaxed" style={{ color: 'var(--color-text-dim)' }}>
                 By {isFree ? 'getting this ticket' : 'purchasing'} you agree to Ventry&apos;s{' '}
-                <Link href="/terms/buyers" className="underline" style={{ color: 'var(--color-text-muted)' }}>Buyer Terms of Use</Link>{' '}
-                and <Link href="/refund-policy" className="underline" style={{ color: 'var(--color-text-muted)' }}>Refund Policy</Link>.
+                <Link href="/terms/buyers" className="underline" style={{ color: 'var(--color-text-muted)' }}>Buyer Terms of Use</Link>.
               </p>
 
               <Button type="submit" size="lg" fullWidth disabled={loading || !email || domainBlocked}>

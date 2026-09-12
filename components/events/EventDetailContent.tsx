@@ -198,9 +198,6 @@ export function EventDetailContent({ identifier }: EventDetailContentProps) {
   // ahead of the title/description on mobile too, not just ahead of the map.
   const ticketCard = (
     <div className="rounded-xl border overflow-hidden" style={{ backgroundColor: 'var(--color-surface)', borderColor: 'var(--color-border)' }}>
-      <div className="px-5 py-3.5 flex items-center gap-2 text-sm border-b" style={{ backgroundColor: 'var(--color-purple-dim)', borderColor: '#7c3aed30', color: 'var(--color-purple-light)' }}>
-        <Shield size={15} />Ventry Escrow Protected
-      </div>
       <div className="p-5 flex flex-col gap-4">
         <h3 className="font-semibold text-base" style={{ color: 'var(--color-text)' }}>Select Tickets</h3>
         {event.allowedEmailDomains && event.allowedEmailDomains.length > 0 && (
@@ -268,7 +265,7 @@ export function EventDetailContent({ identifier }: EventDetailContentProps) {
                   <span style={{ color: 'var(--color-text)' }}>Total</span><span style={{ color: 'var(--color-text)' }}>{formatNGN(total)}</span>
                 </div>
                 <p className="text-[10px] leading-snug mt-1" style={{ color: 'var(--color-text-dim)' }}>
-                  The service fee (2%, capped at ₦3,000 per ticket for tickets above ₦150,000) and processing fee are non-refundable — only the base ticket price is refundable.
+                  The service fee (2%, capped at ₦3,000 per ticket for tickets above ₦150,000) and processing fee are non-refundable.
                 </p>
               </>
             )}
@@ -278,9 +275,6 @@ export function EventDetailContent({ identifier }: EventDetailContentProps) {
         <Button fullWidth size="lg" disabled={!hasSelection || checkingOut} onClick={handlePurchase}>
           {checkingOut ? 'Loading…' : allFree ? 'Get Free Tickets' : 'Purchase Tickets'}
         </Button>
-        {!allFree && (
-          <p className="text-xs text-center leading-relaxed" style={{ color: 'var(--color-text-dim)' }}>Your payment is held in escrow until the event happens. Full refund if cancelled.</p>
-        )}
       </div>
     </div>
   );
@@ -443,21 +437,6 @@ export function EventDetailContent({ identifier }: EventDetailContentProps) {
                 <SocialLinks socials={event.organizer.socials} organizerName={event.organizer?.name} />
               </div>
             )}
-
-            <div className="rounded-xl border p-5" style={{ backgroundColor: 'var(--color-surface)', borderColor: 'var(--color-border)' }}>
-              <h3 className="font-semibold mb-2" style={{ color: 'var(--color-text)' }}>Refund Policy</h3>
-              <p className="text-sm leading-relaxed" style={{ color: 'var(--color-text-muted)' }}>
-                Your ticket price is protected in escrow and refunded automatically if this event is cancelled or flagged
-                as fraudulent. The Ventry service fee and processing fee are non-refundable in all cases.
-              </p>
-              <Link
-                href="/refund-policy"
-                className="inline-flex items-center gap-1 text-sm font-medium mt-2 hover:underline"
-                style={{ color: 'var(--color-purple-light)' }}
-              >
-                Read the full Refund Policy <ChevronRight size={14} />
-              </Link>
-            </div>
 
             {(() => {
               const organizerBlockInner = (

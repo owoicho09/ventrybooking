@@ -11,7 +11,7 @@ import { signTicketLink } from '@/lib/server/ticketLinks';
  *
  * Shared between the organiser's own edit route (first 2 changes, applied
  * immediately) and the admin change-request approval route (3rd+ change,
- * applied only once approved) — one escrow-correct code path either way.
+ * applied only once approved) — one correct code path either way.
  */
 export async function createChangeRefundWindow(
   db: ReturnType<typeof getServerSupabase>,

@@ -157,7 +157,7 @@ export default function PrivacyPage() {
               <Ul items={[
                 'Generating your unique QR-coded ticket and delivering it to your email address after a successful purchase.',
                 'Creating a secure payment transaction with our payment processor and reconciling the outcome with your order.',
-                'Holding funds in escrow and releasing them to the organizer after the event.',
+                'Holding funds and releasing them to the organizer after the event.',
                 'Processing refunds when an event is cancelled or a complaint is upheld.',
               ]} />
 

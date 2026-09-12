@@ -60,8 +60,7 @@ export default function OrganiserTermsPage() {
         <Sub title="1.2 What these terms cover">
           <P>
             These Organiser Terms of Use (&ldquo;these Terms&rdquo;) govern your use of Ventry as an event organiser.
-            Our <Link href="/refund-policy" style={{ color: 'var(--color-purple-light)' }} className="hover:underline">Refund Policy</Link>,{' '}
-            <Link href="/terms/buyers" style={{ color: 'var(--color-purple-light)' }} className="hover:underline">Buyer Terms of Use</Link> and{' '}
+            Our <Link href="/terms/buyers" style={{ color: 'var(--color-purple-light)' }} className="hover:underline">Buyer Terms of Use</Link> and{' '}
             <Link href="/privacy" style={{ color: 'var(--color-purple-light)' }} className="hover:underline">Privacy Policy</Link> form part of these Terms.
           </P>
         </Sub>
@@ -1073,7 +1072,6 @@ export default function OrganiserTermsPage() {
         <span>&copy; {new Date().getFullYear()} Ventry. All rights reserved.</span>
         <div className="flex gap-4">
           <Link href="/terms/buyers" style={{ color: 'var(--color-purple-light)' }}>Buyer Terms</Link>
-          <Link href="/refund-policy" style={{ color: 'var(--color-purple-light)' }}>Refund Policy</Link>
           <Link href="/privacy" style={{ color: 'var(--color-purple-light)' }}>Privacy Policy</Link>
         </div>
       </div>

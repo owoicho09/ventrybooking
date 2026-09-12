@@ -80,7 +80,7 @@ export function SiteOGCard({ logoSrc }: { logoSrc?: string } = {}) {
           />
         )}
         <div style={{ display: 'flex', alignItems: 'center', gap: '24px' }}>
-          {['Escrow Protected', 'Verified Organizers', 'QR Tickets'].map((label) => (
+          {['Secure Payments', 'Verified Organizers', 'QR Tickets'].map((label) => (
             <div
               key={label}
               style={{

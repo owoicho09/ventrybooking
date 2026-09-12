@@ -45,7 +45,7 @@ export default function AdminSettingsPage() {
         style={{ backgroundColor: 'var(--color-surface)', borderColor: 'var(--color-border)' }}>
         <h2 className="font-semibold mb-1" style={{ color: 'var(--color-text)' }}>Payout Settings</h2>
         <p className="text-sm mb-6" style={{ color: 'var(--color-text-muted)' }}>
-          Default percentage of escrow released to organizers after event confirmation.
+          Default percentage of held funds released to organizers after event confirmation.
         </p>
 
         <div className="flex flex-col gap-4">

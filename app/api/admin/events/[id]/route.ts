@@ -64,7 +64,7 @@ export async function GET(
 
   const totalSold = tiers.reduce((s, t) => s + (t.sold ?? 0), 0);
 
-  // Released/otp_pending means Paystack funds have already left escrow for this event —
+  // Released/otp_pending means Paystack funds have already been paid out for this event —
   // refunds can no longer be issued against it (see the refund endpoint's own check,
   // this flag just lets the UI explain why up front).
   const payoutReleased = payout?.status === 'completed' || payout?.status === 'otp_pending';

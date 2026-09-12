@@ -143,7 +143,7 @@ export default function AdminPayoutsPage() {
         style={{ backgroundColor: 'var(--color-surface)', borderColor: 'var(--color-border)' }}>
         <h2 className="font-semibold mb-1" style={{ color: 'var(--color-text)' }}>Global Payout Percentage</h2>
         <p className="text-sm mb-5" style={{ color: 'var(--color-text-muted)' }}>
-          Control what percentage of escrow is released to organizers.
+          Control what percentage of held funds is released to organizers.
         </p>
         <div className="flex flex-col sm:flex-row sm:items-center gap-4">
           <div className="w-full sm:flex-1 min-w-0">

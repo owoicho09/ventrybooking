@@ -22,10 +22,9 @@ import { getEventsHostedCounts } from '@/lib/server/eventsHosted';
 import { ticketUrgency } from '@/lib/ticketUrgency';
 
 const trustBadges = [
-  { icon: Shield, label: 'Escrow Protected' },
+  { icon: Shield, label: 'Secure Payments' },
   { icon: UserCheck, label: 'Verified Organizers' },
   { icon: QrCode, label: 'Instant QR Tickets' },
-  { icon: RotateCcw, label: 'Automatic Refunds' },
 ];
 
 const howItWorksSteps = [
@@ -37,7 +36,7 @@ const howItWorksSteps = [
   {
     step: 2,
     title: 'Pay Securely',
-    desc: 'Your payment is held in escrow — not released until the event happens.',
+    desc: 'Checkout is fast and secure — your ticket is confirmed the moment payment clears.',
   },
   {
     step: 3,
@@ -54,8 +53,8 @@ const howItWorksSteps = [
 const trustFeatures = [
   {
     icon: Lock,
-    title: 'Escrow Payments',
-    desc: 'Buyer money is held securely by Ventry and only released to organizers after the event successfully takes place.',
+    title: 'Secure Payments',
+    desc: 'Payments are processed securely, and your QR ticket is issued the moment your payment clears.',
   },
   {
     icon: BadgeCheck,
@@ -64,8 +63,8 @@ const trustFeatures = [
   },
   {
     icon: RotateCcw,
-    title: 'Automatic Refunds',
-    desc: 'If an event is cancelled or flagged as fraudulent, refunds are triggered automatically. No arguing, no waiting.',
+    title: 'Real Support',
+    desc: 'Questions or issues with an event? Reach us anytime through in-app support.',
   },
 ];
 
@@ -166,7 +165,7 @@ export default async function HomePage() {
             className="text-base sm:text-lg md:text-xl leading-relaxed max-w-xl mx-auto mb-10"
             style={{ color: 'var(--color-text-muted)' }}
           >
-            Get your ticket to the best parties, sport events, conferences, seminars and every other experience, worry-free. Every ticket on Ventry is fully refundable if anything goes wrong.
+            Get your ticket to the best parties, sport events, conferences, seminars and every other experience — with secure payments and verified organizers.
           </p>
 
           <div className="flex flex-col sm:flex-row gap-3 justify-center mb-12">

@@ -1,5 +1,5 @@
 import Link from 'next/link';
-import { ArrowRight, ShoppingBag, Calendar, ShieldCheck, Users } from 'lucide-react';
+import { ArrowRight, ShoppingBag, Calendar, Users } from 'lucide-react';
 import { PublicNav } from '@/components/layout/PublicNav';
 import { Footer } from '@/components/layout/Footer';
 import { LEGAL_VERSIONS } from '@/lib/legalVersions';
@@ -9,7 +9,7 @@ const cards = [
     href: '/terms/buyers',
     icon: ShoppingBag,
     title: 'Buyer Terms of Use',
-    description: 'What you pay, how escrow protects you, and when you’re entitled to a refund as a ticket buyer.',
+    description: 'What you pay and how ticket purchases work as a buyer.',
     version: `Version ${LEGAL_VERSIONS.buyerTerms.version} · Effective ${LEGAL_VERSIONS.buyerTerms.effective}`,
   },
   {
@@ -18,13 +18,6 @@ const cards = [
     title: 'Organiser Terms of Use',
     description: 'Fees, payouts, venue proof, lineup rules, and when a payout can be withheld as an event organiser.',
     version: `Version ${LEGAL_VERSIONS.organiserTerms.version} · Effective ${LEGAL_VERSIONS.organiserTerms.effective}`,
-  },
-  {
-    href: '/refund-policy',
-    icon: ShieldCheck,
-    title: 'Refund Policy',
-    description: 'The full detail on when a ticket is refunded, what portion is returned, and how to request one.',
-    version: `Version ${LEGAL_VERSIONS.refundPolicy.version} · Effective ${LEGAL_VERSIONS.refundPolicy.effective}`,
   },
   {
     href: '/terms/affiliates',

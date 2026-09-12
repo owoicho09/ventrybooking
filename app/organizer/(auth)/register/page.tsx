@@ -10,7 +10,7 @@ import { LEGAL_VERSIONS } from '@/lib/legalVersions';
 
 const benefits = [
   { icon: Zap, text: 'Instant access after email verification — no waiting' },
-  { icon: Shield, text: 'Escrow protects your reputation — buyers trust you' },
+  { icon: Shield, text: 'Verified organiser badge — buyers trust you' },
   { icon: Users, text: 'Full dashboard: sales, scans, payouts' },
 ];
 
@@ -125,8 +125,6 @@ export default function OrganizerRegisterPage() {
               <span className="text-sm" style={{ color: 'var(--color-text-muted)' }}>
                 I agree to the{' '}
                 <Link href="/terms/organisers" style={{ color: 'var(--color-purple-light)' }} className="hover:underline">Organiser Terms</Link>
-                {', '}
-                <Link href="/refund-policy" style={{ color: 'var(--color-purple-light)' }} className="hover:underline">Refund Policy</Link>
                 {' and '}
                 <Link href="/privacy" style={{ color: 'var(--color-purple-light)' }} className="hover:underline">Privacy Policy</Link>
               </span>

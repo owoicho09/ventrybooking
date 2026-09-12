@@ -3,7 +3,7 @@ import { getAuthUser } from '@/lib/server/auth';
 import { getServerSupabase } from '@/lib/supabase/server';
 
 // Bulk convenience over the per-commission mark-paid route — same
-// escrow-safe update, just applied to every still-pending row for one
+// race-condition-safe update, just applied to every still-pending row for one
 // affiliate in one action, for when a payout run covers all of it at once.
 export async function POST(
   _req: NextRequest,

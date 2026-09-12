@@ -9,7 +9,7 @@ import { Button } from '@/components/ui/Button';
 import { Table, Thead, Tbody, Th, Tr, Td } from '@/components/ui/Table';
 import { formatNGN, formatShortDate } from '@/lib/utils';
 
-interface Stats { ticketsSold: number; revenueInEscrow: number; activeEvents: number; payoutDue: number; }
+interface Stats { ticketsSold: number; pendingRevenue: number; activeEvents: number; payoutDue: number; }
 interface OrgEvent { id: string; name: string; date: string; totalSold: number; status: string; }
 interface Me { name: string; verified: boolean; }
 
@@ -65,7 +65,7 @@ export default function OrganizerDashboardPage() {
 
       <div className="grid grid-cols-1 sm:grid-cols-2 xl:grid-cols-4 gap-4">
         <StatsCard label="Tickets Sold" value={stats ? stats.ticketsSold.toLocaleString() : '—'} icon={Ticket} trend="Across all active events" />
-        <StatsCard label="Revenue in Escrow" value={stats ? formatNGN(stats.revenueInEscrow) : '—'} icon={Wallet} trend="Protected until event day" accent />
+        <StatsCard label="Pending Revenue" value={stats ? formatNGN(stats.pendingRevenue) : '—'} icon={Wallet} trend="Awaiting payout" accent />
         <StatsCard label="Active Events" value={stats ? stats.activeEvents : '—'} icon={CalendarDays} trend="Events currently live" />
         <StatsCard label="Payout Due" value={stats ? formatNGN(stats.payoutDue) : '—'} icon={ArrowUpRight} trend="Expected after event completion" />
       </div>

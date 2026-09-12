@@ -13,7 +13,7 @@ export async function GET() {
   const [ticketsRes, eventsRes, payoutsRes] = await Promise.all([
     db.from('tickets').select('quantity').eq('organizer_id', user.sub).in('status', ['valid', 'used']),
     db.from('events').select('id, status').eq('organizer_id', user.sub),
-    // Fetch pending + processing payouts — "in escrow" is the net they will receive
+    // Fetch pending + processing payouts — net is what they'll receive once paid out
     db.from('payouts').select('net, status').eq('organizer_id', user.sub).in('status', ['pending', 'processing']),
   ]);
 
@@ -21,14 +21,14 @@ export async function GET() {
   const events  = eventsRes.data  || [];
   const payouts = payoutsRes.data || [];
 
-  const ticketsSold     = tickets.reduce((s, t) => s + t.quantity, 0);
+  const ticketsSold    = tickets.reduce((s, t) => s + t.quantity, 0);
   // Show only the organizer's net (after platform fee), never the gross or service fees
-  const revenueInEscrow = payouts.reduce((s, p) => s + p.net, 0);
-  const activeEvents    = events.filter(e => e.status === 'approved').length;
-  const payoutDue       = payouts.filter(p => p.status === 'pending').reduce((s, p) => s + p.net, 0);
+  const pendingRevenue = payouts.reduce((s, p) => s + p.net, 0);
+  const activeEvents   = events.filter(e => e.status === 'approved').length;
+  const payoutDue      = payouts.filter(p => p.status === 'pending').reduce((s, p) => s + p.net, 0);
 
   return NextResponse.json(
-    { success: true, data: { ticketsSold, revenueInEscrow, activeEvents, payoutDue } },
+    { success: true, data: { ticketsSold, pendingRevenue, activeEvents, payoutDue } },
     { headers: { 'Cache-Control': 'no-store' } },
   );
 }

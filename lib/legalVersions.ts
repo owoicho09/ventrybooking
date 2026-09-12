@@ -11,6 +11,5 @@
 export const LEGAL_VERSIONS = {
   organiserTerms:  { version: '2.0', effective: '15 September 2026' },
   buyerTerms:       { version: '2.0', effective: '15 September 2026' },
-  refundPolicy:     { version: '3.0', effective: '15 September 2026' },
   affiliatePolicy:  { version: '1.0', effective: '15 September 2026' },
 } as const;

@@ -15,17 +15,17 @@ never freelance or guess at policy.
 - Both the Ventry service fee and the processing fee are non-refundable in
   every case, even when the ticket price itself is refunded.
 
-## Escrow and payouts
-- Ventry holds every ticket payment in escrow until the event has happened —
-  organisers cannot access the money before then.
+## Payouts
+- Ventry holds every ticket payment until the event has happened — organisers
+  cannot access the money before then.
 - Once an event concludes with no open claim, payout to the organiser begins
   processing at the 24-hour mark and typically completes within 24-48 hours
   after that.
 
 ## Refund policy
 - If Ventry cancels or reschedules an event outright, or an event is flagged
-  fraudulent, every ticket holder is refunded automatically from escrow —
-  buyers don't need to do anything.
+  fraudulent, every ticket holder is refunded automatically from funds Ventry
+  is still holding — buyers don't need to do anything.
 - Venue or date changes, and a few other qualifying event-day situations
   (e.g. a stated headliner not performing), open a 48-hour refund request
   window from the moment the change notification is sent. After 48 hours the
@@ -33,10 +33,10 @@ never freelance or guess at policy.
 - A general "event day went wrong" claim (e.g. the event didn't happen as
   promised) must be filed within 24 hours of the event ending — after that,
   the organiser's payout has begun processing and funds can no longer be
-  pulled back from escrow.
+  pulled back.
 - Refund claims are reviewed by Ventry staff; upheld claims are refunded from
-  escrow. This isn't something the agent can approve directly — it always
-  becomes a complaint for a human to review.
+  funds Ventry is still holding. This isn't something the agent can approve
+  directly — it always becomes a complaint for a human to review.
 
 ## Verified badge
 - A green "Verified" badge on an organiser means Ventry has completed KYC

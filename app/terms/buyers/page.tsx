@@ -56,8 +56,7 @@ export default function BuyerTermsPage() {
             to event organisers, and a separate{' '}
             <Link href="/terms/affiliates" style={{ color: 'var(--color-purple-light)' }}>Affiliate Programme Policy</Link>{' '}
             applies to affiliates. Our{' '}
-            <Link href="/refund-policy" style={{ color: 'var(--color-purple-light)' }}>Refund Policy</Link> and{' '}
-            <Link href="/privacy" style={{ color: 'var(--color-purple-light)' }}>Privacy Policy</Link> form part of these
+            <Link href="/privacy" style={{ color: 'var(--color-purple-light)' }}>Privacy Policy</Link> forms part of these
             Terms.
           </P>
         </Sub>
@@ -455,8 +454,7 @@ export default function BuyerTermsPage() {
         <Sub title="10.3 Only tickets bought on Ventry are ours to stand behind">
           <P>
             Ventry is responsible only for tickets bought through ventrybooking.com. Anything bought from a third party sits
-            entirely outside these Terms and outside our{' '}
-            <Link href="/refund-policy" style={{ color: 'var(--color-purple-light)' }}>Refund Policy</Link>.
+            entirely outside these Terms.
           </P>
         </Sub>
         <Sub title="10.4 Bulk and commercial resale is banned">
@@ -501,7 +499,7 @@ export default function BuyerTermsPage() {
             'use bots, scripts or automated tools to buy tickets;',
             'create multiple accounts to get around purchase limits;',
             'impersonate another person or provide false information;',
-            'raise a payment dispute without a proper basis under our Refund Policy;',
+            'raise a payment dispute without a proper basis;',
             'use Ventry for any unlawful purpose, including money laundering or the financing of terrorism;',
             'upload or transmit malicious code, or attempt to interfere with, scrape or reverse engineer the platform.',
           ]} />
@@ -517,8 +515,7 @@ export default function BuyerTermsPage() {
       <Section id="chargebacks" title="13. Chargebacks">
         <Sub title="13.1 Use our process first">
           <P>
-            If you raise a payment dispute with your bank instead of using the process in our{' '}
-            <Link href="/refund-policy" style={{ color: 'var(--color-purple-light)' }}>Refund Policy</Link>, the dispute is
+            If you raise a payment dispute with your bank instead of contacting us first, the dispute is
             decided by your bank and card scheme under their rules, not by Ventry. A chargeback raised on an event that is
             going ahead can result in your ticket being cancelled.
           </P>
@@ -651,7 +648,6 @@ export default function BuyerTermsPage() {
         <span>&copy; {new Date().getFullYear()} Ventry. All rights reserved.</span>
         <div className="flex gap-4">
           <Link href="/terms/organisers" style={{ color: 'var(--color-purple-light)' }}>Organiser Terms</Link>
-          <Link href="/refund-policy" style={{ color: 'var(--color-purple-light)' }}>Refund Policy</Link>
           <Link href="/privacy" style={{ color: 'var(--color-purple-light)' }}>Privacy Policy</Link>
         </div>
       </div>

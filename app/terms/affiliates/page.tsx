@@ -55,8 +55,7 @@ export default function AffiliatePolicyPage() {
             This Affiliate Programme Policy (&quot;this Policy&quot;) governs your participation in the Ventry Affiliate
             Programme as a person who refers event organisers to Ventry and earns commission when they sell tickets. Our{' '}
             <Link href="/terms/organisers" style={{ color: 'var(--color-purple-light)' }}>Organiser Terms of Use</Link>,{' '}
-            <Link href="/terms/buyers" style={{ color: 'var(--color-purple-light)' }}>Buyer Terms of Use</Link>,{' '}
-            <Link href="/refund-policy" style={{ color: 'var(--color-purple-light)' }}>Refund Policy</Link> and{' '}
+            <Link href="/terms/buyers" style={{ color: 'var(--color-purple-light)' }}>Buyer Terms of Use</Link> and{' '}
             <Link href="/privacy" style={{ color: 'var(--color-purple-light)' }}>Privacy Policy</Link> also apply to you
             where relevant.
           </P>
@@ -537,7 +536,6 @@ export default function AffiliatePolicyPage() {
         <span>&copy; {new Date().getFullYear()} Ventry. All rights reserved.</span>
         <div className="flex gap-4">
           <Link href="/terms/organisers" style={{ color: 'var(--color-purple-light)' }}>Organiser Terms</Link>
-          <Link href="/refund-policy" style={{ color: 'var(--color-purple-light)' }}>Refund Policy</Link>
           <Link href="/privacy" style={{ color: 'var(--color-purple-light)' }}>Privacy Policy</Link>
         </div>
       </div>

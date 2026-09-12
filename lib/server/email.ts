@@ -177,7 +177,7 @@ export async function sendTicketEmail(params: {
 
     ${viewAllBtn}
 
-    <p class="footer">Your payment is held in escrow by Ventry and only released to the organizer after the event occurs.</p>
+    <p class="footer">Your ticket is confirmed — thank you for your purchase.</p>
     <p class="footer">
       <a href="${APP_URL}/api/buyer/auth/claim?token=${signTicketLink({ ticketId: tickets[0].ticketId, purpose: 'buyer_claim' }, 30 * 24 * 60 * 60)}" style="color:#a855f7;">
         View all your tickets anytime

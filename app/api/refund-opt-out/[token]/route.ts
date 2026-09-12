@@ -155,10 +155,10 @@ export async function POST(
   const markFailed = (reason: string) =>
     db.from('ticket_change_refunds').update({ status: 'failed', failure_reason: reason }).eq('id', claim.id);
 
-  // Escrow gate — mirrors the admin refund-tickets route. In practice this
+  // Held-funds gate — mirrors the admin refund-tickets route. In practice this
   // window only ever opens well before the event, and payouts only release
   // after it, so this should never actually trip — kept anyway because
-  // escrow correctness must never depend on timing working out.
+  // refund correctness must never depend on timing working out.
   const { data: payout } = await db.from('payouts').select('id, gross, status').eq('event_id', ticket.event_id).maybeSingle();
   if (payout && (payout.status === 'completed' || payout.status === 'otp_pending')) {
     await markFailed('Payout already released');

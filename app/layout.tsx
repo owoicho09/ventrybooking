@@ -37,12 +37,12 @@ export const metadata: Metadata = {
 
   title: 'Ventry — Your Ticket to Every Experience',
   description:
-    'Discover and buy tickets to the best parties, concerts and events across Nigeria. Every payment protected in escrow.',
+    'Discover and buy tickets to the best parties, concerts and events across Nigeria, with secure payments and instant QR tickets.',
 
   openGraph: {
     title: 'Ventry — Your Ticket to Every Experience',
     description:
-      'Discover and buy tickets to the best parties, concerts and events across Nigeria. Every payment protected in escrow.',
+      'Discover and buy tickets to the best parties, concerts and events across Nigeria, with secure payments and instant QR tickets.',
     siteName: 'Ventry',
     url: 'https://ventrybooking.com',
     type: 'website',
@@ -61,7 +61,7 @@ export const metadata: Metadata = {
     card: 'summary_large_image',
     title: 'Ventry — Your Ticket to Every Experience',
     description:
-      'Discover and buy tickets to the best parties, concerts and events across Nigeria. Every payment protected in escrow.',
+      'Discover and buy tickets to the best parties, concerts and events across Nigeria, with secure payments and instant QR tickets.',
     images: ['/opengraph-image'],
   },
 
