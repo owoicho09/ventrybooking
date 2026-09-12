@@ -2,7 +2,6 @@ import { NextRequest, NextResponse } from 'next/server';
 import { getAuthUser } from '@/lib/server/auth';
 import { getServerSupabase } from '@/lib/supabase/server';
 import { v4 as uuidv4 } from 'uuid';
-import { compressToWebp } from '@/lib/server/imageCompress';
 
 export async function POST(
   req: NextRequest,
@@ -37,6 +36,7 @@ export async function POST(
       return NextResponse.json({ error: 'Header banner image must be under 8MB' }, { status: 400 });
     }
 
+    const { compressToWebp } = await import('@/lib/server/imageCompress');
     const webp = await compressToWebp(await bannerFile.arrayBuffer(), { maxWidth: 2160, maxHeight: 1080 });
     const path = `header-banners/${user.sub}/${uuidv4()}.webp`;
 

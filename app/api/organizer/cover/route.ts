@@ -2,7 +2,6 @@ import { NextRequest, NextResponse } from 'next/server';
 import { getAuthUser } from '@/lib/server/auth';
 import { getServerSupabase } from '@/lib/supabase/server';
 import { v4 as uuidv4 } from 'uuid';
-import { compressToWebp } from '@/lib/server/imageCompress';
 
 export async function POST(req: NextRequest) {
   const user = await getAuthUser();
@@ -22,6 +21,7 @@ export async function POST(req: NextRequest) {
       return NextResponse.json({ error: 'Cover image must be under 8MB' }, { status: 400 });
     }
 
+    const { compressToWebp } = await import('@/lib/server/imageCompress');
     const webp = await compressToWebp(await coverFile.arrayBuffer(), { maxWidth: 2160, maxHeight: 1080 });
     const path = `organizer-covers/${user.sub}/${uuidv4()}.webp`;
 

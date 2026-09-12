@@ -7,49 +7,53 @@ import { sendAdminNewEventEmail } from '@/lib/server/email';
 import { generateEventSlug } from '@/lib/server/slug';
 import { isValidAccentColor } from '@/lib/accentColors';
 import { PLATFORM_FEE_RATE } from '@/lib/fees';
-import { compressToWebp } from '@/lib/server/imageCompress';
 import { normalizeLineup } from '@/lib/server/lineup';
 import { normalizeEmailDomains } from '@/lib/server/domainRestriction';
 
 export async function GET(req: NextRequest) {
-  const user = await getAuthUser();
-  if (!user || user.role !== 'organizer') {
-    return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
+  try {
+    const user = await getAuthUser();
+    if (!user || user.role !== 'organizer') {
+      return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
+    }
+
+    const db = getServerSupabase();
+    const { searchParams } = req.nextUrl;
+    const status = searchParams.get('status');
+
+    const { data: org } = await db.from('users').select('platform_fee_rate').eq('id', user.sub).maybeSingle();
+
+    let qb = db
+      .from('events')
+      .select(`
+        id, name:event_name, category, date, time, event_mode, venue, city, status, total_sold, banner_color,
+        tiers:ticket_tiers(id, name, price, available, sold)
+      `)
+      .eq('organizer_id', user.sub)
+      .order('date', { ascending: false });
+
+    if (status) qb = qb.eq('status', status);
+
+    const { data, error } = await qb;
+    if (error) return NextResponse.json({ error: 'Failed to fetch events' }, { status: 500 });
+
+    // Compute totalSold from ticket_tiers.sold (the live counter kept by
+    // increment_tier_sold) rather than relying on events.total_sold directly.
+    // This also fixes the snake_case → camelCase mismatch the dashboard expects.
+    type RawTier = { id: string; name: string; price: number; available: number; sold: number };
+    const mapped = (data || []).map(ev => ({
+      ...ev,
+      totalSold: ((ev.tiers as RawTier[]) ?? []).reduce((sum, t) => sum + (t.sold ?? 0), 0),
+    }));
+
+    return NextResponse.json(
+      { success: true, data: mapped, platformFeeRate: org?.platform_fee_rate ?? PLATFORM_FEE_RATE },
+      { headers: { 'Cache-Control': 'no-store' } },
+    );
+  } catch (err) {
+    console.error('GET /api/organizer/events error', err);
+    return NextResponse.json({ error: 'Failed to fetch events' }, { status: 500 });
   }
-
-  const db = getServerSupabase();
-  const { searchParams } = req.nextUrl;
-  const status = searchParams.get('status');
-
-  const { data: org } = await db.from('users').select('platform_fee_rate').eq('id', user.sub).maybeSingle();
-
-  let qb = db
-    .from('events')
-    .select(`
-      id, name:event_name, category, date, time, event_mode, venue, city, status, total_sold, banner_color,
-      tiers:ticket_tiers(id, name, price, available, sold)
-    `)
-    .eq('organizer_id', user.sub)
-    .order('date', { ascending: false });
-
-  if (status) qb = qb.eq('status', status);
-
-  const { data, error } = await qb;
-  if (error) return NextResponse.json({ error: 'Failed to fetch events' }, { status: 500 });
-
-  // Compute totalSold from ticket_tiers.sold (the live counter kept by
-  // increment_tier_sold) rather than relying on events.total_sold directly.
-  // This also fixes the snake_case → camelCase mismatch the dashboard expects.
-  type RawTier = { id: string; name: string; price: number; available: number; sold: number };
-  const mapped = (data || []).map(ev => ({
-    ...ev,
-    totalSold: ((ev.tiers as RawTier[]) ?? []).reduce((sum, t) => sum + (t.sold ?? 0), 0),
-  }));
-
-  return NextResponse.json(
-    { success: true, data: mapped, platformFeeRate: org?.platform_fee_rate ?? PLATFORM_FEE_RATE },
-    { headers: { 'Cache-Control': 'no-store' } },
-  );
 }
 
 export async function POST(req: NextRequest) {
@@ -135,6 +139,12 @@ export async function POST(req: NextRequest) {
       if (headerBannerFile.size > 8 * 1024 * 1024) {
         return NextResponse.json({ error: 'Header banner image must be under 8MB' }, { status: 400 });
       }
+      // Lazy-imported: this pulls in `sharp`, a native module. Importing it at
+      // module scope would crash every request to this file (GET included)
+      // the moment sharp's binary fails to load on the server, as happened in
+      // production on 2026-09-12 — it took down the organizer events list for
+      // every organizer, not just header-banner uploads.
+      const { compressToWebp } = await import('@/lib/server/imageCompress');
       const webp = await compressToWebp(await headerBannerFile.arrayBuffer(), { maxWidth: 2160, maxHeight: 1080 });
       const path = `header-banners/${organizerId}/${uuidv4()}.webp`;
       const { error: uploadError } = await db.storage
