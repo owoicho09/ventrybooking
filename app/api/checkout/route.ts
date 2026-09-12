@@ -69,15 +69,36 @@ export async function POST(req: NextRequest) {
     }
 
     // A free tier can still ride along in an otherwise-paid cart — cap it
-    // here too so the per-order free-ticket limit can't be bypassed by
-    // mixing in a paid tier.
-    const FREE_TICKET_ORDER_CAP = 2;
+    // here too, cumulative with any free tickets already claimed for this
+    // event, so the per-buyer free-ticket limit can't be bypassed by mixing
+    // in a paid tier or by checking out repeatedly in small batches.
+    const FREE_TICKET_EVENT_CAP = 2;
     const freeQty = cartItems.reduce((s, i) => {
       const tier = tierById.get(i.tierId)!;
       return tier.price === 0 ? s + i.quantity : s;
     }, 0);
-    if (freeQty > FREE_TICKET_ORDER_CAP) {
-      return NextResponse.json({ error: `Free tickets are limited to a maximum of ${FREE_TICKET_ORDER_CAP} per order` }, { status: 400 });
+    if (freeQty > 0) {
+      const email = buyerEmail.toLowerCase().trim();
+      const { count: existingFreeCount, error: countErr } = await db
+        .from('tickets')
+        .select('id', { count: 'exact', head: true })
+        .eq('event_id', eventId)
+        .ilike('buyer_email', email)
+        .eq('total_paid', 0)
+        .in('status', ['valid', 'used']);
+      if (countErr) {
+        console.error('POST /api/checkout: existing free ticket count error', countErr);
+        return NextResponse.json({ error: 'Failed to verify ticket limit' }, { status: 500 });
+      }
+      const alreadyClaimed = existingFreeCount ?? 0;
+      if (alreadyClaimed + freeQty > FREE_TICKET_EVENT_CAP) {
+        const remainingAllowed = Math.max(0, FREE_TICKET_EVENT_CAP - alreadyClaimed);
+        return NextResponse.json({
+          error: remainingAllowed > 0
+            ? `Free tickets are limited to ${FREE_TICKET_EVENT_CAP} per person for this event — you can still get ${remainingAllowed} more.`
+            : `You've already claimed the maximum of ${FREE_TICKET_EVENT_CAP} free tickets for this event.`,
+        }, { status: 400 });
+      }
     }
 
     const { subtotal, serviceFee, processingFee, total } = buyerTotalForItems(

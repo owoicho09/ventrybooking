@@ -24,15 +24,9 @@ export async function POST(req: NextRequest) {
     if (new Set(cartItems.map(i => i.tierId)).size !== cartItems.length) {
       return NextResponse.json({ error: 'Duplicate ticket tier in order' }, { status: 400 });
     }
-    // Every item on this route is a free ticket, so the 2-per-order cap
-    // applies to the whole cart, not per tier.
-    const FREE_TICKET_ORDER_CAP = 2;
-    const totalRequestedQty = cartItems.reduce((s, i) => s + i.quantity, 0);
-    if (totalRequestedQty > FREE_TICKET_ORDER_CAP) {
-      return NextResponse.json({ error: `Free tickets are limited to a maximum of ${FREE_TICKET_ORDER_CAP} per order` }, { status: 400 });
-    }
 
     const db = getServerSupabase();
+    const email = buyerEmail.toLowerCase().trim();
 
     const { data: event } = await db
       .from('events')
@@ -48,6 +42,32 @@ export async function POST(req: NextRequest) {
         { error: `This event is restricted to ${(event.allowed_email_domains as string[]).map(d => `@${d}`).join(' or ')} email addresses.` },
         { status: 403 },
       );
+    }
+
+    // Cap is per buyer per event, cumulative across every free order they've
+    // already placed — not just per checkout — otherwise a buyer can rack up
+    // as many as they want by checking out repeatedly in small batches.
+    const FREE_TICKET_EVENT_CAP = 2;
+    const requestedQty = cartItems.reduce((s, i) => s + i.quantity, 0);
+    const { count: existingFreeCount, error: countErr } = await db
+      .from('tickets')
+      .select('id', { count: 'exact', head: true })
+      .eq('event_id', eventId)
+      .ilike('buyer_email', email)
+      .eq('total_paid', 0)
+      .in('status', ['valid', 'used']);
+    if (countErr) {
+      console.error('POST /api/checkout/free: existing free ticket count error', countErr);
+      return NextResponse.json({ error: 'Failed to verify ticket limit' }, { status: 500 });
+    }
+    const alreadyClaimed = existingFreeCount ?? 0;
+    if (alreadyClaimed + requestedQty > FREE_TICKET_EVENT_CAP) {
+      const remainingAllowed = Math.max(0, FREE_TICKET_EVENT_CAP - alreadyClaimed);
+      return NextResponse.json({
+        error: remainingAllowed > 0
+          ? `Free tickets are limited to ${FREE_TICKET_EVENT_CAP} per person for this event — you can still get ${remainingAllowed} more.`
+          : `You've already claimed the maximum of ${FREE_TICKET_EVENT_CAP} free tickets for this event.`,
+      }, { status: 400 });
     }
 
     const { data: tiers } = await db
@@ -71,7 +91,6 @@ export async function POST(req: NextRequest) {
       }
     }
 
-    const email        = buyerEmail.toLowerCase().trim();
     const purchasedAt  = new Date().toISOString();
     const consent      = marketingConsent === true;
     const ventryConsent = ventryMarketingConsent === true;
