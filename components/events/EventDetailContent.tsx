@@ -72,12 +72,27 @@ export function EventDetailContent({ identifier }: EventDetailContentProps) {
     }).catch(() => {});
   }, [event, searchParams]);
 
+  // Free tickets are capped at 2 per order (across all free tiers combined)
+  // to curb bulk claiming — paid tiers keep the normal 10-per-tier cap.
+  const FREE_TIER_ORDER_CAP = 2;
+
+  const maxQtyForTier = (tier: TicketTier) => {
+    const remaining = tier.available - tier.sold;
+    let cap = Math.min(10, remaining);
+    if (tier.price === 0) {
+      const otherFreeQty = (event?.tiers ?? [])
+        .filter(t => t.price === 0 && t.id !== tier.id)
+        .reduce((s, t) => s + (quantities[t.id] ?? 0), 0);
+      cap = Math.min(cap, Math.max(0, FREE_TIER_ORDER_CAP - otherFreeQty));
+    }
+    return cap;
+  };
+
   const updateQty = (tierId: string, delta: number) => {
     if (!event) return;
     const tier = event.tiers.find(t => t.id === tierId);
     if (!tier) return;
-    const remaining = tier.available - tier.sold;
-    setQuantities(prev => ({ ...prev, [tierId]: Math.max(0, Math.min(Math.min(10, remaining), (prev[tierId] ?? 0) + delta)) }));
+    setQuantities(prev => ({ ...prev, [tierId]: Math.max(0, Math.min(maxQtyForTier(tier), (prev[tierId] ?? 0) + delta)) }));
   };
 
   const selectedTiers    = event ? event.tiers.filter(t => (quantities[t.id] ?? 0) > 0) : [];
@@ -235,12 +250,15 @@ export function EventDetailContent({ identifier }: EventDetailContentProps) {
                         <span className="text-xs" style={{ color: 'var(--color-text-dim)' }}>{remaining} left</span>
                       </div>
                     )}
+                    {tier.price === 0 && (
+                      <p className="text-xs mt-1" style={{ color: 'var(--color-text-dim)' }}>Max {FREE_TIER_ORDER_CAP} free tickets per order</p>
+                    )}
                   </div>
                   {isSoldOut ? <Badge variant="gray">{URGENCY_LABEL.sold_out}</Badge> : (
                     <div className="flex items-center gap-2">
                       <button onClick={() => updateQty(tier.id, -1)} disabled={qty === 0} className="w-7 h-7 rounded-md flex items-center justify-center border transition-colors disabled:opacity-30" style={{ borderColor: 'var(--color-border)', color: 'var(--color-text)', backgroundColor: 'var(--color-surface)' }}><Minus size={13} /></button>
                       <span className="w-5 text-center text-sm font-semibold" style={{ color: 'var(--color-text)' }}>{qty}</span>
-                      <button onClick={() => updateQty(tier.id, 1)} disabled={qty >= Math.min(10, remaining)} className="w-7 h-7 rounded-md flex items-center justify-center border transition-colors disabled:opacity-30" style={{ borderColor: 'var(--color-purple)', color: 'var(--color-purple)', backgroundColor: 'var(--color-purple-dim)' }}><Plus size={13} /></button>
+                      <button onClick={() => updateQty(tier.id, 1)} disabled={qty >= maxQtyForTier(tier)} className="w-7 h-7 rounded-md flex items-center justify-center border transition-colors disabled:opacity-30" style={{ borderColor: 'var(--color-purple)', color: 'var(--color-purple)', backgroundColor: 'var(--color-purple-dim)' }}><Plus size={13} /></button>
                     </div>
                   )}
                 </div>

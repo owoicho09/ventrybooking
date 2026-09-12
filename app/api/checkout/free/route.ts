@@ -24,6 +24,13 @@ export async function POST(req: NextRequest) {
     if (new Set(cartItems.map(i => i.tierId)).size !== cartItems.length) {
       return NextResponse.json({ error: 'Duplicate ticket tier in order' }, { status: 400 });
     }
+    // Every item on this route is a free ticket, so the 2-per-order cap
+    // applies to the whole cart, not per tier.
+    const FREE_TICKET_ORDER_CAP = 2;
+    const totalRequestedQty = cartItems.reduce((s, i) => s + i.quantity, 0);
+    if (totalRequestedQty > FREE_TICKET_ORDER_CAP) {
+      return NextResponse.json({ error: `Free tickets are limited to a maximum of ${FREE_TICKET_ORDER_CAP} per order` }, { status: 400 });
+    }
 
     const db = getServerSupabase();
 

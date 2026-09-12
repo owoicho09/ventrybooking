@@ -68,6 +68,18 @@ export async function POST(req: NextRequest) {
       }
     }
 
+    // A free tier can still ride along in an otherwise-paid cart — cap it
+    // here too so the per-order free-ticket limit can't be bypassed by
+    // mixing in a paid tier.
+    const FREE_TICKET_ORDER_CAP = 2;
+    const freeQty = cartItems.reduce((s, i) => {
+      const tier = tierById.get(i.tierId)!;
+      return tier.price === 0 ? s + i.quantity : s;
+    }, 0);
+    if (freeQty > FREE_TICKET_ORDER_CAP) {
+      return NextResponse.json({ error: `Free tickets are limited to a maximum of ${FREE_TICKET_ORDER_CAP} per order` }, { status: 400 });
+    }
+
     const { subtotal, serviceFee, processingFee, total } = buyerTotalForItems(
       cartItems.map(i => ({ price: tierById.get(i.tierId)!.price, quantity: i.quantity })),
     );
