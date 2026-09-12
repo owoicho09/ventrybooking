@@ -10,6 +10,7 @@ import { Button } from '@/components/ui/Button';
 import { useToast } from '@/components/ui/Toast';
 import { ACCENT_COLOR_PRESETS } from '@/lib/accentColors';
 import { BannerCropInput } from '@/components/organizer/BannerCropInput';
+import { FlyerUploadInput } from '@/components/organizer/FlyerUploadInput';
 import { compressImageFile } from '@/lib/compressImage';
 
 interface Tier { id: string; name: string; price: string; quantity: string; }
@@ -182,9 +183,9 @@ export default function CreateEventPage() {
         <Input label="Event Name" value={name} onChange={e => setName(e.target.value)} placeholder="e.g. Afrobeat Vibes Festival 2026" required />
         <Select label="Event Type" options={eventTypes} value={category} onChange={e => setCategory(e.target.value)} />
         <Textarea label="Description" value={description} onChange={e => setDescription(e.target.value)} placeholder="Tell attendees what to expect..." rows={4} />
-        <BannerCropInput
+        <FlyerUploadInput
           label="Event Flyer"
-          onCropped={setBanner}
+          onFile={setBanner}
           onColorExtracted={handleColorExtracted}
           buttonText={banner ? `${banner.name} — click to replace` : undefined}
         />

@@ -15,6 +15,7 @@ import { useToast } from '@/components/ui/Toast';
 import { formatNGN, formatShortDate } from '@/lib/utils';
 import { ACCENT_COLOR_PRESETS } from '@/lib/accentColors';
 import { BannerCropInput } from '@/components/organizer/BannerCropInput';
+import { FlyerUploadInput } from '@/components/organizer/FlyerUploadInput';
 import { EventQRCode } from '@/components/organizer/EventQRCode';
 
 interface Tier { id: string; name: string; price: number; available: number; sold: number; }
@@ -635,10 +636,10 @@ export default function OrganizerEventDetailPage() {
       {/* Flyer upload */}
       <div className="rounded-xl border p-5 flex flex-col gap-3"
         style={{ backgroundColor: 'var(--color-surface)', borderColor: 'var(--color-border)' }}>
-        <BannerCropInput
+        <FlyerUploadInput
           label="Event Flyer"
           currentUrl={event.banner_url}
-          onCropped={handleBannerChange}
+          onFile={handleBannerChange}
           onColorExtracted={hex => { pendingExtractedColorRef.current = hex; }}
           buttonText={event.banner_url ? 'Click to replace flyer' : undefined}
         />
