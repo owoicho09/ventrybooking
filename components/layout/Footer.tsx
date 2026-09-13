@@ -7,7 +7,7 @@ export function Footer() {
     { href: '/#how-it-works', label: 'How It Works' },
     { href: '/#for-organizers', label: 'For Organizers' },
     { href: '/affiliates', label: 'Affiliates' },
-    { href: '/help', label: 'Help & Refunds' },
+    { href: '/help', label: 'Help' },
     { href: '/terms/buyers', label: 'Buyer Terms' },
     { href: '/terms/organisers', label: 'Organiser Terms' },
     { href: '/terms/affiliates', label: 'Affiliate Policy' },

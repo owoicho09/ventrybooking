@@ -1,7 +1,8 @@
 'use client';
 
-import { Mail, MessageCircle, ChevronDown } from 'lucide-react';
+import { Mail, MessageCircle, ChevronDown, ChevronRight } from 'lucide-react';
 import { useState } from 'react';
+import Link from 'next/link';
 import { PublicNav } from '@/components/layout/PublicNav';
 import { Footer } from '@/components/layout/Footer';
 
@@ -20,7 +21,11 @@ const faqItems = [
   },
   {
     q: 'Will I get a refund if an event is cancelled?',
-    a: 'Yes. If an organizer cancels an event through Ventry, all buyers receive an automatic refund of the base ticket price within 3-5 business days. The Ventry service fee (2%, capped at ₦3,000 per ticket for tickets above ₦150,000) is non-refundable.',
+    a: 'Yes. If an event is cancelled or rescheduled outright, or flagged as fraudulent, every ticket holder is refunded the base ticket price automatically — you don’t need to file anything. It typically appears back in your account within 3-5 business days. The Ventry service fee (2%, capped at ₦3,000 per ticket for tickets above ₦150,000) and the payment processing fee are non-refundable in every case.',
+  },
+  {
+    q: 'What if the venue, date or a billed headliner changes?',
+    a: 'A change of venue or date, or a billed Headliner not appearing, opens a 48-hour window from the moment we notify you to request a refund — after that the window closes and your ticket stands as-is for the new details. If the event itself goes wrong on the day (e.g. it doesn’t happen as promised), that claim must be filed within 24 hours of the event ending. See our Buyer Terms for the full policy.',
   },
   {
     q: 'How do I report a suspicious or fraudulent event?',
@@ -28,7 +33,7 @@ const faqItems = [
   },
   {
     q: 'Can I get a refund if I change my mind?',
-    a: 'No. Ventry tickets are non-refundable for buyer change of mind. Refunds only apply when an event is cancelled or flagged as fraudulent by Ventry.',
+    a: 'No. Ventry tickets are non-refundable for a simple change of mind. Refunds only apply when an event is cancelled, flagged as fraudulent, or one of the qualifying changes above applies.',
   },
 ];
 
@@ -131,6 +136,16 @@ export default function HelpPage() {
             </div>
           ))}
         </div>
+
+        <p className="text-center mt-6">
+          <Link
+            href="/terms/buyers"
+            className="inline-flex items-center gap-1 text-sm font-medium hover:underline"
+            style={{ color: 'var(--color-purple-light)' }}
+          >
+            Read the full Buyer Terms of Use <ChevronRight size={14} />
+          </Link>
+        </p>
       </div>
       <Footer />
     </div>
