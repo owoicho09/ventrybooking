@@ -30,7 +30,7 @@ export async function GET(
     const { data: tickets, error } = await db
       .from('tickets')
       .select(`
-        id, buyer_name, buyer_email, paystack_reference, purchased_at, marketing_consent,
+        id, buyer_name, paystack_reference, purchased_at, marketing_consent,
         tier:ticket_tiers!tickets_tier_id_fkey(name)
       `)
       .eq('event_id', id)
@@ -43,7 +43,6 @@ export async function GET(
     type RawTicket = {
       id: string;
       buyer_name: string;
-      buyer_email: string;
       paystack_reference: string;
       purchased_at: string;
       marketing_consent: boolean;
@@ -52,7 +51,6 @@ export async function GET(
 
     const orderMap = new Map<string, {
       buyerName: string;
-      buyerEmail: string;
       tierName: string;
       quantity: number;
       purchasedAt: string;
@@ -65,7 +63,6 @@ export async function GET(
       if (!orderMap.has(ref)) {
         orderMap.set(ref, {
           buyerName:        ticket.buyer_name,
-          buyerEmail:       ticket.buyer_email,
           tierName,
           quantity:         1,
           purchasedAt:      ticket.purchased_at,
@@ -78,10 +75,9 @@ export async function GET(
 
     const csvEscape = (v: string) => `"${String(v).replace(/"/g, '""')}"`;
 
-    const header = ['Buyer Name', 'Email', 'Ticket Tier', 'Quantity', 'Purchase Date', 'Marketing Consent'];
+    const header = ['Buyer Name', 'Ticket Tier', 'Quantity', 'Purchase Date', 'Marketing Consent'];
     const rows   = Array.from(orderMap.values()).map(o => [
       csvEscape(o.buyerName),
-      csvEscape(o.buyerEmail),
       csvEscape(o.tierName),
       String(o.quantity),
       csvEscape(new Date(o.purchasedAt).toLocaleString('en-NG', { timeZone: 'Africa/Lagos' })),

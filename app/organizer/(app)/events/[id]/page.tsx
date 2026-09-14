@@ -784,7 +784,7 @@ export default function OrganizerEventDetailPage() {
         <div>
           <h2 className="font-semibold" style={{ color: 'var(--color-text)' }}>Attendee List</h2>
           <p className="text-xs mt-0.5" style={{ color: 'var(--color-text-muted)' }}>
-            Download a CSV of all buyers including name, email, tier, quantity, date, and marketing consent.
+            Download a CSV of all buyers including name, tier, quantity, date, and marketing consent.
           </p>
         </div>
         <Button
