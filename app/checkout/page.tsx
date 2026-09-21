@@ -352,8 +352,8 @@ export default function CheckoutPage() {
                 style={{ borderColor: 'var(--color-border)', color: 'var(--color-text-muted)' }}>
                 <p className="font-semibold mb-1" style={{ color: 'var(--color-text)' }}>Didn&apos;t get the code?</p>
                 <p className="mb-3">
-                  Make sure <strong style={{ color: 'var(--color-text)', wordBreak: 'break-all' }}>{normalizedEmail}</strong> is
-                  the email address you meant to enter. A typo is the most common reason. Also check your spam or
+                  Make sure <strong style={{ color: 'var(--color-text)', wordBreak: 'break-all' }}>{normalizedEmail}</strong>{' '}
+                  is the email address you meant to enter. A typo is the most common reason. Also check your spam or
                   promotions folder. If it&apos;s wrong, change it; otherwise you can resend the code.
                 </p>
                 <div className="flex flex-wrap gap-2">
