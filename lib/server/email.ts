@@ -233,6 +233,22 @@ export async function sendBuyerLoginOTPEmail(to: string, otp: string) {
   });
 }
 
+export async function sendCheckoutOTPEmail(to: string, otp: string) {
+  await sendEmail({
+    to,
+    subject: `Your Ventry verification code: ${otp}`,
+    html: emailShell(`
+      <h1 style="color:#a855f7;font-size:22px;margin:0 0 12px;">Confirm your email</h1>
+      <p style="color:#f1f0ff;margin:0 0 24px;">Enter this code on the checkout page to confirm this is the right email address for your tickets:</p>
+      <div style="text-align:center;background:#12121a;border:1px solid #2d2d3d;border-radius:12px;padding:28px;margin-bottom:24px;">
+        <span style="font-size:36px;font-weight:700;letter-spacing:0.25em;color:#a855f7;font-family:monospace;">${otp}</span>
+      </div>
+      <p style="color:#9ca3af;font-size:13px;margin:0;">Expires in <strong style="color:#f1f0ff;">10 minutes</strong>. Your tickets will be sent to this address, so make sure you can read it. If you didn't start a purchase on Ventry, ignore this email.</p>
+    `),
+    purpose: 'checkout_otp',
+  });
+}
+
 export async function sendKYCApprovedEmail(to: string, name: string) {
   await sendEmail({
     to,

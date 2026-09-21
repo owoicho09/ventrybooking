@@ -3,16 +3,23 @@ import { getServerSupabase } from '@/lib/supabase/server';
 import { initializeTransaction } from '@/lib/server/paystack';
 import { buyerTotalForItems } from '@/lib/server/fees';
 import { isEmailDomainAllowed } from '@/lib/server/domainRestriction';
+import { isCheckoutEmailVerified, EMAIL_NOT_VERIFIED_CODE } from '@/lib/server/checkoutEmailVerification';
 import { v4 as uuidv4 } from 'uuid';
 
 interface CartItem { tierId: string; quantity: number }
 
 export async function POST(req: NextRequest) {
   try {
-    const { eventId, items, buyerEmail, buyerName, marketingConsent, ventryMarketingConsent, ref, purchasedByEmail } = await req.json();
+    const { eventId, items, buyerEmail, buyerName, marketingConsent, ventryMarketingConsent, ref, purchasedByEmail, emailToken } = await req.json();
 
     if (!eventId || !Array.isArray(items) || items.length === 0 || !buyerEmail) {
       return NextResponse.json({ error: 'Missing required fields' }, { status: 400 });
+    }
+    if (!(await isCheckoutEmailVerified(buyerEmail, emailToken))) {
+      return NextResponse.json(
+        { error: 'Please confirm your email address to continue.', code: EMAIL_NOT_VERIFIED_CODE },
+        { status: 403 },
+      );
     }
     const cartItems = items as CartItem[];
     for (const item of cartItems) {

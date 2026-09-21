@@ -39,6 +39,19 @@ export default function CheckoutPage() {
   // rule) but the order still needs to be attributable back to this session.
   const [sessionEmail, setSessionEmail]       = useState<string | null>(null);
 
+  // Email verification. A guest must prove they can read the inbox they typed
+  // before an order is created, which catches typos like "gmil.com" up front.
+  // The token is bound to the exact email it was issued for, so editing the
+  // email afterwards invalidates it (see needsVerification below).
+  const [step, setStep]                       = useState<'details' | 'verify'>('details');
+  const [otp, setOtp]                         = useState('');
+  const [emailToken, setEmailToken]           = useState<string | null>(null);
+  const [verifiedEmail, setVerifiedEmail]     = useState<string | null>(null);
+  const [codeLength, setCodeLength]           = useState(6);
+  const [cooldown, setCooldown]               = useState(0);
+  const [resending, setResending]             = useState(false);
+  const [notice, setNotice]                   = useState('');
+
   useEffect(() => {
     const raw = sessionStorage.getItem('ventry_cart');
     if (raw) {
@@ -60,6 +73,12 @@ export default function CheckoutPage() {
       .catch(() => {});
   }, []);
 
+  useEffect(() => {
+    if (cooldown <= 0) return;
+    const t = setTimeout(() => setCooldown(c => c - 1), 1000);
+    return () => clearTimeout(t);
+  }, [cooldown]);
+
   const { subtotal, serviceFee, processingFee, total } = cart
     ? buyerTotalForItems(cart.items.map(i => ({ price: i.tierPrice, quantity: i.quantity })))
     : { subtotal: 0, serviceFee: 0, processingFee: 0, total: 0 };
@@ -69,65 +88,146 @@ export default function CheckoutPage() {
   const emailDomain = email.trim().toLowerCase().split('@')[1];
   const domainBlocked = !!restrictedDomains?.length && !!email && !restrictedDomains.includes(emailDomain || '');
 
+  const normalizedEmail = email.trim().toLowerCase();
+  // A signed-in buyer is already verified server-side; guests need a token
+  // issued for exactly the email currently in the field.
+  const needsVerification = !sessionEmail && !(emailToken && verifiedEmail === normalizedEmail);
+
+  // Returns true once a code is on its way (including "one was just sent" —
+  // the server's resend cooldown answers 429 with retryAfter in that case).
+  const sendCode = async (): Promise<boolean> => {
+    const res = await fetch('/api/checkout/email-otp/request', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ email: normalizedEmail }),
+    });
+    const data = await res.json().catch(() => ({}));
+    if (res.ok) {
+      setCooldown(data.data?.cooldownSeconds ?? 60);
+      if (data.data?.codeLength) setCodeLength(data.data.codeLength);
+      return true;
+    }
+    if (res.status === 429 && typeof data.retryAfter === 'number') {
+      setCooldown(data.retryAfter);
+      return true;
+    }
+    setError(data.error || 'Could not send a code. Please try again.');
+    return false;
+  };
+
+  // Creates the order (free) or the Paystack session (paid). Only ever called
+  // once the email is verified; the server re-checks the token regardless.
+  const placeOrder = async (token: string | null) => {
+    if (!cart) return;
+    const endpoint = isFree ? '/api/checkout/free' : '/api/checkout';
+    const res = await fetch(endpoint, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        eventId: cart.eventId,
+        items: cart.items.map(i => ({ tierId: i.tierId, quantity: i.quantity })),
+        buyerEmail: normalizedEmail,
+        buyerName: buyerName.trim(),
+        marketingConsent,
+        ventryMarketingConsent,
+        ref: cart.ref,
+        purchasedByEmail: sessionEmail,
+        emailToken: token,
+      }),
+    });
+    const data = await res.json();
+    if (!res.ok) {
+      if (data.code === 'EMAIL_NOT_VERIFIED') {
+        // Token expired or was rejected: start verification over.
+        setEmailToken(null);
+        setVerifiedEmail(null);
+      }
+      setStep('details');
+      setError(data.error || (isFree ? 'Failed to get your free ticket' : 'Failed to initialize payment'));
+      return;
+    }
+    if (isFree) {
+      sessionStorage.removeItem('ventry_cart');
+      window.location.href = `/ticket/${data.data.ticketId}?new=1`;
+    } else {
+      window.location.href = data.data.authorizationUrl;
+    }
+  };
+
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     if (!cart) return;
     setError('');
+    setNotice('');
     if (domainBlocked) {
       setError(`This event is restricted to ${restrictedDomains!.map(d => `@${d}`).join(' or ')} email addresses.`);
       return;
     }
     setLoading(true);
     try {
-      if (isFree) {
-        const res = await fetch('/api/checkout/free', {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({
-            eventId: cart.eventId,
-            items: cart.items.map(i => ({ tierId: i.tierId, quantity: i.quantity })),
-            buyerEmail: email.trim().toLowerCase(),
-            buyerName: buyerName.trim(),
-            marketingConsent,
-            ventryMarketingConsent,
-            ref: cart.ref,
-            purchasedByEmail: sessionEmail,
-          }),
-        });
-        const data = await res.json();
-        if (!res.ok) {
-          setError(data.error || 'Failed to get your free ticket');
-          return;
-        }
-        sessionStorage.removeItem('ventry_cart');
-        window.location.href = `/ticket/${data.data.ticketId}?new=1`;
-      } else {
-        const res = await fetch('/api/checkout', {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({
-            eventId: cart.eventId,
-            items: cart.items.map(i => ({ tierId: i.tierId, quantity: i.quantity })),
-            buyerEmail: email.trim().toLowerCase(),
-            buyerName: buyerName.trim(),
-            marketingConsent,
-            ventryMarketingConsent,
-            ref: cart.ref,
-            purchasedByEmail: sessionEmail,
-          }),
-        });
-        const data = await res.json();
-        if (!res.ok) {
-          setError(data.error || 'Failed to initialize payment');
-          return;
-        }
-        window.location.href = data.data.authorizationUrl;
+      if (needsVerification) {
+        setOtp('');
+        if (await sendCode()) setStep('verify');
+        return;
       }
+      await placeOrder(emailToken);
     } catch {
       setError('Network error. Please try again.');
     } finally {
       setLoading(false);
     }
+  };
+
+  const handleVerify = async (e: React.FormEvent) => {
+    e.preventDefault();
+    setError('');
+    setNotice('');
+    setLoading(true);
+    try {
+      const res = await fetch('/api/checkout/email-otp/verify', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ email: normalizedEmail, otp: otp.trim() }),
+      });
+      const data = await res.json();
+      if (!res.ok) {
+        setError(data.error || 'Could not verify that code');
+        return;
+      }
+      const token: string = data.data.emailToken;
+      setEmailToken(token);
+      setVerifiedEmail(normalizedEmail);
+      // Verified: carry straight on into the purchase, no second click.
+      await placeOrder(token);
+    } catch {
+      setError('Network error. Please try again.');
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  const handleResend = async () => {
+    if (cooldown > 0 || resending) return;
+    setError('');
+    setNotice('');
+    setResending(true);
+    try {
+      if (await sendCode()) {
+        setOtp('');
+        setNotice(`A new code was sent to ${normalizedEmail}.`);
+      }
+    } catch {
+      setError('Network error. Please try again.');
+    } finally {
+      setResending(false);
+    }
+  };
+
+  const handleChangeEmail = () => {
+    setStep('details');
+    setOtp('');
+    setError('');
+    setNotice('');
   };
 
   if (!cart) {
@@ -212,7 +312,7 @@ export default function CheckoutPage() {
             style={{ backgroundColor: 'var(--color-surface)', borderColor: 'var(--color-border)' }}>
             <h1 className="text-2xl font-bold mb-6"
               style={{ color: 'var(--color-text)', fontFamily: 'var(--font-syne), sans-serif' }}>
-              {isFree ? 'Get Your Free Ticket' : 'Complete Your Order'}
+              {step === 'verify' ? 'Confirm Your Email' : isFree ? 'Get Your Free Ticket' : 'Complete Your Order'}
             </h1>
             {error && (
               <div className="mb-4 rounded-lg px-4 py-3 text-sm border"
@@ -220,6 +320,53 @@ export default function CheckoutPage() {
                 {error}
               </div>
             )}
+            {notice && (
+              <div className="mb-4 rounded-lg px-4 py-3 text-sm border"
+                style={{ backgroundColor: 'var(--color-purple-dim)', borderColor: 'var(--color-border)', color: 'var(--color-purple-light)' }}>
+                {notice}
+              </div>
+            )}
+            {step === 'verify' ? (
+            <form onSubmit={handleVerify} className="flex flex-col gap-5">
+              <p className="text-sm leading-relaxed" style={{ color: 'var(--color-text-muted)' }}>
+                We sent a {codeLength}-digit code to{' '}
+                <strong style={{ color: 'var(--color-text)', wordBreak: 'break-all' }}>{normalizedEmail}</strong>.
+                {' '}Enter it below to {isFree ? 'get your ticket' : 'continue to payment'}.
+              </p>
+              <Input
+                label="Verification code"
+                value={otp}
+                onChange={e => setOtp(e.target.value.replace(/\D/g, '').slice(0, codeLength))}
+                placeholder={'0'.repeat(codeLength)}
+                inputMode="numeric"
+                autoComplete="one-time-code"
+                maxLength={codeLength}
+                autoFocus
+                required
+              />
+              <Button type="submit" size="lg" fullWidth disabled={loading || otp.length !== codeLength}>
+                {loading ? 'Verifying…' : isFree ? 'Verify & Get Free Ticket' : `Verify & Pay ${formatNGN(total)}`}
+              </Button>
+
+              <div className="rounded-lg border px-4 py-3 text-xs leading-relaxed"
+                style={{ borderColor: 'var(--color-border)', color: 'var(--color-text-muted)' }}>
+                <p className="font-semibold mb-1" style={{ color: 'var(--color-text)' }}>Didn&apos;t get the code?</p>
+                <p className="mb-3">
+                  Make sure <strong style={{ color: 'var(--color-text)', wordBreak: 'break-all' }}>{normalizedEmail}</strong> is
+                  the email address you meant to enter. A typo is the most common reason. Also check your spam or
+                  promotions folder. If it&apos;s wrong, change it; otherwise you can resend the code.
+                </p>
+                <div className="flex flex-wrap gap-2">
+                  <Button type="button" size="sm" variant="outline" onClick={handleResend} disabled={cooldown > 0 || resending || loading}>
+                    {resending ? 'Sending…' : cooldown > 0 ? `Resend code in ${cooldown}s` : 'Resend code'}
+                  </Button>
+                  <Button type="button" size="sm" variant="ghost" onClick={handleChangeEmail} disabled={loading}>
+                    Change email
+                  </Button>
+                </div>
+              </div>
+            </form>
+            ) : (
             <form onSubmit={handleSubmit} className="flex flex-col gap-5">
               <Input
                 label="Your Name"
@@ -236,7 +383,9 @@ export default function CheckoutPage() {
                 helper={
                   restrictedDomains?.length
                     ? `Restricted event — only ${restrictedDomains.map(d => `@${d}`).join(' or ')} email addresses can buy.`
-                    : "Your QR ticket will be sent here. You'll also use this to retrieve your ticket."
+                    : sessionEmail
+                      ? "Your QR ticket will be sent here. You'll also use this to retrieve your ticket."
+                      : "Your QR ticket will be sent here. We'll email you a code to confirm it's correct before you continue."
                 }
                 required
               />
@@ -279,10 +428,13 @@ export default function CheckoutPage() {
 
               <Button type="submit" size="lg" fullWidth disabled={loading || !email || domainBlocked}>
                 {loading
-                  ? (isFree ? 'Getting your ticket…' : 'Redirecting to payment…')
-                  : (isFree ? 'Get Free Ticket' : `Pay ${formatNGN(total)}`)}
+                  ? (needsVerification ? 'Sending code…' : isFree ? 'Getting your ticket…' : 'Redirecting to payment…')
+                  : needsVerification
+                    ? 'Verify Email & Continue'
+                    : (isFree ? 'Get Free Ticket' : `Pay ${formatNGN(total)}`)}
               </Button>
             </form>
+            )}
 
             <div className="mt-5 flex flex-col gap-3">
               {!isFree && (
