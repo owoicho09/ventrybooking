@@ -12,4 +12,7 @@ export const LEGAL_VERSIONS = {
   organiserTerms:  { version: '2.0', effective: '15 September 2026' },
   buyerTerms:       { version: '2.0', effective: '15 September 2026' },
   affiliatePolicy:  { version: '1.0', effective: '15 September 2026' },
+  // The Privacy Policy is not a versioned acceptance document (nobody ticks a
+  // box for it), so it carries dates only. Bump both whenever its wording changes.
+  privacyPolicy:    { lastUpdated: '12 September 2026', effective: '12 September 2026' },
 } as const;

@@ -1,9 +1,10 @@
 import Link from 'next/link';
 import { PublicNav } from '@/components/layout/PublicNav';
 import { Footer } from '@/components/layout/Footer';
+import { LEGAL_VERSIONS } from '@/lib/legalVersions';
 
-const LAST_UPDATED = '31 May 2026';
-const EFFECTIVE    = '31 May 2026';
+const LAST_UPDATED = LEGAL_VERSIONS.privacyPolicy.lastUpdated;
+const EFFECTIVE    = LEGAL_VERSIONS.privacyPolicy.effective;
 const EMAIL        = 'support@ventrybooking.com';
 const DOMAIN       = 'ventrybooking.com';
 
