@@ -42,7 +42,7 @@ export default async function EventOGImage({ params }: { params: Promise<{ slug:
 
   {
     const event = await getEventForCard(slug);
-    if (event && event.status === 'approved') {
+    if (event && (event.status === 'approved' || event.status === 'completed')) {
       const accent = event.accent_color || '#7c3aed';
       return new ImageResponse(
         (

@@ -111,7 +111,10 @@ export default async function SlugRoute({ params }: PageProps) {
 
   const event = await getEventBySlug(slug);
   if (event) {
-    if (event.status !== 'approved') notFound();
+    // Completed events stay viewable (closed-checkout state, see
+    // EventDetailContent) — only unpublished ones (pending/rejected/cancelled)
+    // should 404.
+    if (event.status !== 'approved' && event.status !== 'completed') notFound();
     return <EventDetailContent identifier={slug} />;
   }
 

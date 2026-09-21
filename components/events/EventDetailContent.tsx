@@ -197,6 +197,9 @@ export function EventDetailContent({ identifier }: EventDetailContentProps) {
   // white (getContrastText) — a deliberately awful colour stays legible in
   // both themes instead of just contrasting with a white button fill.
   const isCompleted = event.status === 'completed';
+  // A past event that sold out says so — every tier out of stock, not merely
+  // one of them. Individual sold-out tiers are still flagged on their own row.
+  const wasSoldOut = event.tiers.length > 0 && event.tiers.every(t => t.available - t.sold <= 0);
 
   const safeAccent = event.accentColor
     ? accentForBackground(event.accentColor, theme === 'light' ? BG_LIGHT : BG_DARK)
@@ -220,14 +223,19 @@ export function EventDetailContent({ identifier }: EventDetailContentProps) {
         <div className="rounded-lg border p-4 flex items-start gap-3 text-sm" style={{ borderColor: 'var(--color-border)', backgroundColor: 'var(--color-surface-2)' }}>
           <Shield size={16} className="flex-shrink-0 mt-0.5" style={{ color: 'var(--color-text-dim)' }} />
           <div>
-            <p className="font-medium" style={{ color: 'var(--color-text)' }}>This event has ended</p>
-            <p className="mt-0.5" style={{ color: 'var(--color-text-muted)' }}>Ticket sales are closed and checkout is no longer available.</p>
+            <p className="font-medium" style={{ color: 'var(--color-text)' }}>{wasSoldOut ? 'This event has ended — it sold out' : 'This event has ended'}</p>
+            <p className="mt-0.5" style={{ color: 'var(--color-text-muted)' }}>
+              {wasSoldOut ? 'Every ticket was claimed. ' : ''}Ticket sales are closed and checkout is no longer available.
+            </p>
           </div>
         </div>
         <div className="flex flex-col gap-3">
           {[...event.tiers].sort((a, b) => a.price - b.price).map(tier => (
-            <div key={tier.id} className="rounded-lg border p-4 flex items-center justify-between" style={{ borderColor: 'var(--color-border)', backgroundColor: 'var(--color-surface-2)' }}>
-              <p className="font-medium text-sm" style={{ color: 'var(--color-text)' }}>{tier.name}</p>
+            <div key={tier.id} className="rounded-lg border p-4 flex items-center justify-between gap-3" style={{ borderColor: 'var(--color-border)', backgroundColor: 'var(--color-surface-2)' }}>
+              <div className="flex items-center gap-2 flex-wrap">
+                <p className="font-medium text-sm" style={{ color: 'var(--color-text)' }}>{tier.name}</p>
+                {tier.available - tier.sold <= 0 && <Badge variant="gray">{URGENCY_LABEL.sold_out}</Badge>}
+              </div>
               <p className="text-base font-bold" style={{ color: tier.price === 0 ? 'var(--color-green)' : 'var(--color-purple)' }}>
                 {tier.price === 0 ? 'Free' : formatNGN(tier.price)}
               </p>
@@ -375,6 +383,7 @@ export function EventDetailContent({ identifier }: EventDetailContentProps) {
               {(event.organizer?.verified || isCompleted) && (
                 <div className="flex flex-wrap items-center gap-2 mb-3">
                   {isCompleted && <Badge variant="blue">Completed</Badge>}
+                  {isCompleted && wasSoldOut && <Badge variant="amber">{URGENCY_LABEL.sold_out}</Badge>}
                   {event.organizer?.verified && <Badge variant="green"><CheckCircle size={11} />Ventry Verified Event</Badge>}
                 </div>
               )}
