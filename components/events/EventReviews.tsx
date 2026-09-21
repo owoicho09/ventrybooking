@@ -1,6 +1,7 @@
 'use client';
 
-import { useState, useEffect, useRef } from 'react';
+import { useState, useEffect, useRef, useCallback } from 'react';
+import { ReviewForm } from '@/components/events/ReviewForm';
 
 interface Review {
   id: string;
@@ -21,6 +22,8 @@ interface ReviewsData {
 interface Props {
   eventId: string;
   eventDate: string;
+  /** True only for a completed event: shows the rate-and-review form for verified buyers. */
+  canReview?: boolean;
   onOrgReputation?: (avg: number | null, count: number) => void;
 }
 
@@ -59,7 +62,7 @@ function timeAgo(dateStr: string): string {
   return `${Math.floor(days / 30)}mo ago`;
 }
 
-export function EventReviews({ eventId, eventDate, onOrgReputation }: Props) {
+export function EventReviews({ eventId, eventDate, canReview = false, onOrgReputation }: Props) {
   const [data, setData]           = useState<ReviewsData | null>(null);
   const [loading, setLoading]     = useState(true);
 
@@ -68,23 +71,26 @@ export function EventReviews({ eventId, eventDate, onOrgReputation }: Props) {
 
   const isPast = new Date(eventDate) < new Date();
 
-  useEffect(() => {
-    let mounted = true;
-    fetch(`/api/events/${eventId}/reviews`)
+  const load = useCallback(() => {
+    return fetch(`/api/events/${eventId}/reviews`)
       .then(r => r.json())
       .then(json => {
-        if (!mounted || !json.success) return;
+        if (!json.success) return;
         setData(json.data);
         onRepRef.current?.(json.data.organizerStats.avg, json.data.organizerStats.count);
       })
-      .catch(() => {})
-      .finally(() => { if (mounted) setLoading(false); });
-    return () => { mounted = false; };
+      .catch(() => {});
   }, [eventId]);
+
+  useEffect(() => {
+    let mounted = true;
+    load().finally(() => { if (mounted) setLoading(false); });
+    return () => { mounted = false; };
+  }, [load]);
 
   // Don't render anything while loading, or if the event hasn't happened and there are no reviews
   if (loading) return null;
-  if (!isPast && !data?.reviews?.length) return null;
+  if (!isPast && !canReview && !data?.reviews?.length) return null;
 
   const hasReviews = (data?.reviews?.length ?? 0) > 0;
   const eventAvg   = data?.eventStats?.avg ?? null;
@@ -145,10 +151,12 @@ export function EventReviews({ eventId, eventDate, onOrgReputation }: Props) {
       ) : (
         isPast && (
           <p className="text-sm text-center py-3" style={{ color: 'var(--color-text-dim)' }}>
-            No reviews yet. Checked-in ticket holders get an email invite to review after the event.
+            No reviews yet.{canReview ? ' Be the first to rate this event.' : ''}
           </p>
         )
       )}
+
+      {canReview && <ReviewForm eventId={eventId} onSubmitted={load} />}
     </div>
   );
 }

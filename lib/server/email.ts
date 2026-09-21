@@ -249,6 +249,22 @@ export async function sendCheckoutOTPEmail(to: string, otp: string) {
   });
 }
 
+export async function sendReviewOTPEmail(to: string, eventName: string, otp: string) {
+  await sendEmail({
+    to,
+    subject: `Your code to review ${eventName}: ${otp}`,
+    html: emailShell(`
+      <h1 style="color:#a855f7;font-size:22px;margin:0 0 12px;">Confirm it's you</h1>
+      <p style="color:#f1f0ff;margin:0 0 24px;">Enter this code on the <strong>${esc(eventName)}</strong> page to rate the event and leave a review:</p>
+      <div style="text-align:center;background:#12121a;border:1px solid #2d2d3d;border-radius:12px;padding:28px;margin-bottom:24px;">
+        <span style="font-size:36px;font-weight:700;letter-spacing:0.25em;color:#a855f7;font-family:monospace;">${otp}</span>
+      </div>
+      <p style="color:#9ca3af;font-size:13px;margin:0;">Expires in <strong style="color:#f1f0ff;">10 minutes</strong>. If you didn't ask to review this event, ignore this email &mdash; no review can be posted without this code.</p>
+    `),
+    purpose: 'review_otp',
+  });
+}
+
 export async function sendKYCApprovedEmail(to: string, name: string) {
   await sendEmail({
     to,
@@ -622,7 +638,7 @@ export async function sendReviewRequestEmail(params: {
     subject: `How was ${params.eventName}?`,
     html: emailShell(`
       <h1 style="color:#a855f7;font-size:22px;margin:0 0 12px;">Rate your experience</h1>
-      <p style="color:#f1f0ff;margin:0 0 24px;">Hi ${esc(params.buyerName || params.to)}, thanks for coming to <strong>${esc(params.eventName)}</strong>! Got a minute to rate it?</p>
+      <p style="color:#f1f0ff;margin:0 0 24px;">Hi ${esc(params.buyerName || params.to)}, thanks for getting a ticket to <strong>${esc(params.eventName)}</strong>. Got a minute to rate it?</p>
       <a href="${params.reviewUrl}" class="btn">Leave a Review</a>
       <p class="footer" style="margin-top:20px;">Takes 10 seconds, no account needed. This link is personal to your ticket and works once.</p>
     `),

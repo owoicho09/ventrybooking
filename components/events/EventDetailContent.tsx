@@ -537,6 +537,7 @@ export function EventDetailContent({ identifier }: EventDetailContentProps) {
             <EventReviews
               eventId={event.id}
               eventDate={event.date}
+              canReview={isCompleted}
               onOrgReputation={(avg, count) => setOrgReputation({ avg, count })}
             />
           </div>

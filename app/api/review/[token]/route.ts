@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { getServerSupabase } from '@/lib/supabase/server';
 import { verifyTicketLink } from '@/lib/server/ticketLinks';
+import { getReviewEligibility, publicReviewName } from '@/lib/server/eventReviews';
 
 // GET — read-only preview: is this ticket eligible, and has it already reviewed?
 export async function GET(
@@ -23,12 +24,15 @@ export async function GET(
 
   const { data: ticket } = await db
     .from('tickets')
-    .select('id, event_id, buyer_name')
+    .select('id, event_id, buyer_name, buyer_email')
     .eq('id', payload.ticketId)
     .maybeSingle();
   if (!ticket) return NextResponse.json({ error: 'Ticket not found.' }, { status: 404 });
 
   const { data: event } = await db.from('events').select('event_name').eq('id', ticket.event_id).maybeSingle();
+  // One review per person per event — a buyer with several tickets (each with
+  // its own link) can't review once per ticket.
+  const eligibility = await getReviewEligibility(db, ticket.event_id, ticket.buyer_email);
 
   const { data: existing } = await db
     .from('event_reviews')
@@ -41,7 +45,7 @@ export async function GET(
     data: {
       eventName: event?.event_name ?? '',
       buyerName: ticket.buyer_name,
-      alreadyReviewed: !!existing,
+      alreadyReviewed: !!existing || eligibility.alreadyReviewed,
       existingReview: existing ?? null,
     },
   });
@@ -77,7 +81,7 @@ export async function POST(
 
   const { data: ticket } = await db
     .from('tickets')
-    .select('id, event_id, buyer_name')
+    .select('id, event_id, buyer_name, buyer_email')
     .eq('id', payload.ticketId)
     .maybeSingle();
   if (!ticket) return NextResponse.json({ error: 'Ticket not found.' }, { status: 404 });
@@ -85,8 +89,16 @@ export async function POST(
   const { data: event } = await db.from('events').select('organizer_id').eq('id', ticket.event_id).maybeSingle();
   if (!event) return NextResponse.json({ error: 'Event not found.' }, { status: 404 });
 
+  const eligibility = await getReviewEligibility(db, ticket.event_id, ticket.buyer_email);
+  if (eligibility.tickets.length === 0) {
+    return NextResponse.json({ error: 'This ticket is no longer eligible to review the event.' }, { status: 403 });
+  }
+  if (eligibility.alreadyReviewed) {
+    return NextResponse.json({ error: 'You have already reviewed this event.' }, { status: 409 });
+  }
+
   const cleanBody = typeof body === 'string' && body.trim() ? body.trim() : null;
-  const displayName = ticket.buyer_name?.trim() || 'Verified Attendee';
+  const displayName = publicReviewName(ticket.buyer_name);
 
   const { error: insertErr } = await db.from('event_reviews').insert({
     id: `REV-${payload.ticketId}`,
