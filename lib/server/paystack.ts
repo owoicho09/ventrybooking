@@ -67,6 +67,59 @@ export async function initiateTransfer(params: {
   return paystackRequest('POST', '/transfer', params);
 }
 
+/**
+ * Transfer initiation for money movements that must never be retried blind.
+ * Distinguishes a definitive rejection (Paystack answered and said no — no
+ * transfer exists) from an unknown outcome (network error, timeout, garbled
+ * response — a transfer MAY exist), which the caller must resolve with
+ * {@link verifyTransfer} before treating it as failed.
+ */
+export async function initiateTransferChecked(params: {
+  amount: number; // kobo
+  recipient: string;
+  reason: string;
+  reference: string;
+}): Promise<
+  | { kind: 'ok'; status: string; transferCode: string | null }
+  | { kind: 'rejected'; message: string }
+  | { kind: 'unknown'; message: string }
+> {
+  let res: Response;
+  try {
+    res = await fetch(`${BASE}/transfer`, {
+      method: 'POST',
+      headers: { Authorization: `Bearer ${SECRET}`, 'Content-Type': 'application/json' },
+      body: JSON.stringify({ source: 'balance', ...params }),
+    });
+  } catch (err) {
+    return { kind: 'unknown', message: err instanceof Error ? err.message : 'Network error' };
+  }
+  let data: { status?: boolean; message?: string; data?: { status?: string; transfer_code?: string } };
+  try {
+    data = await res.json();
+  } catch {
+    return { kind: 'unknown', message: `Unreadable Paystack response (HTTP ${res.status})` };
+  }
+  if (res.status >= 500) return { kind: 'unknown', message: data.message || `Paystack HTTP ${res.status}` };
+  if (!data.status) return { kind: 'rejected', message: data.message || `Paystack HTTP ${res.status}` };
+  return { kind: 'ok', status: data.data?.status ?? 'pending', transferCode: data.data?.transfer_code ?? null };
+}
+
+/** Looks a transfer up by our reference. `found: false` only on Paystack's own 404. */
+export async function verifyTransfer(reference: string): Promise<
+  | { found: true; status: string; transferCode: string | null; failureReason: string | null }
+  | { found: false }
+> {
+  const res = await fetch(`${BASE}/transfer/verify/${encodeURIComponent(reference)}`, {
+    headers: { Authorization: `Bearer ${SECRET}` },
+  });
+  if (res.status === 404) return { found: false };
+  const data = await res.json();
+  if (!res.ok || !data.status) throw new Error(data.message || `Paystack HTTP ${res.status}`);
+  const t = data.data as { status: string; transfer_code?: string; gateway_response?: string | null };
+  return { found: true, status: t.status, transferCode: t.transfer_code ?? null, failureReason: t.gateway_response ?? null };
+}
+
 export function verifyWebhookSignature(body: string, signature: string): boolean {
   const secret = process.env.PAYSTACK_WEBHOOK_SECRET || process.env.PAYSTACK_SECRET_KEY!;
   const hash = crypto.createHmac('sha512', secret).update(body).digest('hex');

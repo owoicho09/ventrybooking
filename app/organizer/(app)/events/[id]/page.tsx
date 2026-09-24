@@ -13,6 +13,7 @@ import { Input, Textarea } from '@/components/ui/Input';
 import { Select } from '@/components/ui/Select';
 import { useToast } from '@/components/ui/Toast';
 import { formatNGN, formatShortDate } from '@/lib/utils';
+import { PLATFORM_FEE_RATE } from '@/lib/fees';
 import { ACCENT_COLOR_PRESETS } from '@/lib/accentColors';
 import { BannerCropInput } from '@/components/organizer/BannerCropInput';
 import { FlyerUploadInput } from '@/components/organizer/FlyerUploadInput';
@@ -157,6 +158,7 @@ export default function OrganizerEventDetailPage() {
   const [lineup, setLineup] = useState<LineupAct[]>([]);
   const [restrictedDomainsInput, setRestrictedDomainsInput] = useState('');
   const [savingBranding, setSavingBranding] = useState(false);
+  const [platformFeeRate, setPlatformFeeRate] = useState(PLATFORM_FEE_RATE);
 
   const load = () => {
     setLoading(true);
@@ -165,6 +167,7 @@ export default function OrganizerEventDetailPage() {
       .then(d => {
         if (d.success) {
           setEvent(d.data);
+          if (typeof d.platformFeeRate === 'number') setPlatformFeeRate(d.platformFeeRate);
           setDescription(d.data.description);
           setDate(d.data.date);
           setTime(d.data.time);
@@ -453,7 +456,7 @@ export default function OrganizerEventDetailPage() {
         {[
           { label: 'Total Sold', value: totalSold.toLocaleString() },
           { label: 'Total Available', value: totalAvailable.toLocaleString() },
-          { label: 'Gross Revenue', value: formatNGN(event.tiers.reduce((s, t) => s + t.price * t.sold, 0)) },
+          { label: 'Net Revenue', value: formatNGN(Math.round(event.tiers.reduce((s, t) => s + t.price * t.sold, 0) * (1 - platformFeeRate))) },
         ].map(({ label, value }) => (
           <div key={label} className="rounded-xl border p-4"
             style={{ backgroundColor: 'var(--color-surface)', borderColor: 'var(--color-border)' }}>

@@ -2,14 +2,14 @@
 
 import { useState, useEffect } from 'react';
 import Link from 'next/link';
-import { Ticket, Wallet, CalendarDays, ArrowUpRight, Plus, Mail } from 'lucide-react';
+import { Ticket, Wallet, CheckCircle, ArrowUpRight, Plus, Mail } from 'lucide-react';
 import { StatsCard } from '@/components/admin/StatsCard';
 import { Badge } from '@/components/ui/Badge';
 import { Button } from '@/components/ui/Button';
 import { Table, Thead, Tbody, Th, Tr, Td } from '@/components/ui/Table';
 import { formatNGN, formatShortDate } from '@/lib/utils';
 
-interface Stats { ticketsSold: number; pendingRevenue: number; activeEvents: number; payoutDue: number; }
+interface Stats { ticketsSold: number; fundsSettled: number; fundsPending: number; }
 interface OrgEvent { id: string; name: string; date: string; totalSold: number; status: string; }
 interface Me { name: string; verified: boolean; }
 
@@ -63,11 +63,11 @@ export default function OrganizerDashboardPage() {
         <Link href="/organizer/events/create"><Button><Plus size={16} />Create Event</Button></Link>
       </div>
 
-      <div className="grid grid-cols-1 sm:grid-cols-2 xl:grid-cols-4 gap-4">
-        <StatsCard label="Tickets Sold" value={stats ? stats.ticketsSold.toLocaleString() : '—'} icon={Ticket} trend="Across all active events" />
-        <StatsCard label="Pending Revenue" value={stats ? formatNGN(stats.pendingRevenue) : '—'} icon={Wallet} trend="Awaiting payout" accent />
-        <StatsCard label="Active Events" value={stats ? stats.activeEvents : '—'} icon={CalendarDays} trend="Events currently live" />
-        <StatsCard label="Payout Due" value={stats ? formatNGN(stats.payoutDue) : '—'} icon={ArrowUpRight} trend="Expected after event completion" />
+      {/* All money figures are the organiser's share after Ventry's fee — never gross. */}
+      <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
+        <StatsCard label="Tickets Sold" value={stats ? stats.ticketsSold.toLocaleString() : '—'} icon={Ticket} trend="Across all your events" />
+        <StatsCard label="Funds Settled" value={stats ? formatNGN(stats.fundsSettled) : '—'} icon={CheckCircle} trend="Sent to your bank account" />
+        <StatsCard label="Funds Pending Settlement" value={stats ? formatNGN(stats.fundsPending) : '—'} icon={Wallet} trend="Released the next working day after each sale" accent />
       </div>
 
       <div className="rounded-xl border overflow-hidden" style={{ backgroundColor: 'var(--color-surface)', borderColor: 'var(--color-border)' }}>

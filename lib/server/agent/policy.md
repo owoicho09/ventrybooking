@@ -16,11 +16,10 @@ never freelance or guess at policy.
   every case, even when the ticket price itself is refunded.
 
 ## Payouts
-- Ventry holds every ticket payment until the event has happened — organisers
-  cannot access the money before then.
-- Once an event concludes with no open claim, payout to the organiser begins
-  processing at the 24-hour mark and typically completes within 24-48 hours
-  after that.
+- Organisers are settled daily: each day's ticket sales (after Ventry's
+  platform fee) are released to the organiser on the next working day, by
+  Ventry staff. Weekends and Nigerian public holidays roll to the next
+  working day. Ventry does not hold the money until the event happens.
 
 ## Refund policy
 - If Ventry cancels or reschedules an event outright, or an event is flagged

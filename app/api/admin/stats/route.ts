@@ -10,13 +10,13 @@ export async function GET() {
 
   const db = getServerSupabase();
 
-  const [eventsRes, ticketsRes, activeTicketsRes, payoutsRes, kycRes, complaintsRes] = await Promise.all([
+  const [eventsRes, ticketsRes, activeTicketsRes, settlementsRes, kycRes, complaintsRes] = await Promise.all([
     db.from('events').select('id, status'),
     db.from('tickets').select('quantity').in('status', ['valid', 'used']),
     // Every non-refunded ticket, event_id'd — the base data for both revenue
     // (service fee) and unsettled funds (full ticket price), split out below.
-    db.from('tickets').select('event_id, total_paid, service_fee').neq('status', 'refunded'),
-    db.from('payouts').select('event_id, fee, status'),
+    db.from('tickets').select('settlement_id, total_paid, service_fee').neq('status', 'refunded'),
+    db.from('settlements').select('id, fee, status'),
     db.from('users').select('id').eq('kyc_status', 'pending'),
     db.from('complaints').select('id').in('status', ['open', 'investigating']),
   ]);
@@ -24,27 +24,22 @@ export async function GET() {
   const events        = eventsRes.data       || [];
   const tickets       = ticketsRes.data      || [];
   const activeTickets = activeTicketsRes.data || [];
-  const payouts       = payoutsRes.data      || [];
+  const settlements   = settlementsRes.data  || [];
 
   // Revenue = what Ventry has actually earned, not what passed through us.
   // - Service fee is ours the moment a ticket sells (and stays excluded if refunded).
-  // - The 3% (or organizer's grandfathered rate) cut of ticket price isn't ours
-  //   until the payout for that event has actually been released — otp_pending
-  //   covers "released but awaiting OTP confirmation", which Paystack already
-  //   accepted the transfer for.
-  const releasedEventIds = new Set(
-    payouts.filter(p => p.status === 'otp_pending' || p.status === 'completed').map(p => p.event_id),
-  );
+  // - The platform fee (3%, or an organiser's grandfathered rate) is ours once
+  //   the settlement carrying it has actually been sent — daily settlements and
+  //   the legacy escrow payouts copied into the same ledger alike.
+  const sent = settlements.filter(s => s.status === 'successful');
+  const sentSettlementIds = new Set(sent.map(s => s.id));
   const serviceFeeRevenue = activeTickets.reduce((s, t) => s + (t.service_fee ?? 0), 0);
-  const payoutFeeRevenue  = payouts
-    .filter(p => p.status === 'otp_pending' || p.status === 'completed')
-    .reduce((s, p) => s + (p.fee ?? 0), 0);
+  const payoutFeeRevenue  = sent.reduce((s, p) => s + Number(p.fee ?? 0), 0);
 
-  // Unsettled funds = full ticket price for every non-refunded ticket on an
-  // event whose payout hasn't released yet — the money currently sitting with
-  // Ventry that still needs to be there to cover organizer payouts.
+  // Unsettled funds = full amount paid for every non-refunded ticket whose
+  // money hasn't been sent to its organiser yet — what Ventry is still holding.
   const unsettledFunds = activeTickets
-    .filter(t => !releasedEventIds.has(t.event_id))
+    .filter(t => !t.settlement_id || !sentSettlementIds.has(t.settlement_id))
     .reduce((s, t) => s + (t.total_paid ?? 0), 0);
 
   return NextResponse.json({

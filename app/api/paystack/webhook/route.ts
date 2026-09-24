@@ -3,6 +3,7 @@ import { verifyWebhookSignature, verifyTransaction } from '@/lib/server/paystack
 import { createTicketFromPayment } from '@/lib/server/ticket';
 import { getServerSupabase } from '@/lib/supabase/server';
 import { notify } from '@/lib/server/notify';
+import { applyTransferOutcome, notifySettlementSuccess } from '@/lib/server/settlements';
 
 export async function POST(req: NextRequest) {
   const signature = req.headers.get('x-paystack-signature') || '';
@@ -141,7 +142,81 @@ export async function POST(req: NextRequest) {
 const fmt = (n: number) =>
   new Intl.NumberFormat('en-NG', { style: 'currency', currency: 'NGN', minimumFractionDigits: 0 }).format(n);
 
+/**
+ * Daily-settlement transfers (VTR-STL-… references). Returns false when the
+ * reference isn't a settlement attempt, so the caller falls through to the
+ * legacy escrow payout handling.
+ */
+async function handleSettlementTransfer(
+  data: { reference: string; amount: number; gateway_response?: string | null; transfer_code?: string },
+  eventType: string,
+): Promise<boolean> {
+  const db = getServerSupabase();
+  const { data: attempt } = await db
+    .from('settlement_attempts')
+    .select('id, settlement_id, status, settlement:settlements(id, organizer_id, transfer_reference, status)')
+    .eq('transfer_reference', data.reference)
+    .maybeSingle();
+  if (!attempt) return false;
+
+  const settlement = (Array.isArray(attempt.settlement) ? attempt.settlement[0] : attempt.settlement) as
+    { id: string; organizer_id: string; transfer_reference: string | null; status: string } | null;
+
+  if (eventType === 'transfer.success') {
+    // A success on a reference that is no longer the settlement's current
+    // attempt means an earlier attempt we recorded as failed actually paid —
+    // a possible double payment that a human has to look at.
+    if (settlement && settlement.transfer_reference !== data.reference) {
+      await db.from('settlement_attempts')
+        .update({ status: 'successful', paystack_status: 'success', finished_at: new Date().toISOString() })
+        .eq('id', attempt.id);
+      notify(
+        { type: 'admin' },
+        {
+          notifType: 'payout',
+          title:     'Settlement: an earlier attempt succeeded — check for double payment',
+          body:      `Paystack confirmed transfer ${data.reference} (${fmt(data.amount / 100)}), an attempt that had been superseded by a retry. Check whether the organiser was paid twice.`,
+          link:      `/admin/payouts/${settlement.organizer_id}`,
+        },
+        { emailChannel: 'immediate' },
+      ).catch(err => console.error('transfer.success: notify admin error', err));
+      return true;
+    }
+    const updated = await applyTransferOutcome(db, data.reference, {
+      status: 'successful', transferCode: data.transfer_code ?? null, paystackStatus: 'success',
+    });
+    if (updated) notifySettlementSuccess(updated);
+    return true;
+  }
+
+  const isReversed = eventType === 'transfer.reversed';
+  const updated = await applyTransferOutcome(
+    db,
+    data.reference,
+    {
+      status: 'failed',
+      reason: data.gateway_response || (isReversed ? 'Transfer reversed by Paystack' : 'Transfer failed at Paystack'),
+      paystackStatus: isReversed ? 'reversed' : 'failed',
+    },
+    { allowFromSuccessful: isReversed },
+  );
+  if (updated) {
+    notify(
+      { type: 'admin' },
+      {
+        notifType: 'payout',
+        title:     `Settlement ${isReversed ? 'reversed' : 'failed'} — retry needed`,
+        body:      `${fmt(data.amount / 100)} (${data.reference}) was ${isReversed ? 'reversed' : 'rejected'} by Paystack. It is marked failed and can be retried.`,
+        link:      `/admin/payouts/${updated.organizer_id}`,
+      },
+      { emailChannel: 'immediate' },
+    ).catch(err => console.error(`${eventType}: notify error`, err));
+  }
+  return true;
+}
+
 async function handleTransferSuccess(data: { reference: string; amount: number }) {
+  if (await handleSettlementTransfer(data, 'transfer.success')) return;
   const db = getServerSupabase();
 
   const { data: payout } = await db
@@ -159,6 +234,12 @@ async function handleTransferSuccess(data: { reference: string; amount: number }
     .from('payouts')
     .update({ status: 'completed' })
     .eq('id', payout.id)
+    .in('status', ['otp_pending', 'processing']);
+
+  // Keep the escrow payout's single history entry in step.
+  await db.from('settlements')
+    .update({ status: 'successful', settled_at: new Date().toISOString(), updated_at: new Date().toISOString() })
+    .eq('legacy_payout_id', payout.id)
     .in('status', ['otp_pending', 'processing']);
 
   notify(
@@ -182,7 +263,8 @@ async function handleTransferSuccess(data: { reference: string; amount: number }
   ).catch(err => console.error('transfer.success: notify admin error', err));
 }
 
-async function handleTransferFailure(data: { reference: string }, eventType: string) {
+async function handleTransferFailure(data: { reference: string; amount: number }, eventType: string) {
+  if (await handleSettlementTransfer(data, eventType)) return;
   const db = getServerSupabase();
 
   const { data: payout } = await db
@@ -201,6 +283,22 @@ async function handleTransferFailure(data: { reference: string }, eventType: str
     .update({ status: 'processing', reference: null })
     .eq('id', payout.id);
 
+  // The escrow payout's history entry records the failure truthfully, and its
+  // tickets go back to the unsettled pool so the money is released through
+  // daily settlement — the old per-event release route no longer exists.
+  const { data: legacy } = await db.from('settlements')
+    .update({
+      status: 'failed',
+      failure_reason: `Escrow transfer ${eventType === 'transfer.reversed' ? 'reversed' : 'failed'} — its sales moved to daily settlement`,
+      settled_at: null,
+      updated_at: new Date().toISOString(),
+    })
+    .eq('legacy_payout_id', payout.id)
+    .select('id');
+  for (const l of legacy ?? []) {
+    await db.from('tickets').update({ settlement_id: null }).eq('settlement_id', l.id);
+  }
+
   const isReversed = eventType === 'transfer.reversed';
 
   notify(
@@ -208,7 +306,7 @@ async function handleTransferFailure(data: { reference: string }, eventType: str
     {
       notifType: 'payout',
       title:     `Transfer ${isReversed ? 'reversed' : 'failed'} — action required`,
-      body:      `Payout for "${payout.event_name}" was ${isReversed ? 'reversed' : 'rejected'} by Paystack. It has been reset to processing for retry.`,
+      body:      `Escrow payout for "${payout.event_name}" was ${isReversed ? 'reversed' : 'rejected'} by Paystack. Its sales are now pending daily settlement — release them from the payouts page.`,
       link:      '/admin/payouts',
     },
     { emailChannel: 'immediate' },

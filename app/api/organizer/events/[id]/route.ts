@@ -7,6 +7,7 @@ import { normalizeLineup, type LineupAct } from '@/lib/server/lineup';
 import { normalizeEmailDomains } from '@/lib/server/domainRestriction';
 import { createChangeRefundWindow, countAppliedEventChanges, FREE_ORGANIZER_CHANGE_LIMIT } from '@/lib/server/eventChangeWindow';
 import { notify } from '@/lib/server/notify';
+import { PLATFORM_FEE_RATE } from '@/lib/fees';
 
 export async function GET(
   _req: NextRequest,
@@ -35,7 +36,9 @@ export async function GET(
     if (error) throw error;
     if (!event) return NextResponse.json({ error: 'Event not found' }, { status: 404 });
 
-    return NextResponse.json({ success: true, data: event });
+    const { data: org } = await db.from('users').select('platform_fee_rate').eq('id', user.sub).maybeSingle();
+
+    return NextResponse.json({ success: true, data: event, platformFeeRate: org?.platform_fee_rate ?? PLATFORM_FEE_RATE });
   } catch (err) {
     console.error('GET /api/organizer/events/[id] error', err);
     return NextResponse.json({ error: 'Failed to fetch event' }, { status: 500 });

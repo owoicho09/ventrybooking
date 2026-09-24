@@ -41,6 +41,20 @@ export async function DELETE(req: NextRequest) {
       }, { status: 400 });
     }
 
+    // Settlements are an audit trail of real money movements and must not be
+    // erased (they also hold a foreign key to the user row, so the delete
+    // below would fail half-way through). Unsettled ticket money means Ventry
+    // still owes this organiser. Either way, support handles the closure.
+    const [{ data: anySettlement }, { data: unsettled }] = await Promise.all([
+      db.from('settlements').select('id').eq('organizer_id', user.sub).limit(1),
+      db.rpc('settlement_unsettled_by_day', { p_organizer_id: user.sub }),
+    ]);
+    if ((anySettlement && anySettlement.length > 0) || (unsettled && unsettled.length > 0)) {
+      return NextResponse.json({
+        error: 'Your account has settlement history or funds pending settlement, so it can\'t be deleted automatically. Please contact support to close it.',
+      }, { status: 400 });
+    }
+
     // Fetch all event IDs belonging to this organizer
     const { data: orgEvents } = await db
       .from('events')

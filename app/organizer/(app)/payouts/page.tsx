@@ -5,24 +5,31 @@ import { Wallet, Edit3, CheckCircle, AlertTriangle } from 'lucide-react';
 import { Badge } from '@/components/ui/Badge';
 import { Button } from '@/components/ui/Button';
 import { Input } from '@/components/ui/Input';
-import { Table, Thead, Tbody, Th, Tr, Td } from '@/components/ui/Table';
 import { formatNGN, formatShortDate } from '@/lib/utils';
 import { NIGERIAN_BANKS } from '@/lib/banks';
 
-interface Payout { id: string; event_name: string; date: string; gross: number; fee: number; net: number; status: string; reference: string; }
+interface Settlement {
+  id: string; kind: 'daily' | 'legacy_escrow'; period_start: string; period_end: string;
+  net: number; ticket_count: number; status: string; released_at: string; settled_at: string | null; event_name: string | null;
+}
+interface Upcoming { label: string; periodStart: string; periodEnd: string; net: number; eligibleOn: string | null; }
 
 const statusBadge = (status: string) => {
   switch (status) {
-    case 'completed': return <Badge variant="green">Completed</Badge>;
-    case 'processing': return <Badge variant="amber">Processing</Badge>;
-    case 'pending': return <Badge variant="gray">Pending</Badge>;
-    default: return <Badge variant="gray">{status}</Badge>;
+    case 'successful':  return <Badge variant="green">Sent</Badge>;
+    case 'processing':
+    case 'otp_pending': return <Badge variant="amber">Sending</Badge>;
+    case 'failed':      return <Badge variant="red">Delayed</Badge>;
+    default:            return <Badge variant="gray">{status}</Badge>;
   }
 };
 
+const period = (a: string, b: string) => (a === b ? formatShortDate(a) : `${formatShortDate(a)} – ${formatShortDate(b)}`);
+
 export default function PayoutsPage() {
-  const [payouts, setPayouts] = useState<Payout[]>([]);
-  const [payoutDue, setPayoutDue] = useState(0);
+  const [settlements, setSettlements] = useState<Settlement[]>([]);
+  const [upcoming, setUpcoming] = useState<Upcoming[]>([]);
+  const [figures, setFigures] = useState<{ settled: number; pending: number } | null>(null);
   const [editingBank, setEditingBank] = useState(false);
   const [bank, setBank] = useState({ bankName: '', accountNumber: '', accountName: '', legalName: '' });
   const [bankMsg, setBankMsg] = useState('');
@@ -30,12 +37,14 @@ export default function PayoutsPage() {
 
   useEffect(() => {
     Promise.all([
-      fetch('/api/organizer/payouts').then(r => r.json()),
-      fetch('/api/organizer/stats').then(r => r.json()),
+      fetch('/api/organizer/payouts', { cache: 'no-store' }).then(r => r.json()),
       fetch('/api/organizer/me').then(r => r.json()),
-    ]).then(([p, s, m]) => {
-      if (p.success) setPayouts(p.data);
-      if (s.success) setPayoutDue(s.data.payoutDue);
+    ]).then(([p, m]) => {
+      if (p.success) {
+        setSettlements(p.data.settlements);
+        setUpcoming(p.data.upcoming);
+        setFigures({ settled: p.data.fundsSettled, pending: p.data.fundsPending });
+      }
       if (m.success) setBank({
         bankName: m.data.bank_name || '',
         accountNumber: m.data.account_number || '',
@@ -59,42 +68,62 @@ export default function PayoutsPage() {
     <div className="flex flex-col gap-8">
       <h1 className="text-2xl font-bold" style={{ color: 'var(--color-text)', fontFamily: 'var(--font-syne), sans-serif' }}>Payouts</h1>
 
-      <div className="rounded-xl border p-6" style={{ background: 'linear-gradient(135deg, #1a0a3d 0%, #0f0a2d 100%)', borderColor: '#7c3aed40' }}>
+      <div className="rounded-xl border p-5 sm:p-6" style={{ background: 'linear-gradient(135deg, #1a0a3d 0%, #0f0a2d 100%)', borderColor: '#7c3aed40' }}>
         <div className="flex items-start gap-4">
           <div className="w-12 h-12 rounded-xl flex items-center justify-center flex-shrink-0" style={{ backgroundColor: 'rgba(124,58,237,0.3)' }}>
             <Wallet size={20} color="#a855f7" />
           </div>
-          <div>
-            <p className="text-sm mb-1" style={{ color: 'rgba(255,255,255,0.55)' }}>Upcoming Payout</p>
-            <p className="text-4xl font-bold text-white mb-1" style={{ fontFamily: 'var(--font-syne), sans-serif' }}>{formatNGN(payoutDue)}</p>
-            <p className="text-sm" style={{ color: 'rgba(255,255,255,0.55)' }}>Expected within 24-48hrs after event</p>
+          <div className="min-w-0">
+            <p className="text-sm mb-1" style={{ color: 'rgba(255,255,255,0.55)' }}>Funds pending settlement</p>
+            <p className="text-3xl sm:text-4xl font-bold text-white mb-1" style={{ fontFamily: 'var(--font-syne), sans-serif' }}>{figures ? formatNGN(figures.pending) : '—'}</p>
+            <p className="text-sm" style={{ color: 'rgba(255,255,255,0.55)' }}>
+              Each day&apos;s sales are released the next working day. Settled so far: <span className="text-white font-semibold">{figures ? formatNGN(figures.settled) : '—'}</span>
+            </p>
+            <p className="text-xs mt-2" style={{ color: 'rgba(255,255,255,0.4)' }}>All amounts are your share, after Ventry&apos;s platform fee.</p>
           </div>
         </div>
       </div>
 
       <div className="rounded-xl border overflow-hidden" style={{ backgroundColor: 'var(--color-surface)', borderColor: 'var(--color-border)' }}>
-        <div className="px-6 py-4 border-b" style={{ borderColor: 'var(--color-border)' }}>
-          <h2 className="font-semibold" style={{ color: 'var(--color-text)' }}>Payout History</h2>
+        <div className="px-4 sm:px-6 py-4 border-b" style={{ borderColor: 'var(--color-border)' }}>
+          <h2 className="font-semibold" style={{ color: 'var(--color-text)' }}>Settlement History</h2>
         </div>
-        {payouts.length === 0 && <p className="px-6 py-8 text-sm text-center" style={{ color: 'var(--color-text-muted)' }}>No payouts yet.</p>}
-        {payouts.length > 0 && <Table>
-          <Thead>
-            <tr><Th>Event</Th><Th>Date</Th><Th>Ticket Revenue</Th><Th>Platform fee (3%)</Th><Th>Your Payout</Th><Th>Status</Th><Th>Reference</Th></tr>
-          </Thead>
-          <Tbody>
-            {payouts.map((payout) => (
-              <Tr key={payout.id}>
-                <Td><p className="font-medium text-sm max-w-[160px] truncate" style={{ color: 'var(--color-text)' }}>{payout.event_name}</p></Td>
-                <Td><span style={{ color: 'var(--color-text-muted)' }}>{formatShortDate(payout.date)}</span></Td>
-                <Td><span style={{ color: 'var(--color-text)' }}>{formatNGN(payout.gross)}</span></Td>
-                <Td><span style={{ color: 'var(--color-text-muted)' }}>{formatNGN(payout.fee)}</span></Td>
-                <Td><span className="font-semibold" style={{ color: 'var(--color-text)' }}>{formatNGN(payout.net)}</span></Td>
-                <Td>{statusBadge(payout.status)}</Td>
-                <Td><span className="text-xs font-mono" style={{ color: 'var(--color-text-dim)' }}>{payout.reference}</span></Td>
-              </Tr>
-            ))}
-          </Tbody>
-        </Table>}
+        {upcoming.length === 0 && settlements.length === 0 && (
+          <p className="px-6 py-8 text-sm text-center" style={{ color: 'var(--color-text-muted)' }}>No settlements yet.</p>
+        )}
+        <ul className="divide-y" style={{ borderColor: 'var(--color-border)' }}>
+          {upcoming.map(u => (
+            <li key={`${u.periodStart}-${u.eligibleOn}`} className="px-4 sm:px-6 py-3 flex items-center justify-between gap-3">
+              <div className="min-w-0">
+                <p className="text-sm font-medium" style={{ color: 'var(--color-text)' }}>Sales {period(u.periodStart, u.periodEnd)}</p>
+                <p className="text-xs" style={{ color: 'var(--color-text-muted)' }}>
+                  {u.eligibleOn ? `Releasable ${formatShortDate(u.eligibleOn)}` : 'Ready — awaiting release'}
+                </p>
+              </div>
+              <div className="text-right flex-shrink-0">
+                <p className="text-sm font-semibold" style={{ color: 'var(--color-text)' }}>{formatNGN(u.net)}</p>
+                <Badge variant="gray">Pending</Badge>
+              </div>
+            </li>
+          ))}
+          {settlements.map(s => (
+            <li key={s.id} className="px-4 sm:px-6 py-3 flex items-center justify-between gap-3">
+              <div className="min-w-0">
+                <p className="text-sm font-medium truncate" style={{ color: 'var(--color-text)' }}>
+                  {s.kind === 'legacy_escrow' ? `${s.event_name ?? 'Event'} — final payout` : `Sales ${period(s.period_start, s.period_end)}`}
+                </p>
+                <p className="text-xs" style={{ color: 'var(--color-text-muted)' }}>
+                  {s.kind === 'legacy_escrow' ? 'Paid after the event (previous payout model)' : `${s.ticket_count} ticket${s.ticket_count === 1 ? '' : 's'}`}
+                  {' · '}{formatShortDate((s.settled_at ?? s.released_at).slice(0, 10))}
+                </p>
+              </div>
+              <div className="text-right flex-shrink-0">
+                <p className="text-sm font-semibold" style={{ color: 'var(--color-text)' }}>{formatNGN(s.net)}</p>
+                {statusBadge(s.status)}
+              </div>
+            </li>
+          ))}
+        </ul>
       </div>
 
       <div className="rounded-xl border p-4 flex items-start gap-3"

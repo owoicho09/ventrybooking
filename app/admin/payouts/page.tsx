@@ -1,343 +1,315 @@
 'use client';
 
-import { useState, useEffect } from 'react';
-import { CheckCircle, Clock, AlertCircle, ExternalLink, X } from 'lucide-react';
-import { Badge } from '@/components/ui/Badge';
+import { useCallback, useEffect, useMemo, useState } from 'react';
+import Link from 'next/link';
+import { CalendarDays, ChevronRight, RefreshCw, AlertTriangle, ExternalLink } from 'lucide-react';
 import { Button } from '@/components/ui/Button';
-import { Table, Thead, Tbody, Th, Tr, Td } from '@/components/ui/Table';
-import { formatNGN, formatShortDate } from '@/lib/utils';
+import { formatNGN } from '@/lib/utils';
+import {
+  fmtDay, fmtPeriod, fmtDateTime, SettlementStatusBadge, ReleaseConfirmModal, ReleaseResults, postRelease,
+  type ReleaseCandidate, type ReleaseOutcome,
+} from '@/components/admin/settlementUi';
 
-type Filter = 'all' | 'pending' | 'processing' | 'otp_pending' | 'completed';
-
-const filters: { value: Filter; label: string }[] = [
-  { value: 'all',         label: 'All' },
-  { value: 'pending',     label: 'Pending Confirmation' },
-  { value: 'processing',  label: 'Ready to Release' },
-  { value: 'otp_pending', label: 'OTP Pending' },
-  { value: 'completed',   label: 'Completed' },
-];
-
-const statusBadge = (status: string) => {
-  switch (status) {
-    case 'completed':   return <Badge variant="green">Completed</Badge>;
-    case 'otp_pending': return <Badge variant="amber">OTP Pending</Badge>;
-    case 'processing':  return <Badge variant="amber">Processing</Badge>;
-    case 'pending':     return <Badge variant="gray">Pending</Badge>;
-    default:            return <Badge variant="gray">{status}</Badge>;
-  }
-};
-
-interface PayoutData {
-  id: string; event_name: string; organizer_name?: string; date: string;
-  gross: number; fee: number; net: number; status: string;
-  organizer?: { id: string; name: string; email: string; bank_name?: string; account_number?: string; account_name?: string };
+interface OrganizerPending {
+  id: string; name: string; email: string;
+  bankName: string | null; accountNumber: string | null; accountName: string | null;
+  feeRate: number;
+  releasable: {
+    salesGross: number; refundsDeducted: number; gross: number; fee: number; net: number;
+    ticketCount: number; periodStart: string; periodEnd: string;
+  } | null;
+  accruing: { eligibleOn: string; periodStart: string; periodEnd: string; net: number; ticketCount: number }[];
+  refundsOwed: { gross: number; ticketCount: number };
+  blockers: string[];
 }
 
-interface PayoutSettings { percentage: number; }
+interface AttentionRow {
+  id: string; organizer_id: string; organizer_name: string; kind: string;
+  period_start: string; period_end: string; net: number; status: string;
+  failure_reason: string | null; released_at: string; event_name: string | null;
+}
 
-interface ReleaseResult {
-  payoutId: string;
-  eventName: string;
-  status: 'otp_pending' | 'completed' | 'error';
-  message: string;
+interface Overview {
+  today: string; cutoff: string; todayIsWorkingDay: boolean; nextWorkingDay: string;
+  organizers: OrganizerPending[];
+  attention: AttentionRow[];
 }
 
 export default function AdminPayoutsPage() {
-  const [activeFilter, setActiveFilter]   = useState<Filter>('all');
-  const [payouts, setPayouts]             = useState<PayoutData[]>([]);
-  const [loading, setLoading]             = useState(true);
-  const [percentage, setPercentage]       = useState(100);
-  const [savingSettings, setSavingSettings] = useState(false);
-  const [acting, setActing]               = useState<string | null>(null);
-  const [releaseResult, setReleaseResult] = useState<ReleaseResult | null>(null);
+  const [data, setData]         = useState<Overview | null>(null);
+  const [loadError, setLoadError] = useState('');
+  const [selected, setSelected] = useState<Set<string>>(new Set());
+  const [confirming, setConfirming] = useState<ReleaseCandidate[]>([]);
+  const [busy, setBusy]         = useState(false);
+  const [results, setResults]   = useState<ReleaseOutcome[]>([]);
+  const [rowBusy, setRowBusy]   = useState<string | null>(null);
+  const [rowMsg, setRowMsg]     = useState<Record<string, string>>({});
 
-  const load = () => {
-    setLoading(true);
-    const params = activeFilter !== 'all' ? `?status=${activeFilter}` : '';
-    fetch(`/api/admin/payouts${params}`)
+  const load = useCallback(() => {
+    fetch('/api/admin/settlements', { cache: 'no-store' })
       .then(r => r.json())
-      .then(d => { if (d.success) setPayouts(d.data); })
-      .catch(console.error)
-      .finally(() => setLoading(false));
-  };
-
-  useEffect(() => { load(); }, [activeFilter]);
-
-  useEffect(() => {
-    fetch('/api/admin/payout-settings')
-      .then(r => r.json())
-      .then((d: { success: boolean; data: PayoutSettings }) => { if (d.success) setPercentage(d.data.percentage); })
-      .catch(console.error);
+      .then(d => {
+        if (d.success) { setData(d.data); setLoadError(''); }
+        else setLoadError(d.error ?? 'Failed to load');
+      })
+      .catch(() => setLoadError('Network error'));
   }, []);
 
-  const handleSaveSettings = async () => {
-    setSavingSettings(true);
-    await fetch('/api/admin/payout-settings', {
-      method: 'PATCH',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ percentage }),
-    });
-    setSavingSettings(false);
-  };
+  useEffect(() => { load(); }, [load]);
 
-  const handleConfirmEvent = async (id: string) => {
-    setActing(id);
-    await fetch(`/api/admin/payouts/${id}/confirm-event`, { method: 'POST' });
-    setActing(null);
+  const releasable = useMemo(
+    () => (data?.organizers ?? []).filter(o => o.releasable && o.releasable.net > 0 && o.blockers.length === 0),
+    [data],
+  );
+  const notReady = useMemo(
+    () => (data?.organizers ?? []).filter(o => !releasable.includes(o)),
+    [data, releasable],
+  );
+  const names = useMemo(
+    () => Object.fromEntries((data?.organizers ?? []).map(o => [o.id, o.name])),
+    [data],
+  );
+  const totalReleasable = releasable.reduce((s, o) => s + o.releasable!.net, 0);
+  const selectedList = releasable.filter(o => selected.has(o.id));
+
+  const toggle = (id: string) => setSelected(prev => {
+    const next = new Set(prev);
+    if (next.has(id)) next.delete(id); else next.add(id);
+    return next;
+  });
+  const allSelected = releasable.length > 0 && selectedList.length === releasable.length;
+
+  const candidate = (o: OrganizerPending): ReleaseCandidate => ({
+    id: o.id, name: o.name, net: o.releasable!.net, period: fmtPeriod(o.releasable!.periodStart, o.releasable!.periodEnd),
+  });
+
+  const doRelease = async () => {
+    if (busy) return;
+    setBusy(true);
+    const ids = confirming.map(c => c.id);
+    const out = await postRelease(ids);
+    setResults(out);
+    setBusy(false);
+    setConfirming([]);
+    setSelected(new Set());
     load();
   };
 
-  const handleRelease = async (payout: PayoutData) => {
-    setActing(payout.id);
+  const rowAction = async (row: AttentionRow, action: 'retry' | 'verify') => {
+    if (rowBusy) return;
+    setRowBusy(row.id);
     try {
-      const res  = await fetch(`/api/admin/payouts/${payout.id}/release`, {
-        method:  'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body:    JSON.stringify({ percentage }),
-      });
-      const data = await res.json();
-
-      if (!res.ok) {
-        setReleaseResult({
-          payoutId:  payout.id,
-          eventName: payout.event_name,
-          status:    'error',
-          message:   data.error ?? 'Failed to release payout',
-        });
-      } else if (data.data?.status === 'otp_pending') {
-        setReleaseResult({
-          payoutId:  payout.id,
-          eventName: payout.event_name,
-          status:    'otp_pending',
-          message:   data.data.message ?? '',
-        });
-      } else {
-        setReleaseResult({
-          payoutId:  payout.id,
-          eventName: payout.event_name,
-          status:    'completed',
-          message:   'Payout released successfully.',
-        });
+      const res = await fetch(`/api/admin/settlements/${row.id}/${action}`, { method: 'POST' });
+      const d = await res.json();
+      let msg = d.error ?? '';
+      if (res.ok && action === 'verify') msg = d.data.message;
+      if (res.ok && action === 'retry') {
+        const r = d.data as ReleaseOutcome;
+        msg = r.outcome === 'released' ? `Retry: ${r.settlement?.status}${r.settlement?.failure_reason ? ` — ${r.settlement.failure_reason}` : ''}` : (r.message ?? '');
       }
+      setRowMsg(m => ({ ...m, [row.id]: msg }));
     } catch {
-      setReleaseResult({
-        payoutId:  payout.id,
-        eventName: payout.event_name,
-        status:    'error',
-        message:   'Network error — please try again.',
-      });
+      setRowMsg(m => ({ ...m, [row.id]: 'Network error — refresh to check' }));
     }
-    setActing(null);
+    setRowBusy(null);
     load();
   };
 
   return (
-    <div className="flex flex-col gap-8">
-      <h1 className="text-2xl font-bold"
-        style={{ color: 'var(--color-text)', fontFamily: 'var(--font-syne), sans-serif' }}>
-        Payout Management
-      </h1>
-
-      {/* ── Global payout percentage ── */}
-      <div className="rounded-xl border p-4 sm:p-6"
-        style={{ backgroundColor: 'var(--color-surface)', borderColor: 'var(--color-border)' }}>
-        <h2 className="font-semibold mb-1" style={{ color: 'var(--color-text)' }}>Global Payout Percentage</h2>
-        <p className="text-sm mb-5" style={{ color: 'var(--color-text-muted)' }}>
-          Control what percentage of held funds is released to organizers.
-        </p>
-        <div className="flex flex-col sm:flex-row sm:items-center gap-4">
-          <div className="w-full sm:flex-1 min-w-0">
-            <input type="range" min={0} max={100} value={percentage}
-              onChange={(e) => setPercentage(Number(e.target.value))}
-              className="w-full accent-[var(--color-purple)]" />
-            <div className="flex justify-between text-xs mt-1" style={{ color: 'var(--color-text-dim)' }}>
-              <span>0%</span><span>100%</span>
-            </div>
-          </div>
-          <div className="w-16 text-center text-xl font-bold rounded-lg py-1.5 flex-shrink-0"
-            style={{ color: 'var(--color-purple-light)', backgroundColor: 'var(--color-purple-dim)' }}>
-            {percentage}%
-          </div>
+    <div className="flex flex-col gap-5 pb-20">
+      <div className="flex items-start justify-between gap-3">
+        <div className="min-w-0">
+          <h1 className="text-2xl font-bold" style={{ color: 'var(--color-text)', fontFamily: 'var(--font-syne), sans-serif' }}>
+            Payouts
+          </h1>
+          {data && (
+            <p className="text-xs mt-1" style={{ color: 'var(--color-text-muted)' }}>
+              {data.todayIsWorkingDay
+                ? <>Sales up to {fmtDay(addDaysIso(data.cutoff, -1))} are releasable today.</>
+                : <>Not a working day — new sales roll to {fmtDay(data.nextWorkingDay)}. Sales before {fmtDay(data.cutoff)} are releasable.</>}
+            </p>
+          )}
         </div>
-        <div className="mt-4">
-          <Button disabled={savingSettings} onClick={handleSaveSettings}>
-            {savingSettings ? 'Saving...' : 'Apply Setting'}
-          </Button>
+        <div className="flex items-center gap-1 flex-shrink-0">
+          <Link href="/admin/payouts/holidays" className="p-2 rounded-lg" aria-label="Holiday calendar"
+            style={{ color: 'var(--color-text-muted)', border: '1px solid var(--color-border)' }}>
+            <CalendarDays size={16} />
+          </Link>
+          <button onClick={load} className="p-2 rounded-lg" aria-label="Refresh"
+            style={{ color: 'var(--color-text-muted)', border: '1px solid var(--color-border)' }}>
+            <RefreshCw size={16} />
+          </button>
         </div>
       </div>
 
-      {/* ── OTP pending banner ── */}
-      {releaseResult?.status === 'otp_pending' && (
-        <div className="rounded-xl border p-4 flex gap-3 items-start"
-          style={{ backgroundColor: '#f59e0b12', borderColor: '#f59e0b50' }}>
-          <AlertCircle size={18} className="flex-shrink-0 mt-0.5" style={{ color: '#f59e0b' }} />
-          <div className="flex-1 min-w-0">
-            <p className="text-sm font-semibold" style={{ color: '#f59e0b' }}>
-              OTP Required — Action Needed in Paystack Dashboard
-            </p>
-            <p className="text-sm mt-1 leading-relaxed" style={{ color: 'var(--color-text-muted)' }}>
-              The transfer for <strong>{releaseResult.eventName}</strong> was initiated but Paystack requires
-              OTP confirmation before funds are sent to the organizer&apos;s bank account.
-            </p>
-            <ol className="mt-2 text-sm flex flex-col gap-1 list-decimal list-inside" style={{ color: 'var(--color-text-muted)' }}>
-              <li>Log in to your <a href="https://dashboard.paystack.com/" target="_blank" rel="noopener noreferrer"
-                className="underline font-medium" style={{ color: 'var(--color-purple-light)' }}>Paystack Dashboard</a></li>
-              <li>Navigate to <strong>Pay</strong> → <strong>Transfers</strong></li>
-              <li>Find the pending transfer and enter the OTP sent to your registered number</li>
-            </ol>
-            <p className="text-xs mt-2" style={{ color: 'var(--color-text-dim)' }}>
-              Once you approve the OTP, the payout status will update to <strong>Completed</strong> automatically via webhook.
-              The payout row below now shows <strong>OTP Pending</strong>.
-            </p>
-          </div>
-          <button onClick={() => setReleaseResult(null)} style={{ color: 'var(--color-text-dim)', flexShrink: 0 }}>
-            <X size={15} />
-          </button>
-        </div>
-      )}
+      {loadError && <p className="text-sm" style={{ color: 'var(--color-red)' }}>{loadError}</p>}
+      {!data && !loadError && <p className="text-sm" style={{ color: 'var(--color-text-muted)' }}>Loading…</p>}
 
-      {/* ── Release success banner ── */}
-      {releaseResult?.status === 'completed' && (
-        <div className="rounded-xl border p-4 flex gap-3 items-start"
-          style={{ backgroundColor: '#10b98112', borderColor: '#10b98140' }}>
-          <CheckCircle size={18} className="flex-shrink-0 mt-0.5" style={{ color: '#10b981' }} />
-          <div className="flex-1 min-w-0">
-            <p className="text-sm font-semibold" style={{ color: '#10b981' }}>Payout Released</p>
-            <p className="text-sm mt-0.5" style={{ color: 'var(--color-text-muted)' }}>
-              Funds for <strong>{releaseResult.eventName}</strong> have been sent successfully.
-            </p>
-          </div>
-          <button onClick={() => setReleaseResult(null)} style={{ color: 'var(--color-text-dim)', flexShrink: 0 }}>
-            <X size={15} />
-          </button>
-        </div>
-      )}
+      <ReleaseResults results={results} names={names} onDismiss={() => setResults([])} />
 
-      {/* ── Error banner ── */}
-      {releaseResult?.status === 'error' && (
-        <div className="rounded-xl border p-4 flex gap-3 items-start"
-          style={{ backgroundColor: '#ef444412', borderColor: '#ef444440' }}>
-          <AlertCircle size={18} className="flex-shrink-0 mt-0.5" style={{ color: '#ef4444' }} />
-          <div className="flex-1 min-w-0">
-            <p className="text-sm font-semibold" style={{ color: '#ef4444' }}>Release Failed</p>
-            <p className="text-sm mt-0.5" style={{ color: 'var(--color-text-muted)' }}>{releaseResult.message}</p>
-          </div>
-          <button onClick={() => setReleaseResult(null)} style={{ color: 'var(--color-text-dim)', flexShrink: 0 }}>
-            <X size={15} />
-          </button>
-        </div>
-      )}
-
-      {/* ── Filter tabs ── */}
-      <div className="flex gap-1.5 flex-wrap">
-        {filters.map(({ value, label }) => (
-          <button key={value} onClick={() => setActiveFilter(value)}
-            className="px-4 py-2 rounded-lg text-sm font-medium transition-all"
-            style={{
-              backgroundColor: activeFilter === value ? 'var(--color-purple)' : 'var(--color-surface)',
-              color:           activeFilter === value ? '#fff'               : 'var(--color-text-muted)',
-              border:          `1px solid ${activeFilter === value ? 'var(--color-purple)' : 'var(--color-border)'}`,
-            }}>
-            {label}
-          </button>
-        ))}
-      </div>
-
-      {loading && <p className="text-sm" style={{ color: 'var(--color-text-muted)' }}>Loading...</p>}
-      {!loading && payouts.length === 0 && (
-        <p className="text-sm" style={{ color: 'var(--color-text-muted)' }}>No payouts found.</p>
-      )}
-
-      {/* ── Payout table ── */}
-      {payouts.length > 0 && (
-        <div className="rounded-xl border overflow-hidden"
-          style={{ backgroundColor: 'var(--color-surface)', borderColor: 'var(--color-border)' }}>
-          <Table>
-            <Thead>
-              <tr>
-                <Th>Event</Th><Th>Organizer</Th><Th>Bank Details</Th><Th>Date</Th>
-                <Th>Gross</Th><Th>Fee</Th><Th>Net</Th>
-                <Th>Status</Th><Th>Action</Th>
-              </tr>
-            </Thead>
-            <Tbody>
-              {payouts.map((payout) => (
-                <Tr key={payout.id}>
-                  <Td>
-                    <p className="font-medium text-sm max-w-[160px] truncate" style={{ color: 'var(--color-text)' }}>
-                      {payout.event_name}
-                    </p>
-                  </Td>
-                  <Td><span style={{ color: 'var(--color-text-muted)' }}>{payout.organizer_name ?? '—'}</span></Td>
-                  <Td>
-                    {payout.organizer?.account_number && payout.organizer?.bank_name ? (
-                      <div className="text-xs leading-relaxed whitespace-nowrap">
-                        <p style={{ color: 'var(--color-text)' }}>{payout.organizer.bank_name}</p>
-                        <p style={{ color: 'var(--color-text-muted)' }}>{payout.organizer.account_number}</p>
-                        <p style={{ color: 'var(--color-text-dim)' }}>{payout.organizer.account_name}</p>
-                      </div>
-                    ) : (
-                      <Badge variant="red">No bank details</Badge>
-                    )}
-                  </Td>
-                  <Td><span style={{ color: 'var(--color-text-muted)' }}>{formatShortDate(payout.date)}</span></Td>
-                  <Td><span style={{ color: 'var(--color-text)' }}>{formatNGN(payout.gross)}</span></Td>
-                  <Td><span style={{ color: 'var(--color-text-muted)' }}>{formatNGN(payout.fee)}</span></Td>
-                  <Td><span className="font-semibold" style={{ color: 'var(--color-text)' }}>{formatNGN(payout.net)}</span></Td>
-                  <Td>{statusBadge(payout.status)}</Td>
-                  <Td>
-                    {payout.status === 'pending' && (
-                      <Button size="sm" variant="outline" disabled={acting === payout.id}
-                        className="whitespace-nowrap"
-                        style={{ borderColor: 'var(--color-amber)', color: 'var(--color-amber)' }}
-                        onClick={() => handleConfirmEvent(payout.id)}>
-                        <Clock size={13} />Confirm Event
-                      </Button>
-                    )}
-
-                    {payout.status === 'processing' && (
-                      <Button size="sm" variant="success" disabled={acting === payout.id}
-                        className="whitespace-nowrap"
-                        onClick={() => handleRelease(payout)}>
-                        <CheckCircle size={13} />Release Payout
-                      </Button>
-                    )}
-
-                    {payout.status === 'otp_pending' && (
-                      <a href="https://dashboard.paystack.com/" target="_blank" rel="noopener noreferrer">
-                        <Button size="sm" variant="outline"
-                          className="whitespace-nowrap"
-                          style={{ borderColor: '#f59e0b', color: '#f59e0b' }}>
-                          <ExternalLink size={13} />Confirm OTP
-                        </Button>
-                      </a>
-                    )}
-
-                    {payout.status === 'completed' && (
-                      <span className="text-xs" style={{ color: 'var(--color-text-dim)' }}>Paid</span>
-                    )}
-                  </Td>
-                </Tr>
-              ))}
-            </Tbody>
-          </Table>
-        </div>
-      )}
-
-      {/* ── OTP guide (sticky info card when OTP-pending rows exist) ── */}
-      {!loading && payouts.some(p => p.status === 'otp_pending') && !releaseResult && (
-        <div className="rounded-xl border p-4 text-sm"
-          style={{ backgroundColor: 'var(--color-surface)', borderColor: '#f59e0b50' }}>
-          <p className="font-semibold mb-1" style={{ color: '#f59e0b' }}>One or more transfers are awaiting OTP</p>
-          <p style={{ color: 'var(--color-text-muted)' }}>
-            Log in to your{' '}
-            <a href="https://dashboard.paystack.com/" target="_blank" rel="noopener noreferrer"
-              className="underline" style={{ color: 'var(--color-purple-light)' }}>Paystack Dashboard</a>
-            {' '}→ Pay → Transfers, and approve any pending transfers.
-            Payout status updates to <strong>Completed</strong> automatically once Paystack confirms.
+      {data && (
+        <div className="rounded-xl border p-4" style={{ backgroundColor: 'var(--color-surface)', borderColor: 'var(--color-border)' }}>
+          <p className="text-xs" style={{ color: 'var(--color-text-muted)' }}>Releasable now (net to organisers)</p>
+          <p className="text-2xl font-bold mt-0.5" style={{ color: 'var(--color-text)', fontFamily: 'var(--font-syne), sans-serif' }}>
+            {formatNGN(totalReleasable)}
+          </p>
+          <p className="text-xs mt-0.5" style={{ color: 'var(--color-text-dim)' }}>
+            {releasable.length} organiser{releasable.length === 1 ? '' : 's'} pending release
           </p>
         </div>
       )}
+
+      {/* ── Needs attention: failed / in-flight ── */}
+      {data && data.attention.length > 0 && (
+        <section className="flex flex-col gap-2">
+          <h2 className="text-sm font-semibold flex items-center gap-1.5" style={{ color: 'var(--color-text)' }}>
+            <AlertTriangle size={14} style={{ color: 'var(--color-amber)' }} /> Needs attention
+          </h2>
+          {data.attention.map(row => (
+            <div key={row.id} className="rounded-xl border p-3 flex flex-col gap-2"
+              style={{ backgroundColor: 'var(--color-surface)', borderColor: row.status === 'failed' ? '#ef444450' : '#f59e0b50' }}>
+              <Link href={`/admin/payouts/${row.organizer_id}`} className="flex items-start justify-between gap-2">
+                <div className="min-w-0">
+                  <p className="text-sm font-medium truncate" style={{ color: 'var(--color-text)' }}>{row.organizer_name}</p>
+                  <p className="text-xs" style={{ color: 'var(--color-text-muted)' }}>
+                    {row.kind === 'legacy_escrow' ? `${row.event_name ?? 'Event'} (escrow payout)` : `Sales ${fmtPeriod(row.period_start, row.period_end)}`}
+                    {' · '}{fmtDateTime(row.released_at)}
+                  </p>
+                </div>
+                <div className="text-right flex-shrink-0">
+                  <p className="text-sm font-semibold" style={{ color: 'var(--color-text)' }}>{formatNGN(row.net)}</p>
+                  <SettlementStatusBadge status={row.status} />
+                </div>
+              </Link>
+              {row.failure_reason && (
+                <p className="text-xs" style={{ color: row.status === 'failed' ? 'var(--color-red)' : 'var(--color-text-muted)' }}>{row.failure_reason}</p>
+              )}
+              {rowMsg[row.id] && <p className="text-xs" style={{ color: 'var(--color-text-muted)' }}>{rowMsg[row.id]}</p>}
+              <div className="flex gap-2">
+                {row.status === 'failed' && row.kind === 'daily' && (
+                  <Button size="sm" variant="success" disabled={rowBusy === row.id} onClick={() => rowAction(row, 'retry')}>
+                    <RefreshCw size={13} />{rowBusy === row.id ? 'Retrying…' : 'Retry'}
+                  </Button>
+                )}
+                {(row.status === 'processing' || row.status === 'otp_pending') && (
+                  <Button size="sm" variant="outline" disabled={rowBusy === row.id} onClick={() => rowAction(row, 'verify')}>
+                    {rowBusy === row.id ? 'Checking…' : 'Check status'}
+                  </Button>
+                )}
+                {row.status === 'otp_pending' && (
+                  <a href="https://dashboard.paystack.com/#/transfers" target="_blank" rel="noopener noreferrer">
+                    <Button size="sm" variant="outline"><ExternalLink size={13} />Approve OTP</Button>
+                  </a>
+                )}
+              </div>
+            </div>
+          ))}
+        </section>
+      )}
+
+      {/* ── Pending release ── */}
+      {data && (
+        <section className="flex flex-col gap-2">
+          <div className="flex items-center justify-between">
+            <h2 className="text-sm font-semibold" style={{ color: 'var(--color-text)' }}>Pending release</h2>
+            {releasable.length > 1 && (
+              <button className="text-xs font-medium px-2 py-1" style={{ color: 'var(--color-purple-light)' }}
+                onClick={() => setSelected(allSelected ? new Set() : new Set(releasable.map(o => o.id)))}>
+                {allSelected ? 'Clear selection' : 'Select all'}
+              </button>
+            )}
+          </div>
+          {releasable.length === 0 && (
+            <p className="text-sm" style={{ color: 'var(--color-text-muted)' }}>Nothing is waiting to be released.</p>
+          )}
+          {releasable.map(o => {
+            const r = o.releasable!;
+            const checked = selected.has(o.id);
+            return (
+              <div key={o.id} className="rounded-xl border p-3 flex items-stretch gap-3"
+                style={{ backgroundColor: 'var(--color-surface)', borderColor: checked ? 'var(--color-purple)' : 'var(--color-border)' }}>
+                <label className="flex items-center pl-1 pr-1 -my-3 py-3 cursor-pointer">
+                  <input type="checkbox" checked={checked} onChange={() => toggle(o.id)}
+                    className="w-5 h-5 accent-[var(--color-purple)]" aria-label={`Select ${o.name}`} />
+                </label>
+                <Link href={`/admin/payouts/${o.id}`} className="flex-1 min-w-0">
+                  <div className="flex items-start justify-between gap-2">
+                    <p className="text-sm font-medium truncate" style={{ color: 'var(--color-text)' }}>{o.name}</p>
+                    <p className="text-base font-bold flex-shrink-0" style={{ color: 'var(--color-text)' }}>{formatNGN(r.net)}</p>
+                  </div>
+                  <p className="text-xs mt-0.5" style={{ color: 'var(--color-text-muted)' }}>
+                    Sales {fmtPeriod(r.periodStart, r.periodEnd)} · {r.ticketCount} ticket{r.ticketCount === 1 ? '' : 's'}
+                  </p>
+                  <p className="text-xs" style={{ color: 'var(--color-text-dim)' }}>
+                    Gross {formatNGN(r.gross)} · fee {formatNGN(r.fee)}
+                    {r.refundsDeducted > 0 && <> · refunds −{formatNGN(r.refundsDeducted)}</>}
+                  </p>
+                  <p className="text-xs truncate" style={{ color: 'var(--color-text-dim)' }}>
+                    {o.bankName} · {o.accountNumber}
+                  </p>
+                </Link>
+                <div className="flex flex-col justify-center gap-1 flex-shrink-0">
+                  <Button size="sm" variant="success" disabled={busy} onClick={() => setConfirming([candidate(o)])}>Release</Button>
+                  <Link href={`/admin/payouts/${o.id}`} className="self-center p-1" aria-label="History" style={{ color: 'var(--color-text-dim)' }}>
+                    <ChevronRight size={16} />
+                  </Link>
+                </div>
+              </div>
+            );
+          })}
+        </section>
+      )}
+
+      {/* ── Not releasable yet / blocked ── */}
+      {data && notReady.length > 0 && (
+        <section className="flex flex-col gap-2">
+          <h2 className="text-sm font-semibold" style={{ color: 'var(--color-text)' }}>Accruing or blocked</h2>
+          {notReady.map(o => (
+            <Link key={o.id} href={`/admin/payouts/${o.id}`} className="rounded-xl border p-3 flex items-center justify-between gap-3"
+              style={{ backgroundColor: 'var(--color-surface)', borderColor: 'var(--color-border)' }}>
+              <div className="min-w-0">
+                <p className="text-sm font-medium truncate" style={{ color: 'var(--color-text)' }}>{o.name}</p>
+                {o.blockers.map(b => (
+                  <p key={b} className="text-xs" style={{ color: 'var(--color-red)' }}>{b}</p>
+                ))}
+                {o.releasable && o.blockers.length > 0 && (
+                  <p className="text-xs" style={{ color: 'var(--color-text-muted)' }}>{formatNGN(o.releasable.net)} releasable once fixed</p>
+                )}
+                {o.accruing.map(a => (
+                  <p key={a.eligibleOn} className="text-xs" style={{ color: 'var(--color-text-muted)' }}>
+                    {formatNGN(a.net)} releasable {fmtDay(a.eligibleOn)}
+                  </p>
+                ))}
+              </div>
+              <ChevronRight size={16} className="flex-shrink-0" style={{ color: 'var(--color-text-dim)' }} />
+            </Link>
+          ))}
+        </section>
+      )}
+
+      {/* ── Sticky bulk bar (sits above the mobile bottom nav) ── */}
+      {selectedList.length > 0 && (
+        <div className="fixed left-0 right-0 z-40 px-3 lg:left-60 lg:px-8 bottom-[calc(4.5rem_+_env(safe-area-inset-bottom))] lg:bottom-4">
+          <div className="rounded-xl border p-3 flex items-center justify-between gap-3 shadow-2xl"
+            style={{ backgroundColor: 'var(--color-surface-2, var(--color-surface))', borderColor: 'var(--color-purple)' }}>
+            <p className="text-sm min-w-0" style={{ color: 'var(--color-text)' }}>
+              <span className="font-semibold">{selectedList.length}</span> selected ·{' '}
+              <span className="font-semibold">{formatNGN(selectedList.reduce((s, o) => s + o.releasable!.net, 0))}</span>
+            </p>
+            <Button variant="success" disabled={busy} onClick={() => setConfirming(selectedList.map(candidate))}>
+              Release {selectedList.length}
+            </Button>
+          </div>
+        </div>
+      )}
+
+      <ReleaseConfirmModal candidates={confirming} busy={busy} onCancel={() => setConfirming([])} onConfirm={doRelease} />
     </div>
   );
+}
+
+function addDaysIso(date: string, days: number) {
+  const d = new Date(`${date}T00:00:00Z`);
+  d.setUTCDate(d.getUTCDate() + days);
+  return d.toISOString().slice(0, 10);
 }

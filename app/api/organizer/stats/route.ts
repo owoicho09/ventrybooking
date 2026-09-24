@@ -1,6 +1,7 @@
 import { NextResponse } from 'next/server';
 import { getAuthUser } from '@/lib/server/auth';
 import { getServerSupabase } from '@/lib/supabase/server';
+import { feeRateOf, organizerFundsFigures } from '@/lib/server/settlements';
 
 export async function GET() {
   const user = await getAuthUser();
@@ -10,25 +11,23 @@ export async function GET() {
 
   const db = getServerSupabase();
 
-  const [ticketsRes, eventsRes, payoutsRes] = await Promise.all([
-    db.from('tickets').select('quantity').eq('organizer_id', user.sub).in('status', ['valid', 'used']),
-    db.from('events').select('id, status').eq('organizer_id', user.sub),
-    // Fetch pending + processing payouts — net is what they'll receive once paid out
-    db.from('payouts').select('net, status').eq('organizer_id', user.sub).in('status', ['pending', 'processing']),
-  ]);
+  try {
+    const [ticketsRes, orgRes] = await Promise.all([
+      db.from('tickets').select('quantity').eq('organizer_id', user.sub).in('status', ['valid', 'used']),
+      db.from('users').select('platform_fee_rate').eq('id', user.sub).maybeSingle(),
+    ]);
 
-  const tickets = ticketsRes.data || [];
-  const events  = eventsRes.data  || [];
-  const payouts = payoutsRes.data || [];
+    const ticketsSold = (ticketsRes.data || []).reduce((s, t) => s + t.quantity, 0);
+    // Money figures are always the organiser's net (after Ventry's fee) —
+    // never gross ticket revenue.
+    const { settled, pending } = await organizerFundsFigures(db, user.sub, feeRateOf({ platform_fee_rate: orgRes.data?.platform_fee_rate ?? null }));
 
-  const ticketsSold    = tickets.reduce((s, t) => s + t.quantity, 0);
-  // Show only the organizer's net (after platform fee), never the gross or service fees
-  const pendingRevenue = payouts.reduce((s, p) => s + p.net, 0);
-  const activeEvents   = events.filter(e => e.status === 'approved').length;
-  const payoutDue      = payouts.filter(p => p.status === 'pending').reduce((s, p) => s + p.net, 0);
-
-  return NextResponse.json(
-    { success: true, data: { ticketsSold, pendingRevenue, activeEvents, payoutDue } },
-    { headers: { 'Cache-Control': 'no-store' } },
-  );
+    return NextResponse.json(
+      { success: true, data: { ticketsSold, fundsSettled: settled, fundsPending: pending } },
+      { headers: { 'Cache-Control': 'no-store' } },
+    );
+  } catch (err) {
+    console.error('GET /api/organizer/stats error', err);
+    return NextResponse.json({ error: 'Failed to load stats' }, { status: 500 });
+  }
 }

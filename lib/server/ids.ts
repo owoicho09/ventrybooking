@@ -23,6 +23,12 @@ export function generatePayoutRef(): string {
   return `VTR-PAY-${year}-${randomAlphaNum(6)}`;
 }
 
+/** Paystack transfer reference for one settlement attempt: VTR-STL-YYYY-XXXXXXXX */
+export function generateSettlementRef(): string {
+  const year = new Date().getFullYear();
+  return `VTR-STL-${year}-${randomAlphaNum(8)}`;
+}
+
 /** Short door-staff access code: STF-XXXX-XXXX */
 export function generateStaffCode(): string {
   return `STF-${randomAlphaNum(4)}-${randomAlphaNum(4)}`;
