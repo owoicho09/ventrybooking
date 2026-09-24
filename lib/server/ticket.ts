@@ -3,6 +3,7 @@ import { generateTicketId, generateRefundCode } from '@/lib/server/ids';
 import { sendTicketEmail } from '@/lib/server/email';
 import { calculateFees, serviceFeePerTicket } from '@/lib/server/fees';
 import { notify } from '@/lib/server/notify';
+import { recordCheckoutConsent } from '@/lib/server/marketingConsent';
 import { recordAffiliateCommissionIfApplicable } from '@/lib/server/affiliateCommission';
 
 export interface CartItem {
@@ -241,23 +242,18 @@ export async function createTicketFromClaimedPayment(p: PaymentData): Promise<st
     }),
   ]);
 
-  // Box 1 consent (organiser mailing list) — adds/reactivates this buyer in
-  // the organiser's Audience. Never touches anything if consent wasn't given.
-  if (consent && email) {
-    (async () => {
-      try {
-        const { error } = await db.rpc('upsert_audience_member', {
-          p_organizer_id: eventRow.organizer_id,
-          p_email:        email,
-          p_name:         p.buyerName || null,
-          p_phone:        null,
-          p_source:       'ticket_consent',
-        });
-        if (error) console.error('createTicketFromPayment: audience upsert error', error);
-      } catch (err) {
-        console.error('createTicketFromPayment: audience upsert error', err);
-      }
-    })();
+  // Marketing consent — organiser's Audience and/or Ventry's list, each only
+  // if consented to. Awaited (it never throws) so a serverless runtime can't
+  // cut the write off after the response.
+  if (consent || ventryConsent) {
+    await recordCheckoutConsent(db, {
+      organizerId: eventRow.organizer_id,
+      eventId:     p.eventId,
+      email,
+      name:        p.buyerName || null,
+      organizer:   consent,
+      ventry:      ventryConsent,
+    });
   }
 
   if (p.refCode) {

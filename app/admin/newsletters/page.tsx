@@ -1,6 +1,7 @@
 'use client';
 
 import { useState, useEffect } from 'react';
+import Link from 'next/link';
 import { CheckCircle, XCircle, Users } from 'lucide-react';
 import { Badge } from '@/components/ui/Badge';
 import { Button } from '@/components/ui/Button';
@@ -91,13 +92,18 @@ export default function AdminNewslettersPage() {
 
   return (
     <div className="flex flex-col gap-6">
-      <div>
-        <h1 className="text-2xl font-bold" style={{ color: 'var(--color-text)', fontFamily: 'var(--font-syne), sans-serif' }}>
-          Newsletter Queue
-        </h1>
-        <p className="text-sm mt-0.5" style={{ color: 'var(--color-text-muted)' }}>
-          Nothing reaches a buyer&apos;s inbox until it&apos;s approved here.
-        </p>
+      <div className="flex items-start justify-between gap-3">
+        <div>
+          <h1 className="text-2xl font-bold" style={{ color: 'var(--color-text)', fontFamily: 'var(--font-syne), sans-serif' }}>
+            Newsletter Queue
+          </h1>
+          <p className="text-sm mt-0.5" style={{ color: 'var(--color-text-muted)' }}>
+            Nothing reaches a buyer&apos;s inbox until it&apos;s approved here.
+          </p>
+        </div>
+        <Link href="/admin/newsletters/subscribers" className="flex-shrink-0">
+          <Button size="sm" variant="outline"><Users size={14} />Subscribers</Button>
+        </Link>
       </div>
 
       <div className="flex gap-1.5 flex-wrap">

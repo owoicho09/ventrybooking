@@ -29,7 +29,6 @@ export default function CheckoutPage() {
   const [email, setEmail]                     = useState('');
   const [buyerName, setBuyerName]             = useState('');
   const [marketingConsent, setMarketingConsent] = useState(false);
-  const [ventryMarketingConsent, setVentryMarketingConsent] = useState(false);
   const [loading, setLoading]                 = useState(false);
   const [error, setError]                     = useState('');
   const [cart, setCart]                       = useState<Cart | null>(null);
@@ -128,8 +127,9 @@ export default function CheckoutPage() {
         items: cart.items.map(i => ({ tierId: i.tierId, quantity: i.quantity })),
         buyerEmail: normalizedEmail,
         buyerName: buyerName.trim(),
+        // One box consents to both lists — the organiser's Audience and Ventry's own.
         marketingConsent,
-        ventryMarketingConsent,
+        ventryMarketingConsent: marketingConsent,
         ref: cart.ref,
         purchasedByEmail: sessionEmail,
         emailToken: token,
@@ -395,31 +395,22 @@ export default function CheckoutPage() {
                 </p>
               )}
 
-              {/* Marketing consent opt-ins — two separate, unticked, optional boxes */}
-              <div className="flex flex-col gap-3">
-                <label className="flex items-start gap-3 cursor-pointer">
-                  <input
-                    type="checkbox"
-                    checked={marketingConsent}
-                    onChange={e => setMarketingConsent(e.target.checked)}
-                    className="mt-0.5 flex-shrink-0 w-4 h-4 rounded accent-[var(--color-purple)]"
-                  />
-                  <span className="text-xs leading-relaxed" style={{ color: 'var(--color-text-muted)' }}>
-                    I agree to receive updates and offers from the event organiser, sent through Ventry. You can unsubscribe at any time.
-                  </span>
-                </label>
-                <label className="flex items-start gap-3 cursor-pointer">
-                  <input
-                    type="checkbox"
-                    checked={ventryMarketingConsent}
-                    onChange={e => setVentryMarketingConsent(e.target.checked)}
-                    className="mt-0.5 flex-shrink-0 w-4 h-4 rounded accent-[var(--color-purple)]"
-                  />
-                  <span className="text-xs leading-relaxed" style={{ color: 'var(--color-text-muted)' }}>
-                    I agree to receive emails from Ventry about upcoming events, new features, and platform updates. You can unsubscribe at any time.
-                  </span>
-                </label>
-              </div>
+              {/* Optional marketing consent — one unticked box covering both the
+                  organiser's Audience and Ventry's list. Deliberately boxed off from
+                  the terms statement below so it never reads as part of agreeing. */}
+              <label className="flex items-start gap-3 cursor-pointer rounded-lg border px-3 py-2.5"
+                style={{ borderColor: 'var(--color-border)' }}>
+                <input
+                  type="checkbox"
+                  checked={marketingConsent}
+                  onChange={e => setMarketingConsent(e.target.checked)}
+                  className="mt-0.5 flex-shrink-0 w-4 h-4 rounded accent-[var(--color-purple)]"
+                />
+                <span className="text-xs leading-relaxed" style={{ color: 'var(--color-text-muted)' }}>
+                  I&apos;d like to receive event updates and offers from this organiser and from Ventry. You can unsubscribe at any time.
+                  <span className="block mt-0.5" style={{ color: 'var(--color-text-dim)' }}>Optional</span>
+                </span>
+              </label>
 
               <p className="text-[11px] leading-relaxed" style={{ color: 'var(--color-text-dim)' }}>
                 By {isFree ? 'getting this ticket' : 'purchasing'} you agree to Ventry&apos;s{' '}

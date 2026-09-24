@@ -11,6 +11,10 @@ interface CartItem { tierId: string; quantity: number }
 export async function POST(req: NextRequest) {
   try {
     const { eventId, items, buyerEmail, buyerName, marketingConsent, ventryMarketingConsent, ref, purchasedByEmail, emailToken } = await req.json();
+    // Checkout now shows one box that consents to both lists. A client that
+    // still sends the two flags separately (a page loaded before the change)
+    // is honoured as-is; otherwise Ventry consent follows the single box.
+    const ventryConsent = typeof ventryMarketingConsent === 'boolean' ? ventryMarketingConsent : marketingConsent === true;
 
     if (!eventId || !Array.isArray(items) || items.length === 0 || !buyerEmail) {
       return NextResponse.json({ error: 'Missing required fields' }, { status: 400 });
@@ -143,7 +147,7 @@ export async function POST(req: NextRequest) {
         buyerEmail,
         buyerName:        buyerName || '',
         marketingConsent: marketingConsent === true,
-        ventryMarketingConsent: ventryMarketingConsent === true,
+        ventryMarketingConsent: ventryConsent,
         subtotal,
         serviceFee,
         processingFee,
@@ -176,7 +180,7 @@ export async function POST(req: NextRequest) {
         total,
         organizer_id:      event.organizer_id,
         marketing_consent: marketingConsent === true,
-        ventry_marketing_consent: ventryMarketingConsent === true,
+        ventry_marketing_consent: ventryConsent,
         created_at:        new Date().toISOString(),
       });
     } catch { /* non-critical */ }

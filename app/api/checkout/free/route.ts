@@ -6,6 +6,7 @@ import { notify } from '@/lib/server/notify';
 import { isEmailDomainAllowed } from '@/lib/server/domainRestriction';
 import { isCheckoutEmailVerified, EMAIL_NOT_VERIFIED_CODE } from '@/lib/server/checkoutEmailVerification';
 import { randomBytes } from 'crypto';
+import { recordCheckoutConsent } from '@/lib/server/marketingConsent';
 
 interface CartItem { tierId: string; quantity: number }
 
@@ -100,7 +101,9 @@ export async function POST(req: NextRequest) {
 
     const purchasedAt  = new Date().toISOString();
     const consent      = marketingConsent === true;
-    const ventryConsent = ventryMarketingConsent === true;
+    // One checkout box now consents to both lists; separately-sent flags from
+    // a page loaded before the change are honoured as-is.
+    const ventryConsent = typeof ventryMarketingConsent === 'boolean' ? ventryMarketingConsent : consent;
     // Pseudo-reference for free orders (no Paystack transaction)
     const reference   = `FREE-${randomBytes(6).toString('hex').toUpperCase()}`;
 
@@ -152,23 +155,17 @@ export async function POST(req: NextRequest) {
       cartItems.map(item => db.rpc('increment_tier_sold', { tier_id: item.tierId, amount: item.quantity })),
     );
 
-    // Box 1 consent (organiser mailing list) — free checkout bypasses
-    // createTicketFromPayment, so the audience upsert happens here instead.
-    if (consent) {
-      (async () => {
-        try {
-          const { error } = await db.rpc('upsert_audience_member', {
-            p_organizer_id: event.organizer_id,
-            p_email:        email,
-            p_name:         buyerName?.trim() || null,
-            p_phone:        null,
-            p_source:       'ticket_consent',
-          });
-          if (error) console.error('free checkout: audience upsert error', error);
-        } catch (err) {
-          console.error('free checkout: audience upsert error', err);
-        }
-      })();
+    // Marketing consent — free checkout bypasses createTicketFromPayment, so
+    // both list writes happen here instead.
+    if (consent || ventryConsent) {
+      await recordCheckoutConsent(db, {
+        organizerId: event.organizer_id,
+        eventId,
+        email,
+        name:        buyerName ?? null,
+        organizer:   consent,
+        ventry:      ventryConsent,
+      });
     }
 
     // Free orders never touch Paystack/the webhook, so credit the affiliate here —

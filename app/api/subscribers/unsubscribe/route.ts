@@ -20,20 +20,43 @@ export async function GET(req: NextRequest) {
     return new NextResponse(htmlPage('Missing unsubscribe token'), { status: 400, headers: { 'Content-Type': 'text/html' } });
   }
 
+  // Each list has its own tokens, so an unsubscribe only ever leaves the one
+  // list the link came from: an organiser's Audience or Ventry's own list.
   const db = getServerSupabase();
-  const { data, error } = await db
+  const now = new Date().toISOString();
+
+  const { data: orgRow, error: orgErr } = await db
     .from('organizer_subscribers')
-    .update({ unsubscribed_at: new Date().toISOString() })
+    .update({ unsubscribed_at: now })
+    .eq('unsubscribe_token', token)
+    .select('id, organizer:users!organizer_subscribers_organizer_id_fkey(name)')
+    .maybeSingle();
+
+  if (!orgErr && orgRow) {
+    const org = (Array.isArray(orgRow.organizer) ? orgRow.organizer[0] : orgRow.organizer) as { name: string } | null;
+    return new NextResponse(
+      htmlPage(`You've been unsubscribed from ${escapeHtml(org?.name ?? 'this organiser')}'s updates.`),
+      { headers: { 'Content-Type': 'text/html' } },
+    );
+  }
+
+  const { data: ventryRow, error: ventryErr } = await db
+    .from('ventry_subscribers')
+    .update({ unsubscribed_at: now })
     .eq('unsubscribe_token', token)
     .select('id')
     .maybeSingle();
 
-  if (error || !data) {
-    return new NextResponse(htmlPage('That unsubscribe link is invalid or has already been used.'), {
-      status: 404,
-      headers: { 'Content-Type': 'text/html' },
-    });
+  if (!ventryErr && ventryRow) {
+    return new NextResponse(htmlPage("You've been unsubscribed from Ventry's updates."), { headers: { 'Content-Type': 'text/html' } });
   }
 
-  return new NextResponse(htmlPage("You've been unsubscribed."), { headers: { 'Content-Type': 'text/html' } });
+  return new NextResponse(htmlPage('That unsubscribe link is invalid or has already been used.'), {
+    status: 404,
+    headers: { 'Content-Type': 'text/html' },
+  });
+}
+
+function escapeHtml(s: string) {
+  return s.replace(/[&<>"']/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]!));
 }
