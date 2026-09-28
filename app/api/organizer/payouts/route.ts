@@ -33,7 +33,7 @@ export async function GET() {
     if (settlementsRes.error) throw new Error(settlementsRes.error.message);
 
     const u = unsettled.get(user.sub);
-    const pending = summarizePending(u?.days ?? [], u?.owed ?? null, feeRate, releaseCutoff(lagosDate(), holidays), holidays);
+    const pending = summarizePending(u?.days ?? [], u?.owed ?? null, feeRate, releaseCutoff(lagosDate(), holidays), holidays, u?.adjustments);
 
     return NextResponse.json(
       {

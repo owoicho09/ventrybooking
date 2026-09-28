@@ -24,6 +24,7 @@ export interface SettlementRow {
   period_end: string;
   gross: number;
   refunds_deducted: number;
+  adjustments_deducted: number;
   fee: number;
   net: number;
   fee_rate: number;
@@ -141,14 +142,17 @@ export function splitFee(gross: number, rate: number) {
 }
 
 export interface PendingSummary {
-  /** Releasable now — sales before the cutoff, less refunds owed back. */
+  /** Releasable now — sales before the cutoff, less refunds owed back, less adjustments. */
   releasable: {
-    salesGross: number; refundsDeducted: number; gross: number; fee: number; net: number;
+    salesGross: number; refundsDeducted: number; gross: number; fee: number;
+    adjustmentsDeducted: number; net: number;
     ticketCount: number; periodStart: string; periodEnd: string;
   } | null;
   /** Sales not yet eligible, grouped by the working day they become releasable. */
   accruing: { eligibleOn: string; periodStart: string; periodEnd: string; gross: number; fee: number; net: number; ticketCount: number }[];
   refundsOwed: { gross: number; ticketCount: number };
+  /** Net amount of one-off deductions waiting to come off the next release. */
+  adjustmentsOwed: number;
 }
 
 type DayRow = { organizer_id: string; sale_date: string; gross: number; ticket_count: number };
@@ -156,21 +160,29 @@ type OwedRow = { organizer_id: string; gross: number; ticket_count: number };
 
 export async function loadUnsettled(db: Db, organizerId?: string) {
   const args = organizerId ? { p_organizer_id: organizerId } : {};
-  const [days, owed] = await Promise.all([
+  const [days, owed, adj] = await Promise.all([
     db.rpc('settlement_unsettled_by_day', args),
     db.rpc('settlement_refunds_owed', args),
+    db.rpc('settlement_adjustments_owed', args),
   ]);
   if (days.error) throw new Error(`Unsettled lookup failed: ${days.error.message}`);
   if (owed.error) throw new Error(`Refunds-owed lookup failed: ${owed.error.message}`);
-  const byOrg = new Map<string, { days: DayRow[]; owed: OwedRow | null }>();
+  if (adj.error) throw new Error(`Adjustments lookup failed: ${adj.error.message}`);
+  const byOrg = new Map<string, { days: DayRow[]; owed: OwedRow | null; adjustments: number }>();
+  const entry = (id: string) => byOrg.get(id) ?? { days: [], owed: null, adjustments: 0 };
   for (const r of (days.data ?? []) as DayRow[]) {
-    const e = byOrg.get(r.organizer_id) ?? { days: [], owed: null };
+    const e = entry(r.organizer_id);
     e.days.push({ ...r, gross: Number(r.gross), ticket_count: Number(r.ticket_count) });
     byOrg.set(r.organizer_id, e);
   }
   for (const r of (owed.data ?? []) as OwedRow[]) {
-    const e = byOrg.get(r.organizer_id) ?? { days: [], owed: null };
+    const e = entry(r.organizer_id);
     e.owed = { ...r, gross: Number(r.gross), ticket_count: Number(r.ticket_count) };
+    byOrg.set(r.organizer_id, e);
+  }
+  for (const r of (adj.data ?? []) as { organizer_id: string; amount: number }[]) {
+    const e = entry(r.organizer_id);
+    e.adjustments = Number(r.amount);
     byOrg.set(r.organizer_id, e);
   }
   return byOrg;
@@ -182,6 +194,7 @@ export function summarizePending(
   feeRate: number,
   cutoff: string,
   holidays: Map<string, string>,
+  adjustmentsOwed = 0,
 ): PendingSummary {
   const refundsOwed = { gross: owed?.gross ?? 0, ticketCount: owed?.ticket_count ?? 0 };
   const eligible = days.filter(d => d.sale_date < cutoff).sort((a, b) => a.sale_date.localeCompare(b.sale_date));
@@ -193,7 +206,8 @@ export function summarizePending(
     const gross = salesGross - refundsOwed.gross;
     const { fee, net } = splitFee(gross, feeRate);
     releasable = {
-      salesGross, refundsDeducted: refundsOwed.gross, gross, fee, net,
+      salesGross, refundsDeducted: refundsOwed.gross, gross, fee,
+      adjustmentsDeducted: adjustmentsOwed, net: net - adjustmentsOwed,
       ticketCount: eligible.reduce((s, d) => s + d.ticket_count, 0),
       periodStart: eligible[0].sale_date,
       periodEnd:   eligible[eligible.length - 1].sale_date,
@@ -219,14 +233,14 @@ export function summarizePending(
       };
     });
 
-  return { releasable, accruing, refundsOwed };
+  return { releasable, accruing, refundsOwed, adjustmentsOwed };
 }
 
 /**
  * The organiser's money figures, all on the net (after-fee) basis:
  *   settled — sent and confirmed by Paystack (daily + legacy escrow payouts).
  *   pending — everything not yet settled: unsettled sales (eligible or not)
- *             less refunds owed back, plus settlements in flight or failed.
+ *             less refunds and adjustments owed back, plus settlements in flight or failed.
  */
 export async function organizerFundsFigures(db: Db, organizerId: string, feeRate: number) {
   const [unsettled, settlementsRes] = await Promise.all([
@@ -245,7 +259,7 @@ export async function organizerFundsFigures(db: Db, organizerId: string, feeRate
 
   const u = unsettled.get(organizerId);
   const unsettledGross = (u?.days ?? []).reduce((s, d) => s + d.gross, 0) - (u?.owed?.gross ?? 0);
-  const pending = splitFee(unsettledGross, feeRate).net + inFlight;
+  const pending = splitFee(unsettledGross, feeRate).net - (u?.adjustments ?? 0) + inFlight;
 
   return { settled, pending };
 }
@@ -446,7 +460,7 @@ export async function releaseForOrganizer(
   const feeRate = feeRateOf(org);
   const cutoff  = releaseCutoff(lagosDate(), holidays);
   const pending = (await loadUnsettled(db, organizerId)).get(organizerId);
-  const summary = summarizePending(pending?.days ?? [], pending?.owed ?? null, feeRate, cutoff, holidays);
+  const summary = summarizePending(pending?.days ?? [], pending?.owed ?? null, feeRate, cutoff, holidays, pending?.adjustments);
 
   if (!summary.releasable) {
     return { organizerId, outcome: 'noop', message: 'Nothing to release — already released or not yet eligible' };

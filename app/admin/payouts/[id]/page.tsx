@@ -19,7 +19,7 @@ interface Attempt {
 
 interface Settlement {
   id: string; kind: 'daily' | 'legacy_escrow'; period_start: string; period_end: string;
-  gross: number; refunds_deducted: number; fee: number; net: number; fee_rate: number; ticket_count: number;
+  gross: number; refunds_deducted: number; adjustments_deducted: number; fee: number; net: number; fee_rate: number; ticket_count: number;
   status: string; failure_reason: string | null; transfer_reference: string | null;
   released_by: string | null; released_at: string; settled_at: string | null; event_name: string | null;
   attempts: Attempt[];
@@ -28,9 +28,10 @@ interface Settlement {
 interface History {
   organizer: { id: string; name: string; email: string; bankName: string | null; accountNumber: string | null; accountName: string | null; feeRate: number };
   pending: {
-    releasable: { salesGross: number; refundsDeducted: number; gross: number; fee: number; net: number; ticketCount: number; periodStart: string; periodEnd: string } | null;
+    releasable: { salesGross: number; refundsDeducted: number; gross: number; fee: number; adjustmentsDeducted: number; net: number; ticketCount: number; periodStart: string; periodEnd: string } | null;
     accruing: { eligibleOn: string; periodStart: string; periodEnd: string; gross: number; fee: number; net: number; ticketCount: number }[];
     refundsOwed: { gross: number; ticketCount: number };
+    adjustmentsOwed: number;
   };
   blockers: string[];
   settlements: Settlement[];
@@ -153,6 +154,11 @@ export default function OrganizerSettlementHistoryPage() {
                 <SettlementStatusBadge status="pending" />
               </div>
               <Amounts gross={rel.gross} fee={rel.fee} net={rel.net} refunds={rel.refundsDeducted} />
+              {rel.adjustmentsDeducted > 0 && (
+                <p className="text-xs mt-1" style={{ color: 'var(--color-text-dim)' }}>
+                  Net includes −{formatNGN(rel.adjustmentsDeducted)} in deductions owed back.
+                </p>
+              )}
               {data.blockers.map(b => <p key={b} className="text-xs mt-2" style={{ color: 'var(--color-red)' }}>{b}</p>)}
               <Button className="mt-3" fullWidth variant="success" disabled={!canRelease || busy}
                 onClick={() => setConfirming([{ id: org!.id, name: org!.name, net: rel.net, period: fmtPeriod(rel.periodStart, rel.periodEnd) }])}>
@@ -176,6 +182,12 @@ export default function OrganizerSettlementHistoryPage() {
               <Amounts gross={a.gross} fee={a.fee} net={a.net} />
             </div>
           ))}
+
+          {!rel && data.pending.adjustmentsOwed > 0 && (
+            <p className="text-xs" style={{ color: 'var(--color-amber)' }}>
+              {formatNGN(data.pending.adjustmentsOwed)} in deductions owed back will come off the next release.
+            </p>
+          )}
 
           {!rel && data.pending.refundsOwed.gross > 0 && (
             <p className="text-xs" style={{ color: 'var(--color-amber)' }}>
@@ -216,6 +228,11 @@ export default function OrganizerSettlementHistoryPage() {
               {s.refunds_deducted > 0 && (
                 <p className="text-xs mt-1" style={{ color: 'var(--color-text-dim)' }}>
                   Includes −{formatNGN(s.refunds_deducted)} for tickets refunded after an earlier settlement.
+                </p>
+              )}
+              {s.adjustments_deducted > 0 && (
+                <p className="text-xs mt-1" style={{ color: 'var(--color-text-dim)' }}>
+                  Net includes −{formatNGN(s.adjustments_deducted)} in deductions owed back.
                 </p>
               )}
 

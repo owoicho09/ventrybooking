@@ -48,7 +48,7 @@ export async function GET() {
       .filter(([id]) => orgs.has(id))
       .map(([id, u]) => {
         const org = orgs.get(id)!;
-        const summary = summarizePending(u.days, u.owed, feeRateOf(org), cutoff, holidays);
+        const summary = summarizePending(u.days, u.owed, feeRateOf(org), cutoff, holidays, u.adjustments);
         const blockers = summary.releasable
           ? eligibilityBlockers({ organizer: org, releasableNet: summary.releasable.net })
           : [];

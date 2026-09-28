@@ -36,7 +36,7 @@ export async function GET(_req: NextRequest, { params }: { params: Promise<{ id:
 
     const cutoff  = releaseCutoff(lagosDate(), holidays);
     const u       = unsettled.get(id);
-    const pending = summarizePending(u?.days ?? [], u?.owed ?? null, feeRateOf(org), cutoff, holidays);
+    const pending = summarizePending(u?.days ?? [], u?.owed ?? null, feeRateOf(org), cutoff, holidays, u?.adjustments);
     const blockers = pending.releasable
       ? eligibilityBlockers({ organizer: org, releasableNet: pending.releasable.net })
       : [];

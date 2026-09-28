@@ -15,7 +15,8 @@ interface OrganizerPending {
   bankName: string | null; accountNumber: string | null; accountName: string | null;
   feeRate: number;
   releasable: {
-    salesGross: number; refundsDeducted: number; gross: number; fee: number; net: number;
+    salesGross: number; refundsDeducted: number; gross: number; fee: number;
+    adjustmentsDeducted: number; net: number;
     ticketCount: number; periodStart: string; periodEnd: string;
   } | null;
   accruing: { eligibleOn: string; periodStart: string; periodEnd: string; net: number; ticketCount: number }[];
@@ -243,6 +244,7 @@ export default function AdminPayoutsPage() {
                   <p className="text-xs" style={{ color: 'var(--color-text-dim)' }}>
                     Gross {formatNGN(r.gross)} · fee {formatNGN(r.fee)}
                     {r.refundsDeducted > 0 && <> · refunds −{formatNGN(r.refundsDeducted)}</>}
+                    {r.adjustmentsDeducted > 0 && <> · deductions −{formatNGN(r.adjustmentsDeducted)}</>}
                   </p>
                   <p className="text-xs truncate" style={{ color: 'var(--color-text-dim)' }}>
                     {o.bankName} · {o.accountNumber}
