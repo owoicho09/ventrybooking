@@ -38,7 +38,9 @@ export async function GET(
         status, total_sold, banner_color, banner_url, header_banner_url, accent_color, lineup, allowed_email_domains,
         organizer:users!events_organizer_id_fkey(id, name, tier, verified, member_since, events_hosted, handle, socials),
         tiers:ticket_tiers(id, name, price, available, sold)
-      `);
+      `)
+      // Tiers the organiser has withdrawn from sale are left off the page.
+      .eq('tiers.hidden', false);
     qb = isUUID(id) ? qb.eq('id', id) : qb.eq('slug', id);
     const { data, error } = await qb.maybeSingle();
 

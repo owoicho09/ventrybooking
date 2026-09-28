@@ -103,6 +103,7 @@ export async function GET(
       .select(EVENT_SELECT)
       .eq('organizer_id', organizer.id)
       .in('status', ['approved', 'completed'])
+      .eq('tiers.hidden', false)
       .order('date', { ascending: true });
 
     const today = new Date().toISOString().slice(0, 10);

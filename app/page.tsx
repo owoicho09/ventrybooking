@@ -79,6 +79,7 @@ export default async function HomePage() {
       tiers:ticket_tiers(id, name, price, available, sold)
     `)
     .eq('status', 'approved')
+    .eq('tiers.hidden', false)
     .order('created_at', { ascending: false })
     .limit(3);
 

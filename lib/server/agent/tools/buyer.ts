@@ -134,7 +134,8 @@ export function createBuyerTools(ctx: BuyerToolContext): AgentTool[] {
         const { data: tiers } = await db
           .from('ticket_tiers')
           .select('available, sold')
-          .eq('event_id', event.id);
+          .eq('event_id', event.id)
+          .eq('hidden', false);
         const soldOut = (tiers ?? []).length > 0 && (tiers ?? []).every(t => t.sold >= t.available);
 
         return {

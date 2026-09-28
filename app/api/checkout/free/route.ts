@@ -82,13 +82,14 @@ export async function POST(req: NextRequest) {
       .from('ticket_tiers')
       .select('id, name, price, available, sold')
       .in('id', cartItems.map(i => i.tierId))
-      .eq('event_id', eventId);
+      .eq('event_id', eventId)
+      .eq('hidden', false);
 
     const tierById = new Map((tiers ?? []).map(t => [t.id, t]));
     for (const item of cartItems) {
       const tier = tierById.get(item.tierId);
       if (!tier) {
-        return NextResponse.json({ error: 'Ticket tier not found' }, { status: 404 });
+        return NextResponse.json({ error: 'Ticket tier not found or no longer on sale' }, { status: 404 });
       }
       if (tier.price !== 0) {
         return NextResponse.json({ error: `"${tier.name}" is not free — checkout requires payment` }, { status: 400 });

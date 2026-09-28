@@ -64,6 +64,7 @@ export async function GET(req: NextRequest) {
       .from('events')
       .select(EVENT_SELECT)
       .in('status', ['approved', 'completed'])
+      .eq('tiers.hidden', false)
       .order('date', { ascending: true });
 
     // Populated alongside events when there's a search query, so an
