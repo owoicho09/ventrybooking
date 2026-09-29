@@ -4,13 +4,23 @@ import { sendReminderEmail } from '@/lib/server/email';
 
 type ReminderType = '1_week' | '1_day' | '3_hours';
 
-// Widened windows for Vercel Hobby daily cron (runs once at 07:00 UTC = 08:00 WAT).
-// '3_hours' fires as a "today" morning reminder for events happening within 18h.
-const WINDOWS: { type: ReminderType; minHours: number; maxHours: number }[] = [
-  { type: '1_week',  minHours: 156, maxHours: 204 },
-  { type: '1_day',   minHours: 18,  maxHours: 48 },
-  { type: '3_hours', minHours: 0,   maxHours: 18 },
+// The cron runs once a day (08:00 WAT), so reminders are picked by calendar-day
+// difference in WAT, not hours-until-start: an hours window wide enough to survive
+// a daily run also spans two calendar days, which sent "is tomorrow" two days early
+// for an early-morning event. '3_hours' is the "today" morning reminder.
+const WINDOWS: { type: ReminderType; minDays: number; maxDays: number }[] = [
+  { type: '1_week',  minDays: 6, maxDays: 7 },
+  { type: '1_day',   minDays: 1, maxDays: 1 },
+  { type: '3_hours', minDays: 0, maxDays: 0 },
 ];
+
+const WAT_OFFSET_MS = 60 * 60 * 1000;
+const DAY_MS        = 24 * 60 * 60 * 1000;
+
+// Calendar date (YYYY-MM-DD) in WAT for a given instant.
+function watDateStr(d: Date): string {
+  return new Date(d.getTime() + WAT_OFFSET_MS).toISOString().split('T')[0];
+}
 
 export async function GET(req: NextRequest) {
   const authHeader = req.headers.get('authorization');
@@ -23,10 +33,9 @@ export async function GET(req: NextRequest) {
     const db  = getServerSupabase();
     const now = new Date();
 
-    // Look ahead 8 days to cover the 1-week reminder window
-    const windowEnd = new Date(now.getTime() + 8.5 * 24 * 60 * 60 * 1000);
-    const todayStr  = now.toISOString().split('T')[0];
-    const endStr    = windowEnd.toISOString().split('T')[0];
+    // Look ahead 7 WAT calendar days to cover the 1-week reminder window
+    const todayStr = watDateStr(now);
+    const endStr   = new Date(Date.parse(todayStr) + 7 * DAY_MS).toISOString().split('T')[0];
 
     const { data: events } = await db
       .from('events')
@@ -42,12 +51,15 @@ export async function GET(req: NextRequest) {
     let totalSent = 0;
 
     for (const event of events) {
-      // Parse event start time in WAT (UTC+1)
-      const eventStartMs = new Date(`${event.date}T${event.time}:00+01:00`).getTime();
-      const diffHours    = (eventStartMs - now.getTime()) / (1000 * 60 * 60);
+      const daysUntil = Math.round((Date.parse(event.date) - Date.parse(todayStr)) / DAY_MS);
 
+      // Don't send a "today" reminder for an event that has already started
+      const eventStartMs = new Date(`${event.date}T${event.time}:00+01:00`).getTime();
+      if (daysUntil === 0 && !(eventStartMs > now.getTime())) continue;
+
+      // At most one reminder per run (the 1-week and 1-day ranges never overlap)
       const applicableWindows = WINDOWS.filter(
-        w => diffHours >= w.minHours && diffHours < w.maxHours,
+        w => daysUntil >= w.minDays && daysUntil <= w.maxDays,
       );
       if (applicableWindows.length === 0) continue;
 
