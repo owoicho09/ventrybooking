@@ -27,7 +27,7 @@ export default function OrganizerLoginPage() {
         setLoading(false);
         return;
       }
-      if (!data.data?.verified) {
+      if (!data.data?.emailVerified) {
         window.location.href = '/organizer/verify';
         return;
       }

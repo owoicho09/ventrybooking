@@ -65,6 +65,8 @@ export default function CreateEventPage() {
   const [banner, setBanner] = useState<File | null>(null);
   const [headerBanner, setHeaderBanner] = useState<File | null>(null);
   const [venueProof, setVenueProof] = useState<File | null>(null);
+  const [venueContactName, setVenueContactName] = useState('');
+  const [venueContactPhone, setVenueContactPhone] = useState('');
   const [tiers, setTiers] = useState<Tier[]>([{ id: '1', name: 'Regular', price: '', quantity: '' }]);
   const [accentColor, setAccentColor] = useState<string | null>(null);
   const [accentAutoDetected, setAccentAutoDetected] = useState(false);
@@ -195,6 +197,8 @@ export default function CreateEventPage() {
         fd.append('landmark', landmark);
         fd.append('locationHidden', String(locationHidden));
         if (venueProof) fd.append('venueProof', await compressImageFile(venueProof));
+        fd.append('venueContactName', venueContactName);
+        fd.append('venueContactPhone', venueContactPhone);
       } else {
         fd.append('meetingLink', meetingLink);
         fd.append('meetingPasscode', meetingPasscode);
@@ -421,6 +425,17 @@ export default function CreateEventPage() {
                   {venueProof ? venueProof.name : 'Upload lease agreement, booking confirmation, or receipt'}
                 </span>
               </label>
+            </div>
+            <div>
+              <p className="text-sm font-medium mb-1" style={{ color: 'var(--color-text)' }}>Venue contact</p>
+              <p className="text-xs mb-2" style={{ color: 'var(--color-text-dim)' }}>
+                Who at the venue can confirm your booking? Ventry calls them before your event gets the <strong>Verified</strong> badge.
+                You can list without this; the event just won&apos;t carry the badge.
+              </p>
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                <Input label="Contact name" value={venueContactName} onChange={e => setVenueContactName(e.target.value)} placeholder="e.g. Bookings manager" />
+                <Input label="Contact phone" type="tel" value={venueContactPhone} onChange={e => setVenueContactPhone(e.target.value)} placeholder="+234 …" />
+              </div>
             </div>
           </>
         ) : (

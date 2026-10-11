@@ -27,7 +27,7 @@ export async function GET(
       .from('events')
       .select(`
         id, slug, event_name, category, description, date, time, event_mode, venue, address, city, landmark,
-        location_hidden, meeting_link, meeting_passcode, status, total_sold, banner_color, banner_url, header_banner_url, accent_color, lineup, allowed_email_domains, organizer_id, created_at, refund_policy, refund_policy_set_at,
+        location_hidden, meeting_link, meeting_passcode, status, total_sold, banner_color, banner_url, header_banner_url, accent_color, lineup, allowed_email_domains, organizer_id, created_at, refund_policy, refund_policy_set_at, verified, venue_proof_url, venue_contact_name, venue_contact_phone,
         tiers:ticket_tiers(id, name, price, available, sold)
       `)
       .eq('id', id)
@@ -86,9 +86,9 @@ export async function PATCH(
 
     let allowedFields: string[];
     if (hasSales) {
-      allowedFields = ['description', 'banner_url', 'date', 'time', 'venue', 'address', 'city', 'landmark', 'location_hidden', 'meeting_link', 'meeting_passcode', 'accent_color', 'lineup', 'allowed_email_domains'];
+      allowedFields = ['description', 'banner_url', 'date', 'time', 'venue', 'address', 'city', 'landmark', 'location_hidden', 'meeting_link', 'meeting_passcode', 'accent_color', 'lineup', 'allowed_email_domains', 'venue_contact_name', 'venue_contact_phone'];
     } else {
-      allowedFields = ['event_name', 'description', 'date', 'time', 'venue', 'address', 'city', 'landmark', 'location_hidden', 'meeting_link', 'meeting_passcode', 'category', 'banner_url', 'accent_color', 'lineup', 'allowed_email_domains'];
+      allowedFields = ['event_name', 'description', 'date', 'time', 'venue', 'address', 'city', 'landmark', 'location_hidden', 'meeting_link', 'meeting_passcode', 'category', 'banner_url', 'accent_color', 'lineup', 'allowed_email_domains', 'venue_contact_name', 'venue_contact_phone'];
     }
 
     const updates: Record<string, string | boolean | null | LineupAct[] | string[] | RefundPolicyAnswers> = {};
@@ -121,7 +121,7 @@ export async function PATCH(
         } else if (key === 'allowed_email_domains') {
           const normalized = normalizeEmailDomains(body[key]);
           updates[key] = normalized.length > 0 ? normalized : null;
-        } else if (key === 'landmark' || key === 'meeting_passcode') {
+        } else if (key === 'landmark' || key === 'meeting_passcode' || key === 'venue_contact_name' || key === 'venue_contact_phone') {
           updates[key] = String(body[key] ?? '').trim() || null;
         } else {
           updates[key] = String(body[key] ?? '').trim();

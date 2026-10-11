@@ -23,6 +23,7 @@ export async function GET(
     .from('users')
     .select(`
       id, name, legal_name, email, phone, handle, avatar_url, socials, tier, verified,
+      email_verified, identity_status, identity_type, identity_name, identity_ref, identity_verified_at, identity_last_error, bank_name_matched,
       member_since, created_at, kyc_status, kyc_submitted_at, kyc_gov_id_path,
       kyc_selfie_path, kyc_social_twitter, kyc_social_instagram, kyc_social_facebook,
       kyc_venue_proof_path, kyc_rejection_reason, kyc_phone_verified,

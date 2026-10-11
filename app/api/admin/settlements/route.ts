@@ -3,7 +3,7 @@ import { getAuthUser } from '@/lib/server/auth';
 import { getServerSupabase } from '@/lib/supabase/server';
 import {
   eligibilityBlockers, feeRateOf, lagosDate, loadHolidays, loadUnsettled, nextWorkingDay,
-  releaseCutoff, summarizePending, type OrganizerRow, type SettlementRow,
+  releaseCutoff, summarizePending, loadSettledTotals, ORGANIZER_COLUMNS, type OrganizerRow, type SettlementRow,
 } from '@/lib/server/settlements';
 
 /** Payout-section overview: every organiser with unsettled money, plus settlements needing attention. */
@@ -37,11 +37,12 @@ export async function GET() {
     let orgRows: OrganizerRow[] = [];
     if (ids.length > 0) {
       const { data, error } = await db.from('users')
-        .select('id, name, email, bank_name, account_number, account_name, platform_fee_rate')
+        .select(ORGANIZER_COLUMNS)
         .in('id', ids);
       if (error) throw new Error(error.message);
-      orgRows = (data ?? []) as OrganizerRow[];
+      orgRows = (data ?? []) as unknown as OrganizerRow[];
     }
+    const settledTotals = await loadSettledTotals(db, ids);
     const orgs = new Map(orgRows.map(o => [o.id, o]));
 
     const organizers = Array.from(unsettled.entries())
@@ -50,7 +51,7 @@ export async function GET() {
         const org = orgs.get(id)!;
         const summary = summarizePending(u.days, u.owed, feeRateOf(org), cutoff, holidays, u.adjustments);
         const blockers = summary.releasable
-          ? eligibilityBlockers({ organizer: org, releasableNet: summary.releasable.net })
+          ? eligibilityBlockers({ organizer: org, releasableNet: summary.releasable.net, settledTotal: settledTotals.get(id) ?? 0 })
           : [];
         return {
           id, name: org.name, email: org.email,

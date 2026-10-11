@@ -4,6 +4,7 @@ import { useState, useEffect } from 'react';
 import { Wallet, Edit3, CheckCircle, AlertTriangle } from 'lucide-react';
 import { Badge } from '@/components/ui/Badge';
 import { Button } from '@/components/ui/Button';
+import { VerificationPanel, type IdentityStatus } from '@/components/organizer/VerificationPanel';
 import { Input } from '@/components/ui/Input';
 import { formatNGN, formatShortDate } from '@/lib/utils';
 import { NIGERIAN_BANKS } from '@/lib/banks';
@@ -32,6 +33,8 @@ export default function PayoutsPage() {
   const [figures, setFigures] = useState<{ settled: number; pending: number } | null>(null);
   const [editingBank, setEditingBank] = useState(false);
   const [bank, setBank] = useState({ bankName: '', accountNumber: '', accountName: '', legalName: '' });
+  const [identity, setIdentity] = useState<IdentityStatus | null>(null);
+  const [panelKey, setPanelKey] = useState(0);
   const [bankMsg, setBankMsg] = useState('');
   const [saving, setSaving] = useState(false);
 
@@ -59,14 +62,20 @@ export default function PayoutsPage() {
     setSaving(true); setBankMsg('');
     const res = await fetch('/api/organizer/bank', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(bank) });
     const d = await res.json();
-    setBankMsg(d.success ? 'Bank details saved.' : (d.error ?? 'Failed to save bank details'));
+    setBankMsg(d.success ? (d.data?.message ?? 'Bank details saved.') : (d.error ?? 'Failed to save bank details'));
     setSaving(false);
-    if (d.success) setEditingBank(false);
+    if (d.success) {
+      setEditingBank(false);
+      setBank(b => ({ ...b, accountName: d.data?.accountName ?? b.accountName }));
+      setPanelKey(k => k + 1); // re-check the name match in the verification panel
+    }
   };
 
   return (
     <div className="flex flex-col gap-8">
       <h1 className="text-2xl font-bold" style={{ color: 'var(--color-text)', fontFamily: 'var(--font-syne), sans-serif' }}>Payouts</h1>
+
+      <VerificationPanel key={panelKey} onChange={setIdentity} />
 
       <div className="rounded-xl border p-5 sm:p-6" style={{ background: 'linear-gradient(135deg, #1a0a3d 0%, #0f0a2d 100%)', borderColor: '#7c3aed40' }}>
         <div className="flex items-start gap-4">
@@ -147,8 +156,10 @@ export default function PayoutsPage() {
           <div className="flex flex-col gap-3">
             <div className="flex justify-between text-sm"><span style={{ color: 'var(--color-text-muted)' }}>Bank Name</span><span className="font-medium" style={{ color: 'var(--color-text)' }}>{bank.bankName || '—'}</span></div>
             <div className="flex justify-between text-sm"><span style={{ color: 'var(--color-text-muted)' }}>Account Number</span><span className="font-mono font-medium" style={{ color: 'var(--color-text)' }}>{bank.accountNumber ? `****${bank.accountNumber.slice(-4)}` : '—'}</span></div>
+            <div className="flex justify-between text-sm"><span style={{ color: 'var(--color-text-muted)' }}>Account Name</span><span className="font-medium" style={{ color: 'var(--color-text)' }}>{bank.accountName || '—'}</span></div>
             <div className="flex justify-between text-sm"><span style={{ color: 'var(--color-text-muted)' }}>Legal Name</span><span className="font-medium" style={{ color: 'var(--color-text)' }}>{bank.legalName || '—'}</span></div>
-            {bank.accountNumber && <div className="flex items-center gap-2 mt-1"><CheckCircle size={14} style={{ color: 'var(--color-green)' }} /><span className="text-xs" style={{ color: 'var(--color-green)' }}>Verified account</span></div>}
+            {bank.accountNumber && identity?.bank.matched === true && <div className="flex items-center gap-2 mt-1"><CheckCircle size={14} style={{ color: 'var(--color-green)' }} /><span className="text-xs" style={{ color: 'var(--color-green)' }}>Account name confirmed by your bank and matches your {identity.status === 'verified' ? 'verified' : 'legal'} name</span></div>}
+            {bank.accountNumber && identity?.bank.matched === false && <p className="text-xs mt-1" style={{ color: 'var(--color-red)' }}>The bank has this account in a different name. Payouts need an account in your own name.</p>}
           </div>
         ) : (
           <form onSubmit={saveBank} className="flex flex-col gap-4">
@@ -168,15 +179,18 @@ export default function PayoutsPage() {
               </select>
             </div>
             <Input label="Account Number" value={bank.accountNumber} onChange={e => setBank(b => ({ ...b, accountNumber: e.target.value }))} placeholder="10-digit account number" maxLength={10} />
-            <Input label="Account Name" value={bank.accountName} onChange={e => setBank(b => ({ ...b, accountName: e.target.value }))} placeholder="Name as on bank account" />
+            <p className="text-xs -mt-2" style={{ color: 'var(--color-text-dim)' }}>We confirm the account name with your bank when you save.</p>
             <Input
               label="Legal Name"
-              value={bank.legalName}
+              value={identity?.status === 'verified' ? (identity.name ?? bank.legalName) : bank.legalName}
               onChange={e => setBank(b => ({ ...b, legalName: e.target.value }))}
+              disabled={identity?.status === 'verified'}
               placeholder="Your legal name exactly as it appears on your bank account"
-              helper="This is never shown to buyers — your display name is what they see. It's used to match your settlement bank account."
+              helper={identity?.status === 'verified'
+                ? 'Set by your identity check. Payouts can only go to an account in this name.'
+                : 'Never shown to buyers; your display name is what they see. Used to match your payout account and your NIN.'}
             />
-            {bankMsg && <p className="text-xs" style={{ color: bankMsg.includes('saved') ? 'var(--color-green)' : 'var(--color-red)' }}>{bankMsg}</p>}
+            {bankMsg && <p className="text-xs" style={{ color: /saved/i.test(bankMsg) ? 'var(--color-green)' : 'var(--color-red)' }}>{bankMsg}</p>}
             <Button type="submit" disabled={saving}>{saving ? 'Saving...' : 'Save Bank Details'}</Button>
           </form>
         )}

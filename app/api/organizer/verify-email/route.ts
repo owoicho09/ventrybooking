@@ -23,9 +23,9 @@ export async function POST(req: NextRequest) {
       return NextResponse.json({ error: 'Too many resend attempts. Please wait a few minutes.' }, { status: 429 });
     }
 
-    const { data: userRow } = await db.from('users').select('email, name, verified').eq('id', user.sub).single();
+    const { data: userRow } = await db.from('users').select('email, name, email_verified').eq('id', user.sub).single();
     if (!userRow) return NextResponse.json({ error: 'User not found' }, { status: 404 });
-    if (userRow.verified) return NextResponse.json({ success: true });
+    if (userRow.email_verified) return NextResponse.json({ success: true });
 
     const otp = randomInt(100000, 999999).toString();
     const expiresAt = new Date(Date.now() + 10 * 60 * 1000).toISOString();
@@ -53,7 +53,7 @@ export async function POST(req: NextRequest) {
 
     const { data: userRow, error: dbErr } = await db
       .from('users')
-      .select('email_otp, email_otp_expires_at, verified')
+      .select('email_otp, email_otp_expires_at, email_verified')
       .eq('id', user.sub)
       .single();
 
@@ -62,7 +62,7 @@ export async function POST(req: NextRequest) {
       return NextResponse.json({ error: 'Database error: ' + dbErr.message }, { status: 500 });
     }
     if (!userRow) return NextResponse.json({ error: 'User not found' }, { status: 404 });
-    if (userRow.verified) return NextResponse.json({ success: true, data: { verified: true } });
+    if (userRow.email_verified) return NextResponse.json({ success: true, data: { verified: true } });
 
     if (!userRow.email_otp || !userRow.email_otp_expires_at) {
       return NextResponse.json({ error: 'No verification code found. Request a new one.' }, { status: 400 });
@@ -76,9 +76,10 @@ export async function POST(req: NextRequest) {
       return NextResponse.json({ error: 'Incorrect code. Please try again.' }, { status: 400 });
     }
 
+    // Confirms the email only. users.verified (the public tick) is set by the
+    // identity check in /api/organizer/identity.
     await db.from('users').update({
-      verified: true,
-      kyc_status: 'approved',
+      email_verified: true,
       email_otp: null,
       email_otp_expires_at: null,
     }).eq('id', user.sub);

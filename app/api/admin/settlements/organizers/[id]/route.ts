@@ -3,7 +3,7 @@ import { getAuthUser } from '@/lib/server/auth';
 import { getServerSupabase } from '@/lib/supabase/server';
 import {
   eligibilityBlockers, feeRateOf, lagosDate, loadHolidays, loadUnsettled,
-  releaseCutoff, summarizePending, type OrganizerRow,
+  releaseCutoff, summarizePending, loadSettledTotals, ORGANIZER_COLUMNS, type OrganizerRow,
 } from '@/lib/server/settlements';
 
 /** One organiser's settlement history: pending (releasable + accruing) and every settlement with its attempts. */
@@ -18,11 +18,11 @@ export async function GET(_req: NextRequest, { params }: { params: Promise<{ id:
     const db = getServerSupabase();
     const { data: orgData } = await db
       .from('users')
-      .select('id, name, email, bank_name, account_number, account_name, platform_fee_rate')
+      .select(ORGANIZER_COLUMNS)
       .eq('id', id)
       .maybeSingle();
     if (!orgData) return NextResponse.json({ error: 'Organiser not found' }, { status: 404 });
-    const org = orgData as OrganizerRow;
+    const org = orgData as unknown as OrganizerRow;
 
     const [holidays, unsettled, settlementsRes] = await Promise.all([
       loadHolidays(db),
@@ -38,7 +38,7 @@ export async function GET(_req: NextRequest, { params }: { params: Promise<{ id:
     const u       = unsettled.get(id);
     const pending = summarizePending(u?.days ?? [], u?.owed ?? null, feeRateOf(org), cutoff, holidays, u?.adjustments);
     const blockers = pending.releasable
-      ? eligibilityBlockers({ organizer: org, releasableNet: pending.releasable.net })
+      ? eligibilityBlockers({ organizer: org, releasableNet: pending.releasable.net, settledTotal: (await loadSettledTotals(db, [id])).get(id) ?? 0 })
       : [];
 
     return NextResponse.json(

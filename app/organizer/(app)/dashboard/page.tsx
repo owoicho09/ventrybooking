@@ -2,7 +2,7 @@
 
 import { useState, useEffect } from 'react';
 import Link from 'next/link';
-import { Ticket, Wallet, CheckCircle, ArrowUpRight, Plus, Mail } from 'lucide-react';
+import { Ticket, Wallet, CheckCircle, ArrowUpRight, Plus, Mail, ShieldAlert } from 'lucide-react';
 import { StatsCard } from '@/components/admin/StatsCard';
 import { Badge } from '@/components/ui/Badge';
 import { Button } from '@/components/ui/Button';
@@ -11,7 +11,7 @@ import { formatNGN, formatShortDate } from '@/lib/utils';
 
 interface Stats { ticketsSold: number; fundsSettled: number; fundsPending: number; }
 interface OrgEvent { id: string; name: string; date: string; totalSold: number; status: string; }
-interface Me { name: string; verified: boolean; }
+interface Me { name: string; verified: boolean; email_verified: boolean; identity_status: string; }
 
 const statusBadge = (status: string) => {
   switch (status) {
@@ -41,7 +41,19 @@ export default function OrganizerDashboardPage() {
 
   return (
     <div className="flex flex-col gap-8">
-      {me && !me.verified && (
+      {me && me.email_verified && me.identity_status !== 'verified' && (
+        <div className="rounded-xl border px-5 py-4 flex items-start gap-4" style={{ backgroundColor: '#f59e0b12', borderColor: '#f59e0b40' }}>
+          <ShieldAlert size={20} className="flex-shrink-0 mt-0.5" style={{ color: 'var(--color-amber)' }} />
+          <div className="flex-1">
+            <p className="font-semibold text-sm" style={{ color: 'var(--color-text)' }}>Verify your identity to get the verified tick and unlimited payouts</p>
+            <p className="text-xs mt-0.5" style={{ color: 'var(--color-text-muted)' }}>Two minutes with your NIN, or your CAC number for a registered business. Until then payouts stop at ₦500,000 in total.</p>
+          </div>
+          <Link href="/organizer/payouts#verification">
+            <Button size="sm">Verify</Button>
+          </Link>
+        </div>
+      )}
+      {me && !me.email_verified && (
         <div className="rounded-xl border px-5 py-4 flex items-start gap-4" style={{ backgroundColor: '#7c3aed15', borderColor: '#7c3aed40' }}>
           <Mail size={20} className="flex-shrink-0 mt-0.5" style={{ color: 'var(--color-purple-light)' }} />
           <div className="flex-1">

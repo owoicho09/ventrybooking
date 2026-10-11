@@ -20,7 +20,14 @@ export async function POST(
     const { data: org } = await db.from('users').select('name, email').eq('id', id).single();
     if (!org) return NextResponse.json({ error: 'Organizer not found' }, { status: 404 });
 
-    await db.from('users').update({ kyc_status: 'approved', verified: true }).eq('id', id);
+    // Admin vouching for identity by hand (e.g. checked documents offline):
+    // treated like a provider check, so it also lifts the settlement cap.
+    await db.from('users').update({
+      kyc_status: 'approved',
+      verified: true,
+      identity_status: 'verified',
+      identity_verified_at: new Date().toISOString(),
+    }).eq('id', id);
     await sendKYCApprovedEmail(org.email, org.name).catch(console.error);
     notify(
       { type: 'organizer', id },

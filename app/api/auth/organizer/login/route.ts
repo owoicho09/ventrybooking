@@ -21,7 +21,7 @@ export async function POST(req: NextRequest) {
     const db = getServerSupabase();
     const { data: user } = await db
       .from('users')
-      .select('id, email, name, password_hash, kyc_status, verified')
+      .select('id, email, name, password_hash, kyc_status, verified, email_verified')
       .eq('email', email)
       .single();
 
@@ -38,6 +38,7 @@ export async function POST(req: NextRequest) {
         email: user.email,
         kycStatus: user.kyc_status,
         verified: user.verified,
+        emailVerified: user.email_verified,
       },
     });
     res.cookies.set({ ...cookieOptions(30 * 24 * 60 * 60), value: token });

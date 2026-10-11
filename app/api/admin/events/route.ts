@@ -17,7 +17,7 @@ export async function GET(req: NextRequest) {
     .select(`
       id, name:event_name, category, date, city, event_mode, venue, address, landmark, location_hidden,
       meeting_link, meeting_passcode,
-      status, description, banner_url, venue_proof_url, verified, verified_at, verified_by,
+      status, description, banner_url, venue_proof_url, verified, verified_at, verified_by, venue_contact_name, venue_contact_phone,
       organizer:users!events_organizer_id_fkey(id, name, tier, verified),
       tiers:ticket_tiers(id, name, price, available)
     `)

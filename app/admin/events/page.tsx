@@ -36,6 +36,7 @@ interface EventData {
   address?: string; landmark?: string | null; location_hidden?: boolean;
   venue_proof_url?: string | null;
   verified?: boolean; verified_at?: string | null; verified_by?: string | null;
+  venue_contact_name?: string | null; venue_contact_phone?: string | null;
   meeting_link?: string | null; meeting_passcode?: string | null;
   description: string; status: string;
   organizer: { name: string; tier?: string };
@@ -329,6 +330,12 @@ export default function AdminEventsPage() {
                   </p>
                 )}
 
+                <p className="text-sm mt-3" style={{ color: 'var(--color-text-muted)' }}>
+                  Venue contact:{' '}
+                  {selectedEvent.venue_contact_phone
+                    ? <><span style={{ color: 'var(--color-text)' }}>{selectedEvent.venue_contact_name || 'Unnamed'}</span> · <a href={`tel:${selectedEvent.venue_contact_phone}`} style={{ color: 'var(--color-purple-light)' }}>{selectedEvent.venue_contact_phone}</a></>
+                    : <span>none given</span>}
+                </p>
                 <div className="mt-3 pt-3 border-t flex flex-col gap-2" style={{ borderColor: 'var(--color-border)' }}>
                   <p className="text-xs" style={{ color: 'var(--color-text-muted)' }}>
                     {selectedEvent.verified
@@ -339,14 +346,16 @@ export default function AdminEventsPage() {
                     <Button
                       size="sm"
                       variant={selectedEvent.verified ? 'outline' : 'success'}
-                      disabled={badgeBusy || (!selectedEvent.verified && !selectedEvent.venue_proof_url)}
+                      disabled={badgeBusy || (!selectedEvent.verified && (!selectedEvent.venue_proof_url || !selectedEvent.venue_contact_phone))}
                       onClick={() => setEventVerified(selectedEvent, !selectedEvent.verified)}
                     >
                       {badgeBusy ? 'Saving…' : selectedEvent.verified ? 'Remove Verified badge' : 'Venue confirmed: add Verified badge'}
                     </Button>
                   </div>
-                  {!selectedEvent.verified && !selectedEvent.venue_proof_url && (
-                    <p className="text-xs" style={{ color: 'var(--color-text-dim)' }}>Needs venue proof on file first.</p>
+                  {!selectedEvent.verified && (!selectedEvent.venue_proof_url || !selectedEvent.venue_contact_phone) && (
+                    <p className="text-xs" style={{ color: 'var(--color-text-dim)' }}>
+                      Needs {[!selectedEvent.venue_proof_url && 'venue proof', !selectedEvent.venue_contact_phone && 'a venue contact to call'].filter(Boolean).join(' and ')} first.
+                    </p>
                   )}
                 </div>
               </div>

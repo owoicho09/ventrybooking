@@ -12,6 +12,8 @@ import { formatNGN, formatShortDate } from '@/lib/utils';
 
 interface Profile {
   id: string; name: string; legal_name: string | null; email: string; phone: string; handle: string | null;
+  email_verified?: boolean; identity_status?: string; identity_type?: string | null; identity_name?: string | null; identity_ref?: string | null;
+  identity_verified_at?: string | null; identity_last_error?: string | null; bank_name_matched?: boolean | null;
   tier: string; verified: boolean; member_since: string | null; kyc_status: string;
   kyc_submitted_at: string | null; kyc_gov_id_path: string | null; kyc_selfie_path: string | null;
   kyc_social_twitter: string | null; kyc_social_instagram: string | null; kyc_social_facebook: string | null;
@@ -136,6 +138,15 @@ export default function AdminOrganizerDetailPage() {
             <p className="text-sm mt-0.5" style={{ color: 'var(--color-text-muted)' }}>
               Legal name: <span style={{ color: 'var(--color-text)' }}>{profile.legal_name || 'not given yet'}</span>
               <span style={{ color: 'var(--color-text-dim)' }}> · display name above is what buyers see</span>
+            </p>
+            <p className="text-sm mt-0.5" style={{ color: 'var(--color-text-muted)' }}>
+              Identity:{' '}
+              {profile.identity_status === 'verified'
+                ? <span style={{ color: 'var(--color-green)' }}>verified{profile.identity_type ? ` by ${profile.identity_type.toUpperCase()}` : ' by admin'}{profile.identity_ref ? ` (${profile.identity_ref})` : ''}{profile.identity_name ? ` as "${profile.identity_name}"` : ''}</span>
+                : profile.identity_status === 'legacy'
+                  ? <span style={{ color: 'var(--color-amber)' }}>not checked (older tick kept; ₦500k payout cap applies)</span>
+                  : <span style={{ color: 'var(--color-amber)' }}>not verified{profile.identity_last_error ? ` (last attempt: ${profile.identity_last_error})` : ''}</span>}
+              {profile.bank_name_matched === false && <span style={{ color: 'var(--color-red)' }}> · bank account name does not match</span>}
             </p>
             <p className="text-sm mt-0.5" style={{ color: 'var(--color-text-muted)' }}>
               {profile.email} &bull; {profile.phone}{profile.handle && <> &bull; @{profile.handle}</>}

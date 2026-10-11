@@ -48,6 +48,7 @@ interface OrgEvent {
   status: string; total_sold: number; banner_url: string | null; header_banner_url: string | null; banner_color: string;
   accent_color: string | null; lineup: LineupAct[]; allowed_email_domains: string[] | null;
   refund_policy: RefundPolicyAnswers | null; refund_policy_set_at: string | null;
+  verified: boolean; venue_proof_url: string | null; venue_contact_name: string | null; venue_contact_phone: string | null;
   organizer_id: string; tiers: Tier[];
 }
 
@@ -168,6 +169,9 @@ export default function OrganizerEventDetailPage() {
   const [policyDraft, setPolicyDraft] = useState<RefundPolicyDraft>({});
   const [policyConfirmed, setPolicyConfirmed] = useState(false);
   const [savingPolicy, setSavingPolicy] = useState(false);
+  const [contactName, setContactName] = useState('');
+  const [contactPhone, setContactPhone] = useState('');
+  const [savingContact, setSavingContact] = useState(false);
   const [displayName, setDisplayName] = useState('');
   const [accountEmail, setAccountEmail] = useState('');
   const [me, setMe] = useState<{ id?: string; name?: string; verified?: boolean; handle?: string | null; avatar_url?: string | null; member_since?: string; socials?: Record<string, string> } | null>(null);
@@ -206,6 +210,8 @@ export default function OrganizerEventDetailPage() {
             ? { cancelDays: String(rp.cancelDays), postponement: rp.postponement, venueChange: rp.venueChange, guestNoShow: rp.guestNoShow, contactEmail: rp.contactEmail }
             : {});
           setPolicyConfirmed(false);
+          setContactName(d.data.venue_contact_name ?? '');
+          setContactPhone(d.data.venue_contact_phone ?? '');
         } else {
           toast(d.error || 'Event not found', 'error');
           router.push('/organizer/events');
@@ -319,6 +325,23 @@ export default function OrganizerEventDetailPage() {
       socials: me?.socials,
     },
   } : null;
+
+  const handleSaveContact = async () => {
+    setSavingContact(true);
+    try {
+      const res = await fetch(`/api/organizer/events/${id}`, {
+        method: 'PATCH',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ venue_contact_name: contactName, venue_contact_phone: contactPhone }),
+      });
+      const data = await res.json();
+      if (!res.ok) { toast(data.error || 'Could not save the venue contact', 'error'); return; }
+      toast('Venue contact saved. Ventry will call to confirm your booking.', 'success');
+      load();
+    } finally {
+      setSavingContact(false);
+    }
+  };
 
   const handleSavePolicy = async () => {
     const parsed = parseRefundPolicy(policyValue);
@@ -865,6 +888,37 @@ export default function OrganizerEventDetailPage() {
           <Button size="sm" variant="outline" onClick={() => setPreviewing(true)}><Eye size={14} />Preview before saving</Button>
         </div>
       </div>
+
+      {/* Event verification (Organiser Terms 4.2) */}
+      {event.event_mode !== 'online' && (
+        <div className="rounded-xl border p-5 flex flex-col gap-3"
+          style={{ backgroundColor: 'var(--color-surface)', borderColor: 'var(--color-border)' }}>
+          <div>
+            <h2 className="font-semibold flex items-center gap-2" style={{ color: 'var(--color-text)' }}>
+              {event.verified ? <><span style={{ color: 'var(--color-green)' }}>✓</span> Verified event</> : 'Get the Verified badge'}
+            </h2>
+            <p className="text-xs mt-0.5" style={{ color: 'var(--color-text-muted)' }}>
+              {event.verified
+                ? 'Ventry has confirmed your venue booking for this date. Buyers see the Verified badge on your event.'
+                : 'The badge needs written proof of your venue booking and a venue contact Ventry can call to confirm it. Private or residential venues can list, but don\u2019t carry the badge.'}
+            </p>
+          </div>
+          {!event.verified && (
+            <>
+              <p className="text-sm" style={{ color: event.venue_proof_url ? 'var(--color-green)' : 'var(--color-text-muted)' }}>
+                {event.venue_proof_url ? '✓ Venue proof uploaded' : '○ No venue proof uploaded. Contact support to add one.'}
+              </p>
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                <Input label="Venue contact name" value={contactName} onChange={e => setContactName(e.target.value)} placeholder="e.g. Bookings manager" />
+                <Input label="Venue contact phone" type="tel" value={contactPhone} onChange={e => setContactPhone(e.target.value)} placeholder="+234 …" />
+              </div>
+              <Button size="sm" className="self-start" disabled={savingContact} onClick={handleSaveContact}>
+                {savingContact ? 'Saving…' : 'Save venue contact'}
+              </Button>
+            </>
+          )}
+        </div>
+      )}
 
       {/* Refund policy */}
       <div className="rounded-xl border p-5 flex flex-col gap-4"

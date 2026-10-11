@@ -20,7 +20,7 @@ export default function VerifyEmailPage() {
     fetch('/api/organizer/me')
       .then(r => r.json())
       .then(d => {
-        if (d.data?.verified) { router.replace('/organizer/dashboard'); return; }
+        if (d.data?.email_verified) { router.replace('/organizer/dashboard'); return; }
         if (d.data?.email) setEmail(d.data.email);
       })
       .catch(() => {});

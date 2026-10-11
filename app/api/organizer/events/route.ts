@@ -68,13 +68,15 @@ export async function POST(req: NextRequest) {
     const organizerId = user.sub;
 
     // Verify KYC approved
-    const { data: org, error: orgError } = await db.from('users').select('verified, name').eq('id', organizerId).maybeSingle();
+    // Listing needs a confirmed email. Identity verification is separate: an
+    // unverified organiser can sell, with settlement capped (Organiser Terms 3.7).
+    const { data: org, error: orgError } = await db.from('users').select('email_verified, name').eq('id', organizerId).maybeSingle();
     if (orgError) {
       console.error('POST /api/organizer/events kyc check db error:', orgError.message);
       return NextResponse.json({ error: orgError.message }, { status: 500 });
     }
-    if (!org || !org.verified) {
-      return NextResponse.json({ error: 'KYC verification required before creating events' }, { status: 403 });
+    if (!org || !org.email_verified) {
+      return NextResponse.json({ error: 'Confirm your email address before creating events' }, { status: 403 });
     }
 
     const formData = await req.formData();
@@ -91,6 +93,8 @@ export async function POST(req: NextRequest) {
     const locationHidden = formData.get('locationHidden') === 'true';
     const meetingLink = (formData.get('meetingLink') as string) || '';
     const meetingPasscode = (formData.get('meetingPasscode') as string) || '';
+    const venueContactName = String(formData.get('venueContactName') ?? '').trim().slice(0, 120) || null;
+    const venueContactPhone = String(formData.get('venueContactPhone') ?? '').trim().slice(0, 40) || null;
     const tiersJson = formData.get('tiers') as string;
     const bannerFile = formData.get('banner') as File | null;
     const headerBannerFile = formData.get('headerBanner') as File | null;
@@ -218,6 +222,8 @@ export async function POST(req: NextRequest) {
       banner_url: bannerUrl,
       header_banner_url: headerBannerUrl,
       venue_proof_url: venueProofUrl,
+      venue_contact_name: eventMode === 'physical' ? venueContactName : null,
+      venue_contact_phone: eventMode === 'physical' ? venueContactPhone : null,
       banner_color: 'from-purple-900 to-indigo-900',
       accent_color: accentColor,
       refund_policy: refundPolicy.value,

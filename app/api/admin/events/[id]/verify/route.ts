@@ -20,6 +20,12 @@ export async function POST(req: NextRequest, { params }: { params: Promise<{ id:
   }
 
   const db = getServerSupabase();
+  if (body.verified) {
+    const { data: ev } = await db.from('events').select('venue_proof_url, venue_contact_phone').eq('id', id).maybeSingle();
+    if (ev && (!ev.venue_proof_url || !ev.venue_contact_phone)) {
+      return NextResponse.json({ error: 'The badge needs venue proof on file and a venue contact you have called' }, { status: 400 });
+    }
+  }
   const { data, error } = await db
     .from('events')
     .update(body.verified

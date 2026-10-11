@@ -54,6 +54,32 @@ export interface OrganizerRow {
   account_number: string | null;
   account_name: string | null;
   platform_fee_rate: number | null;
+  /** 'verified' only after a provider (Dojah) identity check. */
+  identity_status?: string | null;
+  /** false when the bank account name doesn't match the verified identity. */
+  bank_name_matched?: boolean | null;
+}
+
+/** Every users column the settlement flow reads, in one place. */
+export const ORGANIZER_COLUMNS = 'id, name, email, bank_name, account_number, account_name, platform_fee_rate, identity_status, bank_name_matched';
+
+/**
+ * Organiser Terms 3.7: an organiser without a provider identity check can be
+ * settled up to this much in total, across every event and all time; further
+ * settlement pauses until they verify.
+ */
+export const UNVERIFIED_SETTLEMENT_CAP = 500_000;
+
+/** Total already paid out (successful settlements, any kind) per organiser. */
+export async function loadSettledTotals(db: Db, organizerIds: string[]): Promise<Map<string, number>> {
+  const totals = new Map<string, number>();
+  if (organizerIds.length === 0) return totals;
+  const { data, error } = await db.from('settlements').select('organizer_id, net').eq('status', 'successful').in('organizer_id', organizerIds);
+  if (error) throw new Error(error.message);
+  for (const r of (data ?? []) as { organizer_id: string; net: number | string }[]) {
+    totals.set(r.organizer_id, (totals.get(r.organizer_id) ?? 0) + Number(r.net || 0));
+  }
+  return totals;
 }
 
 // ── Working-day calendar ────────────────────────────────────────────────────
@@ -105,6 +131,8 @@ export interface EligibilityContext {
   organizer: OrganizerRow;
   /** Net the release would send (97% basis, after refunds owed). */
   releasableNet: number;
+  /** Already settled to this organiser, all time (see loadSettledTotals). */
+  settledTotal: number;
 }
 
 /**
@@ -128,6 +156,24 @@ export const ELIGIBILITY_CONDITIONS: { id: string; check: (ctx: EligibilityConte
       !organizer.account_number || getBankCode(organizer.bank_name || '')
         ? null
         : `Unknown bank "${organizer.bank_name}" — organiser must update bank details`,
+  },
+  {
+    // Organiser Terms 3.7: settlement pauses at the cap until identity is verified.
+    id: 'unverified_cap',
+    check: ({ organizer, releasableNet, settledTotal }) => {
+      if (organizer.identity_status === 'verified') return null;
+      if (settledTotal + releasableNet <= UNVERIFIED_SETTLEMENT_CAP) return null;
+      const fmtN = (n: number) => '₦' + Math.round(n).toLocaleString('en-NG');
+      return `Identity not verified: ${fmtN(settledTotal)} already paid, and this would pass the ${fmtN(UNVERIFIED_SETTLEMENT_CAP)} limit for unverified organisers. Ask them to verify with NIN or CAC.`;
+    },
+  },
+  {
+    // Organiser Terms 3.4/8.4: only settle to an account in the verified name.
+    id: 'bank_name_match',
+    check: ({ organizer }) =>
+      organizer.bank_name_matched === false
+        ? 'The bank account name does not match the organiser\u2019s verified name. They need to add an account in their own verified name.'
+        : null,
   },
 ];
 
@@ -490,7 +536,7 @@ async function emailSettlementPaid(s: SettlementRow) {
 async function loadOrganizer(db: Db, organizerId: string): Promise<OrganizerRow | null> {
   const { data } = await db
     .from('users')
-    .select('id, name, email, bank_name, account_number, account_name, platform_fee_rate')
+    .select(ORGANIZER_COLUMNS)
     .eq('id', organizerId)
     .maybeSingle();
   return (data as OrganizerRow | null) ?? null;
@@ -522,7 +568,8 @@ export async function releaseForOrganizer(
   if (!summary.releasable) {
     return { organizerId, outcome: 'noop', message: 'Nothing to release — already released or not yet eligible' };
   }
-  const blockers = eligibilityBlockers({ organizer: org, releasableNet: summary.releasable.net });
+  const settledTotal = (await loadSettledTotals(db, [organizerId])).get(organizerId) ?? 0;
+  const blockers = eligibilityBlockers({ organizer: org, releasableNet: summary.releasable.net, settledTotal });
   if (blockers.length > 0) return { organizerId, outcome: 'blocked', message: blockers.join('; ') };
 
   const { data, error } = await db.rpc('claim_settlement', {
@@ -551,8 +598,11 @@ export async function retrySettlement(db: Db, settlementId: string, by: string):
   const org = await loadOrganizer(db, existing.organizer_id);
   if (!org) return { organizerId: existing.organizer_id, outcome: 'error', message: 'Organiser not found' };
 
-  // Re-check the gates that don't depend on the amount (bank details may have changed).
-  const blockers = eligibilityBlockers({ organizer: org, releasableNet: 1 });
+  // Re-check the gates (bank details or verification may have changed), using
+  // the settlement's own amount for the cap.
+  const { data: retryRow } = await db.from('settlements').select('net').eq('id', settlementId).maybeSingle();
+  const settledTotal = (await loadSettledTotals(db, [org.id])).get(org.id) ?? 0;
+  const blockers = eligibilityBlockers({ organizer: org, releasableNet: Math.max(1, Number(retryRow?.net ?? 1)), settledTotal });
   if (blockers.length > 0) return { organizerId: org.id, outcome: 'blocked', message: blockers.join('; ') };
 
   const { data, error } = await db.rpc('begin_settlement_retry', {
@@ -645,7 +695,8 @@ export async function recordManualRelease(
   if (expectedNet != null && Math.round(summary.releasable.net) !== Math.round(expectedNet)) {
     return { organizerId, outcome: 'blocked', message: `The amount due changed to ${fmt(summary.releasable.net)}. Reload and check before recording.` };
   }
-  const blockers = eligibilityBlockers({ organizer: org, releasableNet: summary.releasable.net });
+  const settledTotal = (await loadSettledTotals(db, [organizerId])).get(organizerId) ?? 0;
+  const blockers = eligibilityBlockers({ organizer: org, releasableNet: summary.releasable.net, settledTotal });
   if (blockers.length > 0) return { organizerId, outcome: 'blocked', message: blockers.join('; ') };
 
   const reference = generateSettlementRef();
