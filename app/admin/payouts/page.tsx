@@ -2,12 +2,12 @@
 
 import { useCallback, useEffect, useMemo, useState } from 'react';
 import Link from 'next/link';
-import { CalendarDays, ChevronRight, ChevronDown, RefreshCw, AlertTriangle, ExternalLink } from 'lucide-react';
+import { CalendarDays, ChevronRight, ChevronDown, RefreshCw, AlertTriangle, ExternalLink, Landmark } from 'lucide-react';
 import { Button } from '@/components/ui/Button';
 import { formatNGN } from '@/lib/utils';
 import {
-  fmtDay, fmtPeriod, fmtDateTime, SettlementStatusBadge, ReleaseConfirmModal, ReleaseResults, postRelease,
-  type ReleaseCandidate, type ReleaseOutcome,
+  fmtDay, fmtPeriod, fmtDateTime, SettlementStatusBadge, ReleaseConfirmModal, ReleaseResults, postRelease, ManualPayModal,
+  type ReleaseCandidate, type ReleaseOutcome, type ManualPayTarget,
 } from '@/components/admin/settlementUi';
 import type { EventPayoutSummary } from '@/lib/server/eventPayouts';
 
@@ -53,6 +53,10 @@ export default function AdminPayoutsPage() {
   const [history, setHistory]   = useState<History | null>(null);
   const [historyError, setHistoryError] = useState('');
   const [openEvents, setOpenEvents] = useState<Set<string>>(new Set());
+  // "Paid by bank transfer": the admin sent the money themselves; this records it.
+  const [manual, setManual] = useState<(ManualPayTarget & { organizerId: string }) | null>(null);
+  const [manualBusy, setManualBusy] = useState(false);
+  const [manualError, setManualError] = useState('');
 
   const load = useCallback(() => {
     fetch('/api/admin/settlements', { cache: 'no-store' })
@@ -109,6 +113,29 @@ export default function AdminPayoutsPage() {
     setConfirming([]);
     setSelected(new Set());
     load();
+  };
+
+  const recordManual = async ({ reference, note }: { reference: string; note: string }) => {
+    if (!manual || manualBusy) return;
+    setManualBusy(true);
+    setManualError('');
+    try {
+      const res = await fetch('/api/admin/settlements/manual', {
+        method: 'POST', headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ organizerId: manual.organizerId, reference, note, expectedNet: manual.net }),
+      });
+      const d = await res.json();
+      const r = d?.data as ReleaseOutcome | undefined;
+      if (!res.ok || !r) { setManualError(d?.error ?? 'Could not record the payment'); return; }
+      if (r.outcome !== 'released') { setManualError(r.message ?? 'Nothing was recorded'); load(); return; }
+      setResults([r]);
+      setManual(null);
+      load();
+    } catch {
+      setManualError('Network error. Refresh to check whether it was recorded before trying again.');
+    } finally {
+      setManualBusy(false);
+    }
   };
 
   const toggleEvent = (id: string) => setOpenEvents(prev => {
@@ -213,6 +240,11 @@ export default function AdminPayoutsPage() {
                     <RefreshCw size={13} />{rowBusy === row.id ? 'Retrying…' : 'Retry'}
                   </Button>
                 )}
+                {row.status === 'failed' && row.kind === 'daily' && (
+                  <Link href={`/admin/payouts/${row.organizer_id}`}>
+                    <Button size="sm" variant="outline"><Landmark size={13} />Mark paid by transfer</Button>
+                  </Link>
+                )}
                 {(row.status === 'processing' || row.status === 'otp_pending') && (
                   <Button size="sm" variant="outline" disabled={rowBusy === row.id} onClick={() => rowAction(row, 'verify')}>
                     {rowBusy === row.id ? 'Checking…' : 'Check status'}
@@ -278,6 +310,10 @@ export default function AdminPayoutsPage() {
                 </Link>
                 <div className="flex flex-col justify-center gap-1 flex-shrink-0">
                   <Button size="sm" variant="success" disabled={busy} onClick={() => setConfirming([candidate(o)])}>Release</Button>
+                  <Button size="sm" variant="outline" disabled={busy} aria-label={`Mark ${o.name} paid by bank transfer`}
+                    onClick={() => { setManualError(''); setManual({ organizerId: o.id, organizerName: o.name, bankName: o.bankName, accountNumber: o.accountNumber, accountName: o.accountName, net: o.releasable!.net, period: fmtPeriod(o.releasable!.periodStart, o.releasable!.periodEnd) }); }}>
+                    <Landmark size={13} />Paid manually
+                  </Button>
                   <Link href={`/admin/payouts/${o.id}`} className="self-center p-1" aria-label="History" style={{ color: 'var(--color-text-dim)' }}>
                     <ChevronRight size={16} />
                   </Link>
@@ -391,6 +427,9 @@ export default function AdminPayoutsPage() {
                           <Button size="sm" variant="success" disabled={rowBusy === p.settlementId} onClick={() => rowAction({ id: p.settlementId }, 'retry')}>
                             <RefreshCw size={13} />{rowBusy === p.settlementId ? 'Retrying…' : 'Retry'}
                           </Button>
+                          <Link href={`/admin/payouts/${ev.organizerId}`}>
+                            <Button size="sm" variant="outline"><Landmark size={13} />Mark paid by transfer</Button>
+                          </Link>
                         </div>
                       )}
                       {(p.status === 'processing' || p.status === 'otp_pending') && (
@@ -435,6 +474,7 @@ export default function AdminPayoutsPage() {
       )}
 
       <ReleaseConfirmModal candidates={confirming} busy={busy} onCancel={() => setConfirming([])} onConfirm={doRelease} />
+      <ManualPayModal target={manual} busy={manualBusy} error={manualError} onCancel={() => setManual(null)} onConfirm={recordManual} />
     </div>
   );
 }
