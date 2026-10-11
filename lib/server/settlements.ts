@@ -492,7 +492,6 @@ async function loadOrganizer(db: Db, organizerId: string): Promise<OrganizerRow 
     .from('users')
     .select('id, name, email, bank_name, account_number, account_name, platform_fee_rate')
     .eq('id', organizerId)
-    .eq('role', 'organizer')
     .maybeSingle();
   return (data as OrganizerRow | null) ?? null;
 }
