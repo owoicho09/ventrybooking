@@ -1,5 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { getServerSupabase } from '@/lib/supabase/server';
+import { addressHiddenNow } from '@/lib/addressReveal';
 import { getEventsHostedCounts } from '@/lib/server/eventsHosted';
 import { isUUID } from '@/lib/slug';
 import { ticketUrgency } from '@/lib/ticketUrgency';
@@ -35,7 +36,7 @@ export async function GET(
     let qb = db
       .from('events')
       .select(`
-        id, slug, event_name, category, description, date, time, event_mode, venue, address, city, landmark, location_hidden,
+        id, slug, event_name, category, description, date, time, event_mode, venue, address, city, landmark, location_hidden, lga, address_reveal_at,
         status, total_sold, banner_color, banner_url, header_banner_url, accent_color, lineup, allowed_email_domains, verified, refund_policy,
         organizer:users!events_organizer_id_fkey(id, name, tier, verified, member_since, events_hosted, handle, socials, avatar_url, cover_image_url),
         tiers:ticket_tiers(id, name, price, available, sold)
@@ -55,7 +56,8 @@ export async function GET(
     }
 
     const tiers = (data.tiers as RawTier[]) ?? [];
-    const locationHidden = data.location_hidden ?? false;
+    // Hidden addresses release themselves at the organiser's reveal time.
+    const locationHidden = addressHiddenNow({ location_hidden: data.location_hidden, address_reveal_at: data.address_reveal_at, date: String(data.date), time: data.time });
 
     // Supabase's untyped client infers to-one embedded resources loosely; normalize
     // in case it comes back as a single-element array rather than an object.
@@ -80,6 +82,8 @@ export async function GET(
       address: locationHidden ? '' : data.address,
       city: data.city,
       landmark: data.landmark ?? null,
+      lga: data.lga ?? null,
+      addressRevealAt: locationHidden ? (data.address_reveal_at ?? null) : null,
       location_hidden: locationHidden,
       locationHidden: locationHidden,
       status: data.status,

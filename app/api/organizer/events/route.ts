@@ -10,6 +10,7 @@ import { PLATFORM_FEE_RATE } from '@/lib/fees';
 import { normalizeLineup } from '@/lib/server/lineup';
 import { normalizeEmailDomains } from '@/lib/server/domainRestriction';
 import { parseRefundPolicy } from '@/lib/refundPolicy';
+import { revealTimeProblem } from '@/lib/addressReveal';
 
 export async function GET(req: NextRequest) {
   try {
@@ -124,6 +125,17 @@ export async function POST(req: NextRequest) {
     if (eventMode === 'physical' && (!venue || !address)) {
       return NextResponse.json({ error: 'Venue name and address are required' }, { status: 400 });
     }
+    // Organiser Terms 4.9: the LGA is always shown; a hidden address needs a
+    // reveal time no later than 24 hours before doors.
+    const lga = String(formData.get('lga') ?? '').trim().slice(0, 80);
+    const addressRevealAt = String(formData.get('addressRevealAt') ?? '') || null;
+    if (eventMode === 'physical' && !lga) {
+      return NextResponse.json({ error: 'Enter the local government area (LGA)' }, { status: 400 });
+    }
+    if (eventMode === 'physical' && locationHidden) {
+      const problem = revealTimeProblem(addressRevealAt, date, time);
+      if (problem) return NextResponse.json({ error: problem }, { status: 400 });
+    }
     if (eventMode === 'online' && !meetingLink) {
       return NextResponse.json({ error: 'Meeting link is required for online events' }, { status: 400 });
     }
@@ -209,6 +221,8 @@ export async function POST(req: NextRequest) {
       city: city || '',
       landmark: landmark || null,
       location_hidden: locationHidden,
+      lga: eventMode === 'physical' ? lga : null,
+      address_reveal_at: eventMode === 'physical' && locationHidden ? addressRevealAt : null,
       meeting_link: eventMode === 'online' ? meetingLink : null,
       meeting_passcode: eventMode === 'online' && meetingPasscode ? meetingPasscode : null,
       organizer_id: organizerId,

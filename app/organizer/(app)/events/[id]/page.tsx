@@ -49,6 +49,7 @@ interface OrgEvent {
   accent_color: string | null; lineup: LineupAct[]; allowed_email_domains: string[] | null;
   refund_policy: RefundPolicyAnswers | null; refund_policy_set_at: string | null;
   verified: boolean; venue_proof_url: string | null; venue_contact_name: string | null; venue_contact_phone: string | null;
+  lga: string | null; address_reveal_at: string | null;
   organizer_id: string; tiers: Tier[];
 }
 
@@ -147,6 +148,8 @@ export default function OrganizerEventDetailPage() {
   const [address, setAddress]     = useState('');
   const [city, setCity] = useState('');
   const [landmark, setLandmark] = useState('');
+  const [lga, setLga] = useState('');
+  const [revealAt, setRevealAt] = useState('');
   const [locationHidden, setLocationHidden] = useState(false);
   const [meetingLink, setMeetingLink] = useState('');
   const [meetingPasscode, setMeetingPasscode] = useState('');
@@ -172,6 +175,22 @@ export default function OrganizerEventDetailPage() {
   const [contactName, setContactName] = useState('');
   const [contactPhone, setContactPhone] = useState('');
   const [savingContact, setSavingContact] = useState(false);
+  const [uploadingProof, setUploadingProof] = useState(false);
+
+  const uploadVenueProof = async (file: File) => {
+    setUploadingProof(true);
+    try {
+      const fd = new FormData();
+      fd.append('venueProof', file);
+      const res = await fetch(`/api/organizer/events/${id}/venue-proof`, { method: 'POST', body: fd });
+      const data = await res.json().catch(() => null);
+      if (!res.ok) { toast(data?.error || 'Upload failed', 'error'); return; }
+      toast('Venue proof uploaded. Ventry will check it and call the venue.', 'success');
+      load();
+    } finally {
+      setUploadingProof(false);
+    }
+  };
   const [displayName, setDisplayName] = useState('');
   const [accountEmail, setAccountEmail] = useState('');
   const [me, setMe] = useState<{ id?: string; name?: string; verified?: boolean; handle?: string | null; avatar_url?: string | null; member_since?: string; socials?: Record<string, string> } | null>(null);
@@ -199,6 +218,8 @@ export default function OrganizerEventDetailPage() {
           setAddress(d.data.address);
           setCity(d.data.city);
           setLandmark(d.data.landmark ?? '');
+          setLga(d.data.lga ?? '');
+          setRevealAt(((iso: string | null) => (iso ? new Date(new Date(iso).getTime() + 60 * 60 * 1000).toISOString().slice(0, 16) : ''))(d.data.address_reveal_at ?? null));
           setLocationHidden(Boolean(d.data.location_hidden));
           setMeetingLink(d.data.meeting_link ?? '');
           setMeetingPasscode(d.data.meeting_passcode ?? '');
@@ -239,7 +260,7 @@ export default function OrganizerEventDetailPage() {
         body: JSON.stringify(
           event?.event_mode === 'online'
             ? { description, date, time, meeting_link: meetingLink, meeting_passcode: meetingPasscode }
-            : { description, date, time, venue, address, city, landmark, location_hidden: locationHidden },
+            : { description, date, time, venue, address, city, landmark, lga, location_hidden: locationHidden, address_reveal_at: locationHidden ? ((v: string) => (v ? new Date(`${v}:00+01:00`).toISOString() : null))(revealAt) : null },
         ),
       });
       const data = await res.json();
@@ -297,6 +318,8 @@ export default function OrganizerEventDetailPage() {
     address: locationHidden ? '' : address,
     city,
     landmark: landmark || null,
+    lga: lga || null,
+    addressRevealAt: locationHidden ? ((v: string) => (v ? new Date(`${v}:00+01:00`).toISOString() : null))(revealAt) : null,
     location_hidden: locationHidden,
     locationHidden,
     status: event.status === 'completed' ? 'completed' : 'approved',
@@ -667,7 +690,7 @@ export default function OrganizerEventDetailPage() {
               <div className="rounded-lg px-4 py-3 flex items-start gap-2 text-sm" style={{ backgroundColor: '#f59e0b10', border: '1px solid #f59e0b30' }}>
                 <AlertTriangle size={15} className="flex-shrink-0 mt-0.5" style={{ color: 'var(--color-amber)' }} />
                 <p style={{ color: 'var(--color-text-muted)' }}>
-                  Saving this date change will email every current ticket holder and give them a 48-hour window to opt out for a full refund. The event keeps selling throughout. Events get 2 organiser-made changes included — after that, changes need Ventry&apos;s approval before they apply.
+                  Saving this date change will email every current ticket holder and give them a 48-hour window to opt out for a full refund. The event keeps selling throughout. This counts as your event&apos;s one postponement: after it, the date and venue can&apos;t move again. A new date must be within 30 days of the original and at least 7 days away, and nothing can move in the last 7 days before the event.
                 </p>
               </div>
             )}
@@ -684,12 +707,13 @@ export default function OrganizerEventDetailPage() {
                 <Input label="Venue Name" value={venue} onChange={e => setVenue(e.target.value)} />
                 <Input label="Venue Address" value={address} onChange={e => setAddress(e.target.value)} />
                 <Input label="City" value={city} onChange={e => setCity(e.target.value)} />
+                <Input label="Local Government Area (LGA)" value={lga} onChange={e => setLga(e.target.value)} placeholder="e.g. Enugu East" helper="Always shown to buyers, even when the street address is hidden." />
                 <Input label="Nearby Landmark" value={landmark} onChange={e => setLandmark(e.target.value)} placeholder="e.g. Landmark Towers, Victoria Island" />
                 {hasSales && (venue !== event.venue || address !== event.address || city !== event.city) && (
                   <div className="rounded-lg px-4 py-3 flex items-start gap-2 text-sm" style={{ backgroundColor: '#f59e0b10', border: '1px solid #f59e0b30' }}>
                     <AlertTriangle size={15} className="flex-shrink-0 mt-0.5" style={{ color: 'var(--color-amber)' }} />
                     <p style={{ color: 'var(--color-text-muted)' }}>
-                      Saving this venue change will email every current ticket holder and give them a 48-hour window to opt out for a full refund. The event keeps selling throughout. Events get 2 organiser-made changes included — after that, changes need Ventry&apos;s approval before they apply.
+                      Saving this venue change will email every current ticket holder and give them a 48-hour window to opt out for a full refund. The event keeps selling throughout. This counts as your event&apos;s one postponement: after it, the date and venue can&apos;t move again. A new date must be within 30 days of the original and at least 7 days away, and nothing can move in the last 7 days before the event.
                     </p>
                   </div>
                 )}
@@ -702,9 +726,18 @@ export default function OrganizerEventDetailPage() {
                     className="mt-0.5 flex-shrink-0 w-4 h-4 rounded accent-[var(--color-purple)]"
                   />
                   <span className="text-sm leading-relaxed" style={{ color: 'var(--color-text-muted)' }}>
-                    Hide exact venue and address on the public event page until I reveal it.
+                    Hide the street address until a time I choose. The date, city and LGA are always shown, and Ventry emails the address to ticket holders at the reveal time.
                   </span>
                 </label>
+                {locationHidden && (
+                  <Input
+                    label="Reveal the address at"
+                    type="datetime-local"
+                    value={revealAt}
+                    onChange={e => setRevealAt(e.target.value)}
+                    helper="Nigeria time. No later than 24 hours before your event starts."
+                  />
+                )}
               </>
             )}
             <div className="flex gap-2">
@@ -716,6 +749,8 @@ export default function OrganizerEventDetailPage() {
                 setAddress(event.address);
                 setCity(event.city);
                 setLandmark(event.landmark ?? '');
+                setLga(event.lga ?? '');
+                setRevealAt(((iso: string | null) => (iso ? new Date(new Date(iso).getTime() + 60 * 60 * 1000).toISOString().slice(0, 16) : ''))(event.address_reveal_at));
                 setLocationHidden(Boolean(event.location_hidden));
                 setMeetingLink(event.meeting_link ?? '');
                 setMeetingPasscode(event.meeting_passcode ?? '');
@@ -906,7 +941,16 @@ export default function OrganizerEventDetailPage() {
           {!event.verified && (
             <>
               <p className="text-sm" style={{ color: event.venue_proof_url ? 'var(--color-green)' : 'var(--color-text-muted)' }}>
-                {event.venue_proof_url ? '✓ Venue proof uploaded' : '○ No venue proof uploaded. Contact support to add one.'}
+                {event.venue_proof_url ? '✓ Venue proof uploaded' : '○ No venue proof uploaded yet.'}
+              </p>
+              <label className="inline-flex items-center gap-2 text-sm font-medium cursor-pointer self-start" style={{ color: 'var(--color-purple-light)' }}>
+                <Upload size={14} />
+                {uploadingProof ? 'Uploading…' : event.venue_proof_url ? 'Replace venue proof' : 'Upload venue proof'}
+                <input type="file" className="sr-only" accept=".pdf,image/*" disabled={uploadingProof}
+                  onChange={e => { const f = e.target.files?.[0]; if (f) void uploadVenueProof(f); e.target.value = ''; }} />
+              </label>
+              <p className="text-xs" style={{ color: 'var(--color-text-dim)' }}>
+                A signed venue agreement, an invoice or receipt from the venue, or the venue&apos;s written confirmation, naming the venue, the event and the date. A photo of the building isn&apos;t accepted.
               </p>
               <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
                 <Input label="Venue contact name" value={contactName} onChange={e => setContactName(e.target.value)} placeholder="e.g. Bookings manager" />

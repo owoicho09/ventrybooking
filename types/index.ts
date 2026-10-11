@@ -62,6 +62,10 @@ export interface Event {
   address: string;
   city: string;
   landmark?: string | null;
+  /** Local government area — always shown, even when the street address is hidden. */
+  lga?: string | null;
+  /** When a hidden address is released (ISO). */
+  addressRevealAt?: string | null;
   location_hidden?: boolean;
   locationHidden?: boolean;
   organizer: Organizer;

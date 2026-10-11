@@ -1,5 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { getServerSupabase } from '@/lib/supabase/server';
+import { addressHiddenNow } from '@/lib/addressReveal';
 import { getEventsHostedCounts } from '@/lib/server/eventsHosted';
 import { ticketUrgency } from '@/lib/ticketUrgency';
 
@@ -14,7 +15,7 @@ function computeBadge(tiers: RawTier[]) {
 
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
 function shapeEvent(row: any, organizer: unknown) {
-  const locationHidden = row.location_hidden ?? false;
+  const locationHidden = addressHiddenNow({ location_hidden: row.location_hidden, address_reveal_at: row.address_reveal_at, date: String(row.date), time: row.time });
   return {
     id: row.id,
     slug: row.slug,
@@ -28,6 +29,7 @@ function shapeEvent(row: any, organizer: unknown) {
     address: locationHidden ? '' : row.address,
     city: row.city,
     landmark: row.landmark ?? null,
+    lga: row.lga ?? null,
     location_hidden: locationHidden,
     locationHidden: locationHidden,
     status: row.status,
@@ -43,7 +45,7 @@ function shapeEvent(row: any, organizer: unknown) {
 }
 
 const EVENT_SELECT = `
-  id, slug, event_name, category, description, date, time, event_mode, venue, address, city, landmark, location_hidden,
+  id, slug, event_name, category, description, date, time, event_mode, venue, address, city, landmark, location_hidden, lga, address_reveal_at,
   status, total_sold, banner_color, banner_url, header_banner_url, verified,
   tiers:ticket_tiers(id, name, price, available, sold)
 `;

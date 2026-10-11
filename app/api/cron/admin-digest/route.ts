@@ -1,6 +1,11 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { getServerSupabase } from '@/lib/supabase/server';
 import { sendAdminDigestEmail } from '@/lib/server/email';
+import { runAddressReveals } from '@/lib/server/addressRevealJob';
+
+// Hourly. Also releases hidden event addresses whose reveal time has passed
+// (no separate schedule needed); a failure there never blocks the digest.
+export const maxDuration = 60;
 
 export async function GET(req: NextRequest) {
   const authHeader = req.headers.get('authorization');
@@ -10,6 +15,10 @@ export async function GET(req: NextRequest) {
   }
 
   try {
+    await runAddressReveals(30_000)
+      .then(r => { if (r.events) console.log('address reveals', r); })
+      .catch(err => console.error('address reveal job error', err));
+
     const db = getServerSupabase();
 
     const { data: rows, error } = await db

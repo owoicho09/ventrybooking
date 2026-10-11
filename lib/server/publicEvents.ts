@@ -1,4 +1,5 @@
 import { getServerSupabase } from '@/lib/supabase/server';
+import { addressHiddenNow } from '@/lib/addressReveal';
 import { ticketUrgency } from '@/lib/ticketUrgency';
 import { normalizeCity, todayWAT, type PublicEvent, type PublicTier } from '@/lib/publicEvents';
 
@@ -7,7 +8,7 @@ import { normalizeCity, todayWAT, type PublicEvent, type PublicTier } from '@/li
 // can't be computed, the field is left null/0 and the page omits it.
 
 const EVENT_SELECT = `
-  id, slug, event_name, category, date, time, event_mode, venue, city, landmark, location_hidden,
+  id, slug, event_name, category, date, time, event_mode, venue, city, landmark, location_hidden, lga, address_reveal_at,
   status, total_sold, banner_url, header_banner_url, accent_color, verified,
   organizer:users!events_organizer_id_fkey(id, name, verified, handle, avatar_url, cover_image_url),
   tiers:ticket_tiers(id, name, price, available, sold)
@@ -28,7 +29,7 @@ function shape(row: any): PublicEvent {
   const totalSold = tiers.reduce((s, t) => s + t.sold, 0);
   const soldOut = tiers.length > 0 && onSale.length === 0;
   const prices = (onSale.length ? onSale : tiers).map(t => t.price);
-  const locationHidden = row.location_hidden ?? false;
+  const locationHidden = addressHiddenNow({ location_hidden: row.location_hidden, address_reveal_at: row.address_reveal_at, date: String(row.date), time: row.time });
   const org = one(row.organizer) as { id: string; name: string; verified: boolean; handle: string | null; avatar_url: string | null; cover_image_url: string | null } | null;
   const status = row.status === 'completed' ? 'completed' : 'approved';
 
@@ -43,6 +44,7 @@ function shape(row: any): PublicEvent {
     venue: locationHidden ? null : (row.venue ?? null),
     city: normalizeCity(row.city),
     landmark: row.landmark ?? null,
+    lga: row.lga ?? null,
     locationHidden,
     status,
     flyerUrl: row.banner_url ?? null,

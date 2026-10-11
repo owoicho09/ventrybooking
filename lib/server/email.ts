@@ -189,6 +189,37 @@ export async function sendTicketEmail(params: {
   await sendEmail({ to: params.to, subject, html, fromName: params.eventName, purpose: 'ticket' });
 }
 
+/** Code to confirm a change of payout bank account (Organiser Terms 3.8). */
+export async function sendBankChangeOTPEmail(to: string, name: string, otp: string) {
+  await sendEmail({
+    to,
+    purpose: 'bank_change_otp',
+    subject: `Your Ventry code to change payout bank details: ${otp}`,
+    html: emailShell(`
+      <h1 style="color:#a855f7;font-size:22px;margin:0 0 12px;">Confirm your bank change</h1>
+      <p style="color:#f1f0ff;margin:0 0 24px;">Hi ${esc(name)}, enter this code to change the bank account your Ventry payouts go to:</p>
+      <div style="text-align:center;background:#12121a;border:1px solid #2d2d3d;border-radius:12px;padding:28px;margin-bottom:24px;">
+        <span style="font-size:40px;font-weight:700;letter-spacing:0.25em;color:#a855f7;font-family:monospace;">${otp}</span>
+      </div>
+      <p style="color:#9ca3af;font-size:13px;margin:0;">Expires in <strong style="color:#f1f0ff;">10 minutes</strong>. If you didn&rsquo;t ask for this, do not share the code, change your password, and reply to this email straight away.</p>
+    `),
+  });
+}
+
+/** Security notice after the payout bank account changed. */
+export async function sendBankChangedEmail(to: string, name: string, bankName: string, last4: string) {
+  await sendEmail({
+    to,
+    purpose: 'bank_changed',
+    subject: 'Your Ventry payout bank account was changed',
+    html: emailShell(`
+      <h1 style="color:#a855f7;font-size:22px;margin:0 0 12px;">Payout account changed</h1>
+      <p style="color:#f1f0ff;">Hi ${esc(name)}, the bank account your Ventry payouts go to was just changed to <strong>${esc(bankName)} ****${esc(last4)}</strong>.</p>
+      <p style="color:#9ca3af;font-size:13px;">If this wasn&rsquo;t you, reply to this email immediately so we can pause your payouts.</p>
+    `),
+  });
+}
+
 export async function sendOTPEmail(to: string, name: string, otp: string) {
   await sendEmail({
     to,
@@ -359,6 +390,45 @@ export async function sendLocationUpdatedEmail(params: {
       </table>
       <a href="${params.eventUrl}" class="btn">View Event Page</a>
       <p class="footer">You received this because you purchased a ticket for this event.</p>
+    `),
+  });
+}
+
+/** The hidden address, released at the organiser's reveal time (Refund Policy §10.3). */
+export async function sendAddressRevealEmail(params: {
+  to: string;
+  buyerName: string;
+  eventName: string;
+  eventDate: string;
+  eventTime: string;
+  venue: string;
+  address: string;
+  lga?: string | null;
+  city: string;
+  landmark?: string | null;
+  eventUrl: string;
+  purpose: string;
+}) {
+  const lines = [params.venue, params.address, [params.lga, params.city].filter(Boolean).join(', '), params.landmark ? `Landmark: ${params.landmark}` : ''].filter(Boolean);
+  const maps = `https://www.google.com/maps?q=${encodeURIComponent([params.venue, params.address, params.city].filter(Boolean).join(', '))}`;
+  await sendEmail({
+    to: params.to,
+    fromName: params.eventName,
+    purpose: params.purpose,
+    subject: `The address for ${params.eventName}`,
+    html: emailShell(`
+      <h1 style="color:#a855f7;font-size:22px;margin:0 0 12px;">Here&rsquo;s where it&rsquo;s happening</h1>
+      <p style="color:#f1f0ff;">Hi ${esc(params.buyerName || 'there')}, the organiser has released the exact address for <strong>${esc(params.eventName)}</strong>.</p>
+      <table width="100%" cellpadding="0" cellspacing="0" style="background:#12121a;border:1px solid #2d2d3d;border-radius:8px;margin:20px 0 24px;">
+        <tr><td style="padding:20px;">
+          <p style="margin:4px 0;color:#9ca3af;font-size:13px;"><strong style="color:#f1f0ff;">When:</strong> ${esc(params.eventDate)}, ${esc(params.eventTime)}</p>
+          <p style="margin:12px 0 4px;color:#f1f0ff;font-size:13px;"><strong>Address:</strong></p>
+          ${lines.map(l => `<p style="margin:4px 0;color:#9ca3af;font-size:13px;">${esc(l)}</p>`).join('')}
+        </td></tr>
+      </table>
+      <a href="${maps}" class="btn">Open in Maps</a>
+      <p style="margin-top:16px;"><a href="${params.eventUrl}" style="color:#a855f7;font-size:13px;">View the event page</a></p>
+      <p class="footer">You received this because you have a ticket for this event. Bring your QR ticket to the door.</p>
     `),
   });
 }

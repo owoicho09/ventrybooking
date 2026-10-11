@@ -5,6 +5,9 @@ import { voidAffiliateCommissionsForOrganizer } from '@/lib/server/affiliateComm
 import { getBankCode } from '@/lib/banks';
 import { resolveAccountName } from '@/lib/server/paystack';
 import { fullNamesMatch } from '@/lib/identityMatch';
+import { hashBankOTP } from '@/lib/server/bankChange';
+import { sendBankChangedEmail } from '@/lib/server/email';
+import { notify } from '@/lib/server/notify';
 
 export async function POST(req: NextRequest) {
   const user = await getAuthUser();
@@ -13,7 +16,7 @@ export async function POST(req: NextRequest) {
   }
 
   try {
-    const { bankName, accountNumber, legalName } = await req.json();
+    const { bankName, accountNumber, legalName, otp } = await req.json();
     if (!bankName || !accountNumber) {
       return NextResponse.json({ error: 'All bank fields are required' }, { status: 400 });
     }
@@ -28,9 +31,23 @@ export async function POST(req: NextRequest) {
 
     const db = getServerSupabase();
     const { data: me } = await db.from('users')
-      .select('identity_status, identity_type, identity_name, legal_name')
+      .select('identity_status, identity_type, identity_name, legal_name, name, email, bank_name, account_number, bank_change_otp, bank_change_otp_expires_at')
       .eq('id', user.sub).maybeSingle();
     const verified = me?.identity_status === 'verified';
+
+    // Changing an existing payout account needs the password + emailed code
+    // from POST /api/organizer/bank/otp (Organiser Terms 3.8). Adding the
+    // first account doesn't.
+    const changing = !!me?.account_number && (me.account_number !== accountNumber || me.bank_name !== bankName);
+    if (changing) {
+      const code = String(otp ?? '').trim();
+      const valid = !!code && !!me?.bank_change_otp && !!me?.bank_change_otp_expires_at
+        && new Date(me.bank_change_otp_expires_at) > new Date()
+        && hashBankOTP(code, user.sub) === me.bank_change_otp;
+      if (!valid) {
+        return NextResponse.json({ error: code ? 'That code is wrong or has expired. Request a new one.' : 'Confirm with your password and the code we email you to change your bank account.', needsOtp: true }, { status: 403 });
+      }
+    }
 
     // The account name comes from the bank (via Paystack), never from what
     // was typed: settlement only goes to an account in the organiser's own
@@ -53,6 +70,8 @@ export async function POST(req: NextRequest) {
     }
 
     const update: Record<string, string | boolean | null> = {
+      bank_change_otp: null,
+      bank_change_otp_expires_at: null,
       bank_name: bankName,
       account_number: accountNumber,
       account_name: resolvedName,
@@ -63,6 +82,14 @@ export async function POST(req: NextRequest) {
       update.legal_name = legalName.trim().slice(0, 200);
     }
     await db.from('users').update(update).eq('id', user.sub);
+
+    if (changing && me?.email) {
+      sendBankChangedEmail(me.email, me.name ?? 'there', bankName, accountNumber.slice(-4)).catch(err => console.error('bank changed email error', err));
+      notify(
+        { type: 'admin' },
+        { notifType: 'payout', title: 'Organiser changed payout account', body: `${me.name ?? 'An organiser'} changed their payout account to ${bankName} ****${accountNumber.slice(-4)} (${resolvedName}).`, link: `/admin/organizers/${user.sub}` },
+      ).catch(console.error);
+    }
 
     // Self-referral check: if this organizer was credited to an affiliate,
     // and the settlement account they just entered matches that affiliate's

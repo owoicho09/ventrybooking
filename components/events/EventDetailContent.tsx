@@ -424,13 +424,18 @@ export function EventDetailContent({ identifier, preview }: EventDetailContentPr
                       <div>
                         {locationHidden ? (
                           <>
-                            <b>{event.landmark ? `Near ${event.landmark}` : city}</b>
-                            <span>{event.landmark ? `${city} · ` : ''}Exact address shared with ticket holders.</span>
+                            <b>{event.landmark ? `Near ${event.landmark}` : [event.lga, city].filter(Boolean).join(', ')}</b>
+                            {event.landmark && <span>{[event.lga, city].filter(Boolean).join(', ')}</span>}
+                            <span>
+                              Exact address {event.addressRevealAt
+                                ? `revealed ${new Date(event.addressRevealAt).toLocaleString('en-GB', { weekday: 'short', day: 'numeric', month: 'short', hour: '2-digit', minute: '2-digit', timeZone: 'Africa/Lagos' })} and emailed to ticket holders.`
+                                : 'emailed to ticket holders no later than 24 hours before doors.'}
+                            </span>
                           </>
                         ) : (
                           <>
                             <b>{event.venue}</b>
-                            <span>{[event.address, city].filter(Boolean).join(', ')}</span>
+                            <span>{[event.address, event.lga, city].filter(Boolean).join(', ')}</span>
                             {event.landmark && <span>Landmark: {event.landmark}</span>}
                           </>
                         )}

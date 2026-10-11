@@ -33,6 +33,8 @@ export interface PublicEvent {
   venue: string | null;
   city: string;
   landmark: string | null;
+  /** Local government area, always shown. */
+  lga: string | null;
   locationHidden: boolean;
   status: 'approved' | 'completed';
   flyerUrl: string | null;
@@ -128,9 +130,10 @@ export function naira(n: number): string {
 }
 
 /** One-line location that never reveals a hidden address. */
-export function locationLine(e: Pick<PublicEvent, 'eventMode' | 'locationHidden' | 'venue' | 'city' | 'landmark'>): string {
+export function locationLine(e: Pick<PublicEvent, 'eventMode' | 'locationHidden' | 'venue' | 'city' | 'landmark' | 'lga'>): string {
   if (e.eventMode === 'online') return 'Online · link in your ticket';
-  if (e.locationHidden || !e.venue) return e.landmark ? `Near ${e.landmark}, ${e.city}` : e.city;
+  const area = [e.lga, e.city].filter(Boolean).join(', ');
+  if (e.locationHidden || !e.venue) return e.landmark ? `Near ${e.landmark}, ${area}` : area;
   return `${e.venue}, ${e.city}`;
 }
 

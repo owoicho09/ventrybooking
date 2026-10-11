@@ -60,6 +60,8 @@ export default function CreateEventPage() {
   const [city, setCity] = useState('');
   const [landmark, setLandmark] = useState('');
   const [locationHidden, setLocationHidden] = useState(false);
+  const [lga, setLga] = useState('');
+  const [revealAt, setRevealAt] = useState('');
   const [meetingLink, setMeetingLink] = useState('');
   const [meetingPasscode, setMeetingPasscode] = useState('');
   const [banner, setBanner] = useState<File | null>(null);
@@ -125,6 +127,8 @@ export default function CreateEventPage() {
     venue: locationHidden ? 'Exact location undisclosed' : venue,
     address: locationHidden ? '' : address,
     city,
+    lga: lga || null,
+    addressRevealAt: locationHidden && revealAt ? ((v: string) => (v ? new Date(`${v}:00+01:00`).toISOString() : ''))(revealAt) : null,
     landmark: landmark || null,
     location_hidden: locationHidden,
     locationHidden,
@@ -196,6 +200,8 @@ export default function CreateEventPage() {
         fd.append('city', city);
         fd.append('landmark', landmark);
         fd.append('locationHidden', String(locationHidden));
+        fd.append('lga', lga);
+        if (locationHidden) fd.append('addressRevealAt', ((v: string) => (v ? new Date(`${v}:00+01:00`).toISOString() : ''))(revealAt));
         if (venueProof) fd.append('venueProof', await compressImageFile(venueProof));
         fd.append('venueContactName', venueContactName);
         fd.append('venueContactPhone', venueContactPhone);
@@ -400,6 +406,7 @@ export default function CreateEventPage() {
             <Input label="Venue Name" value={venue} onChange={e => setVenue(e.target.value)} placeholder="e.g. Eko Atlantic City Arena" required />
             <Input label="Venue Address" value={address} onChange={e => setAddress(e.target.value)} placeholder="Full street address" required />
             <Input label="City" value={city} onChange={e => setCity(e.target.value)} placeholder="Lagos" required />
+            <Input label="Local Government Area (LGA)" value={lga} onChange={e => setLga(e.target.value)} placeholder="e.g. Enugu East" helper="Always shown to buyers, even if you hide the street address." required />
             <Input label="Nearby Landmark" value={landmark} onChange={e => setLandmark(e.target.value)} placeholder="e.g. Landmark Towers, Victoria Island" />
             <label className="flex items-start gap-3 rounded-lg border px-4 py-3 cursor-pointer"
               style={{ borderColor: 'var(--color-border)', backgroundColor: 'var(--color-surface-2)' }}>
@@ -410,9 +417,19 @@ export default function CreateEventPage() {
                 className="mt-0.5 flex-shrink-0 w-4 h-4 rounded accent-[var(--color-purple)]"
               />
               <span className="text-sm leading-relaxed" style={{ color: 'var(--color-text-muted)' }}>
-                Hide exact venue and address from the public event page until I reveal it. Admins and ticket buyers will still receive exact location updates.
+                Hide the street address until a time I choose. The date, city and LGA are always shown. Ventry emails the address to every ticket holder at the reveal time.
               </span>
             </label>
+            {locationHidden && (
+              <Input
+                label="Reveal the address at"
+                type="datetime-local"
+                value={revealAt}
+                onChange={e => setRevealAt(e.target.value)}
+                helper="Nigeria time. No later than 24 hours before your event starts."
+                required
+              />
+            )}
             <div>
               <label className="text-sm font-medium block mb-1.5" style={{ color: 'var(--color-text)' }}>Venue Proof Document</label>
               <p className="text-xs mb-2" style={{ color: 'var(--color-text-dim)' }}>

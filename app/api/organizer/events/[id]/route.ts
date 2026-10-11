@@ -6,6 +6,7 @@ import { isValidAccentColor } from '@/lib/accentColors';
 import { normalizeLineup, type LineupAct } from '@/lib/server/lineup';
 import { normalizeEmailDomains } from '@/lib/server/domainRestriction';
 import { parseRefundPolicy, type RefundPolicyAnswers } from '@/lib/refundPolicy';
+import { revealTimeProblem, eventStart } from '@/lib/addressReveal';
 import { createChangeRefundWindow, countAppliedEventChanges, FREE_ORGANIZER_CHANGE_LIMIT } from '@/lib/server/eventChangeWindow';
 import { notify } from '@/lib/server/notify';
 import { PLATFORM_FEE_RATE } from '@/lib/fees';
@@ -27,7 +28,7 @@ export async function GET(
       .from('events')
       .select(`
         id, slug, event_name, category, description, date, time, event_mode, venue, address, city, landmark,
-        location_hidden, meeting_link, meeting_passcode, status, total_sold, banner_color, banner_url, header_banner_url, accent_color, lineup, allowed_email_domains, organizer_id, created_at, refund_policy, refund_policy_set_at, verified, venue_proof_url, venue_contact_name, venue_contact_phone,
+        location_hidden, meeting_link, meeting_passcode, status, total_sold, banner_color, banner_url, header_banner_url, accent_color, lineup, allowed_email_domains, organizer_id, created_at, refund_policy, refund_policy_set_at, verified, venue_proof_url, venue_contact_name, venue_contact_phone, lga, address_reveal_at,
         tiers:ticket_tiers(id, name, price, available, sold)
       `)
       .eq('id', id)
@@ -61,7 +62,7 @@ export async function PATCH(
 
     const { data: event } = await db
       .from('events')
-      .select('id, slug, organizer_id, status, event_name, date, time, event_mode, venue, address, city, landmark, location_hidden, meeting_link, meeting_passcode, refund_policy')
+      .select('id, slug, organizer_id, status, event_name, date, time, event_mode, venue, address, city, landmark, location_hidden, meeting_link, meeting_passcode, refund_policy, lga, address_reveal_at, postponement_count, original_date')
       .eq('id', id)
       .single();
 
@@ -86,9 +87,9 @@ export async function PATCH(
 
     let allowedFields: string[];
     if (hasSales) {
-      allowedFields = ['description', 'banner_url', 'date', 'time', 'venue', 'address', 'city', 'landmark', 'location_hidden', 'meeting_link', 'meeting_passcode', 'accent_color', 'lineup', 'allowed_email_domains', 'venue_contact_name', 'venue_contact_phone'];
+      allowedFields = ['description', 'banner_url', 'date', 'time', 'venue', 'address', 'city', 'landmark', 'location_hidden', 'meeting_link', 'meeting_passcode', 'accent_color', 'lineup', 'allowed_email_domains', 'venue_contact_name', 'venue_contact_phone', 'lga', 'address_reveal_at'];
     } else {
-      allowedFields = ['event_name', 'description', 'date', 'time', 'venue', 'address', 'city', 'landmark', 'location_hidden', 'meeting_link', 'meeting_passcode', 'category', 'banner_url', 'accent_color', 'lineup', 'allowed_email_domains', 'venue_contact_name', 'venue_contact_phone'];
+      allowedFields = ['event_name', 'description', 'date', 'time', 'venue', 'address', 'city', 'landmark', 'location_hidden', 'meeting_link', 'meeting_passcode', 'category', 'banner_url', 'accent_color', 'lineup', 'allowed_email_domains', 'venue_contact_name', 'venue_contact_phone', 'lga', 'address_reveal_at'];
     }
 
     const updates: Record<string, string | boolean | null | LineupAct[] | string[] | RefundPolicyAnswers> = {};
@@ -121,7 +122,10 @@ export async function PATCH(
         } else if (key === 'allowed_email_domains') {
           const normalized = normalizeEmailDomains(body[key]);
           updates[key] = normalized.length > 0 ? normalized : null;
-        } else if (key === 'landmark' || key === 'meeting_passcode' || key === 'venue_contact_name' || key === 'venue_contact_phone') {
+        } else if (key === 'address_reveal_at') {
+          const v = String(body[key] ?? '').trim();
+          updates[key] = v ? new Date(v).toISOString() : null;
+        } else if (key === 'landmark' || key === 'meeting_passcode' || key === 'venue_contact_name' || key === 'venue_contact_phone' || key === 'lga') {
           updates[key] = String(body[key] ?? '').trim() || null;
         } else {
           updates[key] = String(body[key] ?? '').trim();
@@ -131,6 +135,20 @@ export async function PATCH(
 
     if (Object.keys(updates).length === 0) {
       return NextResponse.json({ error: 'No valid fields to update' }, { status: 400 });
+    }
+
+    // Organiser Terms 4.9: a hidden address needs a reveal time no later than
+    // 24 hours before doors (checked against the date/time after this edit).
+    if (event.event_mode !== 'online') {
+      const hidden = Boolean(updates.location_hidden ?? event.location_hidden);
+      if (hidden && ('location_hidden' in updates || 'address_reveal_at' in updates || 'date' in updates || 'time' in updates)) {
+        const problem = revealTimeProblem(
+          (updates.address_reveal_at as string | null | undefined) ?? event.address_reveal_at,
+          String(updates.date ?? event.date),
+          String(updates.time ?? event.time),
+        );
+        if (problem) return NextResponse.json({ error: problem }, { status: 400 });
+      }
     }
 
     const dateChanged = 'date' in updates && String(updates.date) !== String(event.date ?? '');
@@ -143,6 +161,47 @@ export async function PATCH(
 
     const newDate = String(updates.date ?? event.date);
     const newTime = String(updates.time ?? event.time);
+
+    // ── Postponement rules (Organiser Terms 10, Refund Policy 8) ──
+    // Before any ticket is sold, date/venue/time edit freely. After that:
+    //   • a date or venue change is the event's one postponement;
+    //   • nothing can move within 7 days of the event;
+    //   • a new date must be within 30 days of the original date and at
+    //     least 7 days after today;
+    //   • a same-day time change is fine, except within 2 days of the event.
+    let isPostponement = false;
+    if (hasSales) {
+      const DAY = 24 * 60 * 60 * 1000;
+      const now = Date.now();
+      const currentStart = eventStart(String(event.date), event.time).getTime();
+      const venueMoved = event.event_mode !== 'online' && ['venue', 'address', 'city'].some(k =>
+        k in updates && String(updates[k] ?? '') !== String(event[k as keyof typeof event] ?? ''));
+      const timeMoved = 'time' in updates && String(updates.time) !== String(event.time ?? '');
+      isPostponement = dateChanged || venueMoved;
+      const support = 'Contact support if the event can\u2019t go ahead as listed: it will be treated as a cancellation.';
+
+      if (isPostponement) {
+        if ((event.postponement_count ?? 0) >= 1) {
+          return NextResponse.json({ error: `This event has already been postponed once, which is the limit once tickets are sold. ${support}` }, { status: 400 });
+        }
+        if (currentStart - now < 7 * DAY) {
+          return NextResponse.json({ error: `The date and venue can\u2019t change within 7 days of the event. ${support}` }, { status: 400 });
+        }
+        if (dateChanged) {
+          const original = String(event.original_date ?? event.date).slice(0, 10);
+          const newDay = new Date(`${newDate}T12:00:00Z`).getTime();
+          const originalDay = new Date(`${original}T12:00:00Z`).getTime();
+          if (Math.abs(newDay - originalDay) > 30 * DAY) {
+            return NextResponse.json({ error: 'A postponed date must fall within 30 days of the original event date.' }, { status: 400 });
+          }
+          if (eventStart(newDate, newTime).getTime() - now < 7 * DAY) {
+            return NextResponse.json({ error: 'The new date must be at least 7 days from today, so buyers have reasonable notice.' }, { status: 400 });
+          }
+        }
+      } else if (timeMoved && currentStart - now < 2 * DAY) {
+        return NextResponse.json({ error: 'The start time can\u2019t change within 2 days of the event.' }, { status: 400 });
+      }
+    }
 
     // Only venue/address/city (physical) or date (either mode) are
     // "qualifying" — the ones that mean the thing the buyer bought a ticket
@@ -220,6 +279,14 @@ export async function PATCH(
 
     if (deferredToApproval) {
       return NextResponse.json({ success: true, data: { pendingApproval: true, changeRequestId } });
+    }
+
+    if (isPostponement) {
+      await db.from('events').update({
+        postponement_count: (event.postponement_count ?? 0) + 1,
+        original_date: event.original_date ?? event.date,
+        postponed_at: new Date().toISOString(),
+      }).eq('id', id);
     }
 
     if (event.event_mode === 'online') {

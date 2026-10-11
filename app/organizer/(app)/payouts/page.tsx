@@ -52,6 +52,12 @@ export default function PayoutsPage() {
       })
       .catch(() => {});
   const [editingBank, setEditingBank] = useState(false);
+  // Changing an existing account needs password + emailed code (Organiser Terms 3.8).
+  const [savedAccount, setSavedAccount] = useState<{ bankName: string; accountNumber: string } | null>(null);
+  const [password, setPassword] = useState('');
+  const [otp, setOtp] = useState('');
+  const [otpSentTo, setOtpSentTo] = useState<string | null>(null);
+  const [sendingOtp, setSendingOtp] = useState(false);
   const [bank, setBank] = useState({ bankName: '', accountNumber: '', accountName: '', legalName: '' });
   const [identity, setIdentity] = useState<IdentityStatus | null>(null);
   const [panelKey, setPanelKey] = useState(0);
@@ -70,6 +76,7 @@ export default function PayoutsPage() {
         setEvents(p.data.events ?? []);
         setWallet(p.data.wallet ?? null);
       }
+      if (m.success && m.data.account_number) setSavedAccount({ bankName: m.data.bank_name || '', accountNumber: m.data.account_number });
       if (m.success) setBank({
         bankName: m.data.bank_name || '',
         accountNumber: m.data.account_number || '',
@@ -79,15 +86,29 @@ export default function PayoutsPage() {
     }).catch(console.error);
   }, []);
 
+  const changingAccount = !!savedAccount?.accountNumber
+    && (bank.accountNumber !== savedAccount.accountNumber || bank.bankName !== savedAccount.bankName);
+
+  const sendOtp = async () => {
+    setSendingOtp(true); setBankMsg('');
+    const res = await fetch('/api/organizer/bank/otp', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ password }) });
+    const d = await res.json().catch(() => null);
+    if (res.ok && d?.success) setOtpSentTo(d.data.sentTo);
+    else setBankMsg(d?.error ?? 'Could not send the code');
+    setSendingOtp(false);
+  };
+
   const saveBank = async (e: React.FormEvent) => {
     e.preventDefault();
     setSaving(true); setBankMsg('');
-    const res = await fetch('/api/organizer/bank', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(bank) });
+    const res = await fetch('/api/organizer/bank', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ ...bank, otp: changingAccount ? otp : undefined }) });
     const d = await res.json();
     setBankMsg(d.success ? (d.data?.message ?? 'Bank details saved.') : (d.error ?? 'Failed to save bank details'));
     setSaving(false);
     if (d.success) {
       setEditingBank(false);
+      setSavedAccount({ bankName: bank.bankName, accountNumber: bank.accountNumber });
+      setPassword(''); setOtp(''); setOtpSentTo(null);
       setBank(b => ({ ...b, accountName: d.data?.accountName ?? b.accountName }));
       setPanelKey(k => k + 1); // re-check the name match in the verification panel
     }
@@ -224,7 +245,22 @@ export default function PayoutsPage() {
                 : 'Never shown to buyers; your display name is what they see. Used to match your payout account and your NIN.'}
             />
             {bankMsg && <p className="text-xs" style={{ color: /saved/i.test(bankMsg) ? 'var(--color-green)' : 'var(--color-red)' }}>{bankMsg}</p>}
-            <Button type="submit" disabled={saving}>{saving ? 'Saving...' : 'Save Bank Details'}</Button>
+            {changingAccount && (
+              <div className="rounded-lg border p-3 flex flex-col gap-3" style={{ borderColor: 'var(--color-amber)', backgroundColor: '#f59e0b0d' }}>
+                <p className="text-xs" style={{ color: 'var(--color-text-muted)' }}>
+                  You&apos;re changing the account your payouts go to. For your security, confirm with your password and a code we email you.
+                </p>
+                {!otpSentTo ? (
+                  <div className="flex gap-2 items-end">
+                    <div className="flex-1"><Input label="Account password" type="password" value={password} onChange={e => setPassword(e.target.value)} autoComplete="current-password" /></div>
+                    <Button type="button" variant="outline" disabled={!password || sendingOtp} onClick={sendOtp}>{sendingOtp ? 'Sending…' : 'Email me a code'}</Button>
+                  </div>
+                ) : (
+                  <Input label={`Code sent to ${otpSentTo}`} value={otp} onChange={e => setOtp(e.target.value.replace(/\D/g, '').slice(0, 6))} inputMode="numeric" placeholder="6-digit code" />
+                )}
+              </div>
+            )}
+            <Button type="submit" disabled={saving || (changingAccount && otp.length !== 6)}>{saving ? 'Saving...' : 'Save Bank Details'}</Button>
           </form>
         )}
       </div>
