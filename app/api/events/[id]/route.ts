@@ -36,7 +36,7 @@ export async function GET(
       .select(`
         id, slug, event_name, category, description, date, time, event_mode, venue, address, city, landmark, location_hidden,
         status, total_sold, banner_color, banner_url, header_banner_url, accent_color, lineup, allowed_email_domains,
-        organizer:users!events_organizer_id_fkey(id, name, tier, verified, member_since, events_hosted, handle, socials),
+        organizer:users!events_organizer_id_fkey(id, name, tier, verified, member_since, events_hosted, handle, socials, avatar_url, cover_image_url),
         tiers:ticket_tiers(id, name, price, available, sold)
       `)
       // Tiers the organiser has withdrawn from sale are left off the page.

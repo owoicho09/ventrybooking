@@ -35,6 +35,7 @@ export interface Organizer {
   eventsHosted: number;
   events_hosted?: number;
   handle?: string | null;
+  avatar_url?: string | null;
   kycStatus: KYCStatus;
   submittedAt?: string;
   socials?: { instagram?: string; twitter?: string; tiktok?: string; snapchat?: string; whatsapp?: string };

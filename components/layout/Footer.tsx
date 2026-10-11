@@ -1,61 +1,51 @@
+import '@/app/v2.css';
 import Link from 'next/link';
 
-export function Footer() {
-  const links = [
-    { href: '/events', label: 'Events' },
-    { href: '/blog', label: 'Blog' },
-    { href: '/#how-it-works', label: 'How It Works' },
-    { href: '/#for-organizers', label: 'For Organizers' },
-    { href: '/affiliates', label: 'Affiliates' },
-    { href: '/help', label: 'Help' },
-    { href: '/terms/buyers', label: 'Buyer Terms' },
-    { href: '/terms/organisers', label: 'Organiser Terms' },
-    { href: '/terms/affiliates', label: 'Affiliate Policy' },
-    { href: '/privacy', label: 'Privacy Policy' },
-  ];
+interface FooterProps {
+  /** Busiest cities, linked into the browse page. Optional — omitted when not known. */
+  cities?: string[];
+  /** Drop the top margin when the section above already supplies the spacing. */
+  flush?: boolean;
+}
 
+export function Footer({ cities = [], flush = false }: FooterProps) {
   return (
-    <footer
-      className="border-t mt-20"
-      style={{ borderColor: 'var(--color-border)', backgroundColor: 'var(--color-surface)' }}
-    >
-      <div className="max-w-7xl mx-auto px-6 py-12">
-        <div className="flex flex-col md:flex-row items-start md:items-center justify-between gap-8">
-          <div>
-            <div
-              className="text-xl font-bold tracking-tight mb-2"
-              style={{ fontFamily: 'var(--font-syne), sans-serif' }}
-            >
-              <span style={{ color: 'var(--color-purple)' }}>V</span>
-              <span style={{ color: 'var(--color-text)' }}>ENTRY</span>
-            </div>
-            <p className="text-sm" style={{ color: 'var(--color-text-muted)' }}>
-              Secure event ticketing for Nigeria.
-            </p>
+    <footer className="v2 v-footer" style={flush ? undefined : { marginTop: 80 }}>
+      <div className="v-wrap">
+        <div className="v-fgrid">
+          <div style={{ maxWidth: 260 }}>
+            <Link href="/" className="v-logo" style={{ display: 'inline-block', marginBottom: 10 }}><span>V</span>ENTRY</Link>
+            <p style={{ fontSize: 13.5, color: 'var(--muted)' }}>Secure event ticketing for Nigeria.</p>
           </div>
-
-          <div className="flex flex-wrap gap-x-6 gap-y-2">
-            {links.map((link) => (
-              <Link
-                key={link.href}
-                href={link.href}
-                className="text-sm transition-colors hover:text-[var(--color-text)]"
-                style={{ color: 'var(--color-text-muted)' }}
-              >
-                {link.label}
-              </Link>
-            ))}
+          <div className="v-fcols">
+            <div className="v-fcol">
+              <h5>Discover</h5>
+              <Link href="/events">All events</Link>
+              {cities.slice(0, 3).map(c => (
+                <Link key={c} href={`/events?city=${encodeURIComponent(c)}`}>{c}</Link>
+              ))}
+              <Link href="/blog">Blog</Link>
+            </div>
+            <div className="v-fcol">
+              <h5>Organisers</h5>
+              <Link href="/organizer/register">List an event</Link>
+              <Link href="/terms/organisers">Organiser terms</Link>
+              <Link href="/affiliates">Affiliates</Link>
+              <Link href="/signin">Organiser sign in</Link>
+            </div>
+            <div className="v-fcol">
+              <h5>Help</h5>
+              <Link href="/retrieve">Retrieve a ticket</Link>
+              <Link href="/help">Support</Link>
+              <Link href="/terms/buyers#refunds-claims">Refunds</Link>
+              <Link href="/terms/buyers">Buyer terms</Link>
+              <Link href="/privacy">Privacy</Link>
+            </div>
           </div>
         </div>
-
-        <div
-          className="mt-8 pt-8 border-t text-sm"
-          style={{
-            borderColor: 'var(--color-border)',
-            color: 'var(--color-text-dim)',
-          }}
-        >
-          &copy; 2026 Ventry. All rights reserved. ventrybooking.com
+        <div className="v-fbot">
+          <span>© {new Date().getFullYear()} Ventry Solutions · RC BN9586934</span>
+          <span>Abuja, Nigeria</span>
         </div>
       </div>
     </footer>

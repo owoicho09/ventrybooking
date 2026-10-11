@@ -1,0 +1,325 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Ventry 2.0 — event detail</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Syne:wght@600;700;800&family=DM+Sans:opsz,wght@9..40,400;9..40,500;9..40,700&display=swap" rel="stylesheet">
+<style>
+:root{
+  --bg:#09070F;--surface:#13101C;--surface-2:#1A1626;--line:#272034;
+  --text:#F3F0F8;--muted:#968EAB;--dim:#6B6480;
+  --purple:#7C3AED;--purple-lt:#A78BFA;--maxw:1080px;
+  /* organiser accent — set per event */
+  --accent:#D97706;
+  --accent-soft:rgba(217,119,6,.14);
+  --accent-line:rgba(217,119,6,.42);
+  --accent-fg:#14101F;
+}
+*{box-sizing:border-box;margin:0;padding:0}
+body{background:var(--bg);color:var(--text);font-family:'DM Sans',system-ui,sans-serif;font-size:15px;line-height:1.6;-webkit-font-smoothing:antialiased;overflow-x:hidden}
+h1,h2,h3,h4{font-family:'Syne',sans-serif;letter-spacing:-.02em;line-height:1.1;color:#fff}
+a{color:inherit;text-decoration:none}
+img{display:block;max-width:100%}
+.wrap{max-width:var(--maxw);margin:0 auto;padding:0 24px}
+.btn{display:inline-flex;align-items:center;justify-content:center;font-weight:500;font-size:13.5px;padding:9px 18px;border-radius:100px;border:1px solid transparent;cursor:pointer;transition:.18s}
+.btn-ghost{border-color:var(--line);color:var(--text)}
+.btn-accent{background:var(--accent);color:var(--accent-fg);font-weight:700}
+.btn-accent:hover{filter:brightness(1.08)}
+.btn-block{width:100%;padding:15px;font-size:15.5px;border-radius:12px}
+
+/* top bar over banner */
+.topbar{position:fixed;top:0;left:0;right:0;z-index:70;display:flex;align-items:center;justify-content:space-between;padding:14px 20px;background:linear-gradient(rgba(6,4,12,.8),transparent)}
+.icbtn{width:38px;height:38px;border-radius:50%;background:rgba(9,7,15,.6);backdrop-filter:blur(8px);border:1px solid rgba(255,255,255,.12);display:grid;place-items:center;cursor:pointer}
+.topbar-r{display:flex;gap:9px}
+
+/* FIXED BANNER masthead */
+.masthead{position:fixed;top:0;left:0;right:0;height:52vh;min-height:300px;z-index:1;overflow:hidden}
+.masthead img{width:100%;height:100%;object-fit:cover}
+.masthead::after{content:'';position:absolute;inset:0;background:linear-gradient(rgba(6,4,12,.1) 30%,rgba(9,7,15,.96))}
+.spacer{height:calc(52vh - 60px);min-height:240px}
+.sheet{position:relative;z-index:10;background:var(--bg);border-radius:26px 26px 0 0;box-shadow:0 -24px 60px rgba(0,0,0,.72);padding-top:4px}
+.sheet::before{content:'';display:block;width:42px;height:4px;border-radius:100px;background:#372E4C;margin:12px auto 4px}
+
+/* title block */
+.titleblk{padding:18px 0 4px}
+.badges{display:flex;gap:8px;align-items:center;flex-wrap:wrap;margin-bottom:14px}
+.pill{font-size:11.5px;padding:5px 12px;border-radius:100px;background:var(--accent-soft);border:1px solid var(--accent-line);color:#FCD34D}
+.vfd{font-size:11.5px;font-weight:700;display:inline-flex;gap:6px;align-items:center;background:rgba(16,185,129,.16);border:1px solid rgba(16,185,129,.4);color:#34D399;padding:5px 12px;border-radius:100px}
+h1{font-size:40px;font-weight:800;margin-bottom:12px;max-width:16ch}
+.byline{display:flex;align-items:center;gap:10px;color:var(--muted);font-size:14px}
+.av{width:30px;height:30px;border-radius:50%;background:var(--accent);display:grid;place-items:center;font-family:'Syne';font-weight:800;font-size:13px;color:#fff}
+
+/* layout */
+.cols{display:grid;grid-template-columns:1fr 352px;gap:44px;padding:30px 0 70px;align-items:start}
+
+/* info cards */
+.card{background:var(--surface);border:1px solid var(--line);border-radius:16px;padding:18px 20px;margin-bottom:16px}
+.card h3{font-size:16px;margin-bottom:12px}
+.when{display:flex;gap:0}
+.when div{flex:1;padding-right:16px}
+.when div + div{border-left:1px solid var(--line);padding-left:20px;padding-right:0}
+.when .l{font-size:11.5px;color:var(--dim);margin-bottom:4px}
+.when .v{font-family:'Syne';font-weight:700;font-size:15.5px}
+.when .s{font-size:12.5px;color:var(--muted);margin-top:2px}
+.loc{display:flex;gap:13px;align-items:flex-start}
+.loc svg{flex-shrink:0;margin-top:2px}
+.loc b{display:block;font-family:'Syne';font-size:15px}
+.loc span{font-size:13px;color:var(--muted)}
+.map{height:150px;border-radius:12px;margin-top:14px;background:
+  linear-gradient(rgba(124,58,237,.1),rgba(124,58,237,.1)),
+  repeating-linear-gradient(0deg,#171324 0 1px,transparent 1px 26px),
+  repeating-linear-gradient(90deg,#171324 0 1px,transparent 1px 26px),#0F0C1A;
+  border:1px solid var(--line);position:relative}
+.map::after{content:'';position:absolute;left:50%;top:50%;width:13px;height:13px;border-radius:50%;background:var(--accent);box-shadow:0 0 0 7px var(--accent-soft);transform:translate(-50%,-50%)}
+.body-copy{color:#CFC8DD;font-size:15px}
+.body-copy p{margin-bottom:12px}
+.body-copy ul{list-style:none;display:grid;gap:8px;margin-top:4px}
+.body-copy li{display:flex;gap:10px;font-size:14.5px}
+.body-copy li::before{content:'';width:5px;height:5px;border-radius:50%;background:var(--accent);margin-top:9px;flex-shrink:0}
+
+/* lineup */
+.lineup{display:flex;gap:16px;overflow-x:auto;scrollbar-width:none;padding-bottom:4px}
+.lineup::-webkit-scrollbar{display:none}
+.act{width:98px;flex-shrink:0;text-align:center}
+.act-img{width:88px;height:88px;border-radius:50%;margin:0 auto 9px;background:linear-gradient(140deg,#3C1D6E,#191033);display:grid;place-items:center;font-family:'Syne';font-weight:800;font-size:28px;color:#fff;border:2px solid var(--line)}
+.act.head .act-img{border-color:var(--accent)}
+.act b{display:block;font-family:'Syne';font-size:13px;line-height:1.25}
+.act i{font-style:normal;font-size:10.5px;color:var(--dim);display:block;margin-top:2px}
+.act.head i{color:#FCD34D}
+.mystery{background:repeating-linear-gradient(45deg,#1A1626 0 6px,#221C33 6px 12px);color:var(--dim)}
+
+/* organiser card */
+.orgcard{display:flex;gap:14px;align-items:center}
+.orgav{width:52px;height:52px;border-radius:50%;background:linear-gradient(140deg,#B45309,#431407);display:grid;place-items:center;font-family:'Syne';font-weight:800;font-size:20px;color:#fff;flex-shrink:0}
+.orgname{font-family:'Syne';font-weight:700;font-size:16px}
+.orgmeta{font-size:12.5px;color:var(--muted);margin-top:2px}
+.socrow{display:flex;gap:8px;margin-top:14px;flex-wrap:wrap}
+.soc{width:34px;height:34px;border-radius:50%;background:var(--surface-2);border:1px solid var(--line);display:grid;place-items:center}
+.soc:hover{border-color:var(--accent-line)}
+
+/* policy */
+.policy{border-color:var(--accent-line);background:linear-gradient(var(--accent-soft),var(--accent-soft)),var(--surface)}
+.policy h3{display:flex;align-items:center;gap:9px}
+.policy p{font-size:14px;color:#D9D2E6}
+.policy .fine{font-size:12.5px;color:var(--muted);margin-top:10px;padding-top:10px;border-top:1px solid var(--accent-line)}
+
+/* ticket panel */
+.buy{position:sticky;top:22px}
+.tiers{background:var(--surface);border:1px solid var(--line);border-radius:18px;padding:18px;margin-bottom:14px}
+.tiers h3{font-size:15px;margin-bottom:14px}
+.tier{border:1px solid var(--line);border-radius:12px;padding:13px 15px;margin-bottom:9px;cursor:pointer;transition:.16s}
+.tier:hover{border-color:#3A3150}
+.tier.on{border-color:var(--accent);background:var(--accent-soft)}
+.tier-top{display:flex;justify-content:space-between;align-items:baseline;gap:12px}
+.tier-n{font-family:'Syne';font-weight:700;font-size:14.5px}
+.tier-p{font-family:'Syne';font-weight:700;font-size:16px}
+.tier-s{font-size:12px;color:var(--muted);margin-top:3px}
+.tier.out{opacity:.45}
+.tier.out .tier-s{color:#F87171}
+.qty{display:flex;align-items:center;justify-content:space-between;padding:12px 2px 14px;border-top:1px solid var(--line);margin-top:4px}
+.qty-ctrl{display:flex;align-items:center;gap:14px}
+.qbtn{width:30px;height:30px;border-radius:50%;border:1px solid var(--line);background:var(--surface-2);color:#fff;font-size:16px;cursor:pointer}
+.qnum{font-family:'Syne';font-weight:700;font-size:16px;min-width:14px;text-align:center}
+.sum{font-size:13px;color:var(--muted);display:flex;justify-content:space-between;padding:4px 0}
+.sum.tot{color:#fff;font-family:'Syne';font-weight:700;font-size:16px;padding-top:11px;margin-top:7px;border-top:1px solid var(--line)}
+.nb{font-size:11.5px;color:var(--dim);margin-top:12px;line-height:1.5}
+.trust{display:flex;flex-direction:column;gap:9px;background:var(--surface);border:1px solid var(--line);border-radius:16px;padding:16px 18px}
+.trust div{display:flex;gap:10px;font-size:13px;color:#CFC8DD;align-items:flex-start}
+.trust svg{flex-shrink:0;margin-top:2px}
+
+/* mobile buy bar */
+.mbuy{display:none;position:fixed;left:0;right:0;bottom:0;z-index:80;background:rgba(9,7,15,.94);backdrop-filter:blur(14px);border-top:1px solid var(--line);padding:11px 16px calc(11px + env(safe-area-inset-bottom));align-items:center;justify-content:space-between;gap:14px}
+.mbuy .p{font-family:'Syne';font-weight:700;font-size:17px}
+.mbuy .p i{display:block;font-style:normal;font-size:11px;color:var(--dim);font-family:'DM Sans';font-weight:400}
+
+footer{border-top:1px solid var(--line);background:var(--surface);padding:40px 0 28px}
+.fbot{font-size:12.5px;color:var(--dim);display:flex;justify-content:space-between;gap:16px;flex-wrap:wrap}
+.flinks{display:flex;gap:20px;flex-wrap:wrap;margin-bottom:18px}
+.flinks a{font-size:13.5px;color:var(--muted)}
+.chat{position:fixed;right:18px;bottom:88px;width:50px;height:50px;border-radius:50%;background:var(--purple);display:grid;place-items:center;box-shadow:0 10px 30px rgba(124,58,237,.5);z-index:85}
+
+@media (max-width:900px){
+  .cols{grid-template-columns:1fr;gap:0;padding-bottom:110px}
+  .buy{position:static;margin-top:4px}
+  h1{font-size:28px}
+  .masthead{height:40vh;min-height:230px}
+  .spacer{height:calc(40vh - 46px);min-height:190px}
+  .mbuy{display:flex}
+  .chat{bottom:84px;right:16px}
+}
+@media (prefers-reduced-motion:reduce){*{animation:none!important;transition:none!important}}
+</style>
+</head>
+<body>
+
+<!-- fixed banner -->
+<div class="masthead">
+  <img src="https://foztgjwzmpmohjraiuyt.supabase.co/storage/v1/object/public/event-assets/banners/9fd0299d-40bf-4b54-b27c-e37d80193c41/43d97245-927e-4740-a8d8-2904ac5e5ffc.png" alt="">
+</div>
+
+<div class="topbar">
+  <div class="icbtn"><svg width="17" height="17" viewBox="0 0 24 24" fill="none" stroke="#fff" stroke-width="2"><path d="m15 18-6-6 6-6"/></svg></div>
+  <div class="topbar-r">
+    <div class="icbtn"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="#fff" stroke-width="2"><path d="M4 12v7a1 1 0 0 0 1 1h14a1 1 0 0 0 1-1v-7M12 15V3m0 0 4 4m-4-4L8 7"/></svg></div>
+    <div class="icbtn"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="#fff" stroke-width="2.4" stroke-linecap="round"><path d="M12 5h.01M12 12h.01M12 19h.01"/></svg></div>
+  </div>
+</div>
+
+<div class="spacer"></div>
+
+<main class="sheet">
+  <div class="wrap">
+
+    <div class="titleblk">
+      <div class="badges">
+        <span class="pill">Theatre</span>
+        <span class="vfd">✓ Ventry Verified</span>
+      </div>
+      <h1>The Maestro Grandure</h1>
+      <div class="byline">
+        <span class="av">D</span>
+        <span>Hosted by <b style="color:#fff;font-weight:500">Denzel-Armani</b> · 4.8 ★ from 2 events</span>
+      </div>
+    </div>
+
+    <div class="cols">
+      <!-- LEFT -->
+      <div>
+        <div class="card">
+          <div class="when">
+            <div><div class="l">Begins</div><div class="v">Thu 1 Oct 2026</div><div class="s">17:00 · doors 16:30</div></div>
+            <div><div class="l">Ends</div><div class="v">Thu 1 Oct 2026</div><div class="s">22:00</div></div>
+          </div>
+        </div>
+
+        <div class="card">
+          <div class="loc">
+            <svg width="19" height="19" viewBox="0 0 24 24" fill="none" stroke="#D97706" stroke-width="2"><path d="M20 10c0 5-8 12-8 12s-8-7-8-12a8 8 0 0 1 16 0"/><circle cx="12" cy="10" r="3"/></svg>
+            <div>
+              <b>Amadeo Event Centre</b>
+              <span>Independence Layout, Enugu</span>
+            </div>
+          </div>
+          <div class="map"></div>
+        </div>
+
+        <div class="card">
+          <h3>On the night</h3>
+          <div class="lineup">
+            <div class="act head"><div class="act-img">O</div><b>Obiora N.</b><i>Headliner</i></div>
+            <div class="act"><div class="act-img" style="background:linear-gradient(140deg,#0F766E,#042F2E)">A</div><b>Ada Eze</b><i>Guest artist</i></div>
+            <div class="act"><div class="act-img" style="background:linear-gradient(140deg,#BE185D,#4C0519)">K</div><b>Kene O.</b><i>Special guest</i></div>
+            <div class="act"><div class="act-img mystery">?</div><b>Surprise guest</b><i>Revealed on the night</i></div>
+          </div>
+        </div>
+
+        <div class="card">
+          <h3>About this event</h3>
+          <div class="body-copy">
+            <p>An evening of orchestral highlife and spoken word, staged in the round. Doors at 16:30, curtain at 17:00 sharp — late entry is at the house manager's discretion.</p>
+            <ul>
+              <li>Live 14-piece ensemble</li>
+              <li>Table service for VIP tiers</li>
+              <li>Smart dress. No sportswear.</li>
+            </ul>
+          </div>
+        </div>
+
+        <div class="card">
+          <h3>Your organiser</h3>
+          <div class="orgcard">
+            <div class="orgav">D</div>
+            <div style="flex:1">
+              <div class="orgname">Denzel-Armani</div>
+              <div class="orgmeta">Enugu · 2 events · 312 following</div>
+            </div>
+            <a class="btn btn-ghost" href="#">Follow</a>
+          </div>
+          <div class="socrow">
+            <a class="soc" href="#"><svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="#968EAB" stroke-width="2"><rect x="3" y="3" width="18" height="18" rx="5"/><circle cx="12" cy="12" r="4"/><circle cx="17.5" cy="6.5" r="1" fill="#968EAB" stroke="none"/></svg></a>
+            <a class="soc" href="#"><svg width="14" height="14" viewBox="0 0 24 24" fill="#968EAB"><path d="M18.9 2H22l-7 8 8.2 12h-6.4l-5-7.3L5.9 22H2.8l7.5-8.6L2.5 2H9l4.5 6.6zM17.8 20h1.7L7.3 3.8H5.5z"/></svg></a>
+            <a class="soc" href="#"><svg width="14" height="14" viewBox="0 0 24 24" fill="#968EAB"><path d="M16 2c.4 2.6 2 4.4 4.6 4.7v3.1c-1.6.1-3.1-.3-4.6-1.2v6.6c0 4.3-3.6 7.3-7.6 6.5-3-.6-5-3.3-5-6.3 0-3.6 3.2-6.4 6.8-6v3.3c-2.3-.5-3.9 1.4-3.5 3.2.3 1.4 1.7 2.3 3.1 2 1.3-.3 2.1-1.4 2.1-2.8V2z"/></svg></a>
+            <a class="soc" href="#"><svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="#968EAB" stroke-width="2"><path d="M21 11.5a8.4 8.4 0 0 1-12.3 7.5L3 21l2-5.7A8.4 8.4 0 1 1 21 11.5"/></svg></a>
+          </div>
+        </div>
+
+        <div class="card policy">
+          <h3><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="#FCD34D" stroke-width="2"><circle cx="12" cy="12" r="9"/><path d="M12 8v5m0 3h.01"/></svg>Refund policy for this event</h3>
+          <p>Denzel-Armani accepts refund requests up to <b>14 days</b> before the event date. A postponement to a new date is honoured as a refund if you can't make it.</p>
+          <p class="fine">Refunds are paid by the organiser, not Ventry. If an event is cancelled, Ventry refunds anything it still holds and passes every claim to the organiser. The service fee and processing fee are not refundable. Change of mind is not a refund.</p>
+        </div>
+      </div>
+
+      <!-- RIGHT: buy -->
+      <aside class="buy">
+        <div class="tiers">
+          <h3>Choose your ticket</h3>
+
+          <div class="tier on">
+            <div class="tier-top"><span class="tier-n">Regular</span><span class="tier-p">₦8,000</span></div>
+            <div class="tier-s">General seating · 64 left</div>
+          </div>
+          <div class="tier">
+            <div class="tier-top"><span class="tier-n">Premium</span><span class="tier-p">₦18,000</span></div>
+            <div class="tier-s">Front rows · 12 left</div>
+          </div>
+          <div class="tier">
+            <div class="tier-top"><span class="tier-n">VIP Table of 5</span><span class="tier-p">₦60,000</span></div>
+            <div class="tier-s">Table service · 3 left</div>
+          </div>
+          <div class="tier out">
+            <div class="tier-top"><span class="tier-n">Early bird</span><span class="tier-p">₦5,500</span></div>
+            <div class="tier-s">Sold out</div>
+          </div>
+
+          <div class="qty">
+            <span style="font-size:13.5px;color:var(--muted)">How many?</span>
+            <div class="qty-ctrl"><button class="qbtn">−</button><span class="qnum">2</span><button class="qbtn">+</button></div>
+          </div>
+
+          <div class="sum"><span>2 × Regular</span><span>₦16,000</span></div>
+          <div class="sum"><span>Service fee</span><span>₦320</span></div>
+          <div class="sum"><span>Processing fee</span><span>₦440</span></div>
+          <div class="sum tot"><span>Total</span><span>₦16,760</span></div>
+
+          <a class="btn btn-accent btn-block" href="#" style="margin-top:14px">Get tickets</a>
+          <p class="nb">The total above is exactly what leaves your account. Ventry provides the platform; Denzel-Armani runs the event and handles refunds.</p>
+        </div>
+
+        <div class="trust">
+          <div><svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="#34D399" stroke-width="2"><path d="M20 12c0 5-3.5 7.5-7.7 9a1 1 0 0 1-.6 0C7.5 19.5 4 17 4 12V6a1 1 0 0 1 1-1c2 0 4.5-1.2 6.2-2.7a1.2 1.2 0 0 1 1.5 0C14.5 3.8 17 5 19 5a1 1 0 0 1 1 1z"/></svg><span>Venue booking checked before this event went live.</span></div>
+          <div><svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="#A78BFA" stroke-width="2"><rect x="3" y="3" width="7" height="7" rx="1"/><rect x="14" y="3" width="7" height="7" rx="1"/><rect x="3" y="14" width="7" height="7" rx="1"/><path d="M14 17h3v4"/></svg><span>Your QR ticket arrives by email the moment you pay.</span></div>
+          <div><svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="#968EAB" stroke-width="2"><circle cx="12" cy="12" r="9"/><path d="M12 7v5l3 2"/></svg><span>Lost it? Get it back at ventrybooking.com/retrieve.</span></div>
+        </div>
+      </aside>
+    </div>
+  </div>
+
+  <footer>
+    <div class="wrap">
+      <div class="flinks"><a href="#">Buyer terms</a><a href="#">Refund policy</a><a href="#">Privacy</a><a href="#">Support</a><a href="#">Retrieve a ticket</a></div>
+      <div class="fbot"><span>© 2026 Ventry Solutions · RC BN9586934</span><span>Abuja, Nigeria</span></div>
+    </div>
+  </footer>
+</main>
+
+<div class="mbuy">
+  <div class="p">₦16,760<i>2 × Regular, all fees in</i></div>
+  <a class="btn btn-accent" href="#" style="padding:12px 24px;font-size:14.5px">Get tickets</a>
+</div>
+
+<div class="chat"><svg width="21" height="21" viewBox="0 0 24 24" fill="none" stroke="#fff" stroke-width="2" stroke-linecap="round"><path d="M3 16.3a2 2 0 0 1 .1 1.2l-1.1 3.3a1 1 0 0 0 1.2 1.2l3.4-1a2 2 0 0 1 1.1.1 10 10 0 1 0-4.7-4.8"/></svg></div>
+
+<script>
+document.querySelectorAll('.tier:not(.out)').forEach(function(t){
+  t.addEventListener('click',function(){
+    document.querySelectorAll('.tier').forEach(function(x){x.classList.remove('on')});
+    t.classList.add('on');
+  });
+});
+</script>
+</body>
+</html>

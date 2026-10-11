@@ -1,17 +1,27 @@
 'use client';
 
+import '@/app/v2.css';
 import { useState, useRef, useEffect } from 'react';
 import Link from 'next/link';
 import { usePathname, useRouter } from 'next/navigation';
-import { ChevronDown } from 'lucide-react';
-import { ThemeToggle } from './ThemeToggle';
+import { ChevronDown, Menu, Moon, Sun, X } from 'lucide-react';
+import { useTheme } from './ThemeProvider';
 import { useBuyerAuth } from '@/lib/hooks/useBuyerAuth';
+
+const NAV_LINKS = [
+  { href: '/events', label: 'Events' },
+  { href: '/#how-it-works', label: 'How it works' },
+  { href: '/#for-organisers', label: 'For organisers' },
+  { href: '/blog', label: 'Blog' },
+];
 
 export function PublicNav() {
   const pathname = usePathname();
   const router = useRouter();
+  const { theme, toggle } = useTheme();
   const { loggedIn: buyerLoggedIn, loading: buyerLoading, firstName } = useBuyerAuth();
   const [menuOpen, setMenuOpen] = useState(false);
+  const [mobileOpen, setMobileOpen] = useState(false);
   const menuRef = useRef<HTMLDivElement>(null);
 
   useEffect(() => {
@@ -19,8 +29,13 @@ export function PublicNav() {
     const onClick = (e: MouseEvent) => {
       if (menuRef.current && !menuRef.current.contains(e.target as Node)) setMenuOpen(false);
     };
+    const onKey = (e: KeyboardEvent) => { if (e.key === 'Escape') setMenuOpen(false); };
     document.addEventListener('mousedown', onClick);
-    return () => document.removeEventListener('mousedown', onClick);
+    document.addEventListener('keydown', onKey);
+    return () => {
+      document.removeEventListener('mousedown', onClick);
+      document.removeEventListener('keydown', onKey);
+    };
   }, [menuOpen]);
 
   const handleSignOut = async () => {
@@ -30,126 +45,67 @@ export function PublicNav() {
     router.refresh();
   };
 
-  const navLinks = [
-    { href: '/events', label: 'Events' },
-    { href: '/#how-it-works', label: 'How It Works' },
-    { href: '/#for-organizers', label: 'For Organizers' },
-    { href: '/blog', label: 'Blog' },
-  ];
+  const isActive = (href: string) => href === pathname || (href !== '/' && !href.includes('#') && pathname.startsWith(href));
 
   return (
-    <nav
-      className="fixed top-0 left-0 right-0 z-50 border-b border-[var(--color-border)]"
-      style={{
-        backgroundColor: 'color-mix(in srgb, var(--color-bg) 80%, transparent)',
-        backdropFilter: 'blur(12px)',
-        WebkitBackdropFilter: 'blur(12px)',
-      }}
-    >
-      <div className="max-w-7xl mx-auto px-4 sm:px-6 h-16 flex items-center justify-between gap-4">
-        {/* Logo */}
-        <Link href="/" className="flex items-center gap-1 shrink-0">
-          <span
-            className="text-xl font-bold tracking-tight"
-            style={{ fontFamily: 'var(--font-syne), sans-serif' }}
-          >
-            <span style={{ color: 'var(--color-purple)' }}>V</span>
-            <span style={{ color: 'var(--color-text)' }}>ENTRY</span>
-          </span>
-        </Link>
+    <nav className="v2 v-nav" aria-label="Main">
+      <div className="v-nav-in">
+        <Link href="/" className="v-logo" aria-label="Ventry home"><span>V</span>ENTRY</Link>
 
-        {/* Center Nav */}
-        <div className="hidden md:flex items-center gap-1">
-          {navLinks.map((link) => (
-            <Link
-              key={link.href}
-              href={link.href}
-              className="px-4 py-2 text-sm rounded-lg transition-colors"
-              style={{
-                color: pathname === link.href ? 'var(--color-text)' : 'var(--color-text-muted)',
-                backgroundColor: pathname === link.href ? 'var(--color-surface-2)' : 'transparent',
-              }}
-              onMouseEnter={(e) => {
-                if (pathname !== link.href) {
-                  (e.currentTarget as HTMLElement).style.color = 'var(--color-text)';
-                }
-              }}
-              onMouseLeave={(e) => {
-                if (pathname !== link.href) {
-                  (e.currentTarget as HTMLElement).style.color = 'var(--color-text-muted)';
-                }
-              }}
-            >
-              {link.label}
-            </Link>
+        <div className="v-nav-links">
+          {NAV_LINKS.map(l => (
+            <Link key={l.href} href={l.href} className={isActive(l.href) ? 'on' : undefined}>{l.label}</Link>
           ))}
         </div>
 
-        {/* Right Actions */}
-        <div className="flex items-center gap-2 shrink-0">
-          <Link
-            href="/organizer/register"
-            className="hidden sm:flex items-center px-4 py-2 text-sm rounded-lg border transition-colors"
-            style={{
-              borderColor: 'var(--color-border)',
-              color: 'var(--color-text)',
-            }}
-            onMouseEnter={(e) => {
-              (e.currentTarget as HTMLElement).style.borderColor = 'var(--color-purple)';
-              (e.currentTarget as HTMLElement).style.color = 'var(--color-purple)';
-            }}
-            onMouseLeave={(e) => {
-              (e.currentTarget as HTMLElement).style.borderColor = 'var(--color-border)';
-              (e.currentTarget as HTMLElement).style.color = 'var(--color-text)';
-            }}
-          >
-            Post an Event
-          </Link>
-          <ThemeToggle />
+        <div className="v-nav-cta">
+          <button type="button" className="v-icon-btn" onClick={toggle} aria-label={theme === 'dark' ? 'Switch to light theme' : 'Switch to dark theme'}>
+            {theme === 'dark' ? <Sun size={17} /> : <Moon size={17} />}
+          </button>
 
           {/* The single public-header auth entry: buyer sign-in, or a small
-              menu once signed in. Organiser/affiliate doors live at /signin
-              instead of competing with this. */}
-          {!buyerLoading && (
-            buyerLoggedIn ? (
-              <div className="relative" ref={menuRef}>
-                <button
-                  onClick={() => setMenuOpen(o => !o)}
-                  className="flex items-center gap-1.5 px-4 py-2 text-sm rounded-lg font-medium transition-opacity hover:opacity-90"
-                  style={{ backgroundColor: 'var(--color-purple)', color: '#fff' }}
-                >
-                  {firstName ? `Hi, ${firstName}` : 'My Tickets'}
-                  <ChevronDown size={14} style={{ transform: menuOpen ? 'rotate(180deg)' : undefined, transition: 'transform 0.15s' }} />
-                </button>
-                {menuOpen && (
-                  <div
-                    className="absolute right-0 mt-2 w-48 rounded-lg border shadow-lg overflow-hidden"
-                    style={{ backgroundColor: 'var(--color-surface)', borderColor: 'var(--color-border)' }}
-                  >
-                    <Link href="/account" onClick={() => setMenuOpen(false)} className="block px-4 py-2.5 text-sm transition-colors hover:bg-[var(--color-surface-2)]" style={{ color: 'var(--color-text)' }}>
-                      My Tickets
-                    </Link>
-                    <Link href="/account/following" onClick={() => setMenuOpen(false)} className="block px-4 py-2.5 text-sm transition-colors hover:bg-[var(--color-surface-2)]" style={{ color: 'var(--color-text)' }}>
-                      Following
-                    </Link>
-                    <button onClick={handleSignOut} className="block w-full text-left px-4 py-2.5 text-sm border-t transition-colors hover:bg-[var(--color-surface-2)]" style={{ color: 'var(--color-text-muted)', borderColor: 'var(--color-border)' }}>
-                      Sign out
-                    </button>
-                  </div>
-                )}
-              </div>
-            ) : (
-              <Link
-                href="/signin"
-                className="flex items-center px-4 py-2 text-sm rounded-lg font-medium transition-opacity hover:opacity-90"
-                style={{ backgroundColor: 'var(--color-purple)', color: '#fff' }}
-              >
-                Sign in
-              </Link>
-            )
-          )}
+              menu once signed in. Organiser/affiliate doors live at /signin. */}
+          {!buyerLoading && (buyerLoggedIn ? (
+            <div style={{ position: 'relative' }} ref={menuRef}>
+              <button type="button" className="v-btn v-btn-ghost" onClick={() => setMenuOpen(o => !o)} aria-expanded={menuOpen} aria-haspopup="menu">
+                {firstName ? `Hi, ${firstName}` : 'My tickets'}
+                <ChevronDown size={14} style={{ transform: menuOpen ? 'rotate(180deg)' : undefined, transition: 'transform .15s' }} />
+              </button>
+              {menuOpen && (
+                <div className="v-menu" role="menu">
+                  <Link href="/account" role="menuitem" onClick={() => setMenuOpen(false)}>My tickets</Link>
+                  <Link href="/account/following" role="menuitem" onClick={() => setMenuOpen(false)}>Following</Link>
+                  <hr />
+                  <button type="button" role="menuitem" onClick={handleSignOut} style={{ color: 'var(--muted)' }}>Sign out</button>
+                </div>
+              )}
+            </div>
+          ) : (
+            <Link href="/signin" className="v-btn v-btn-ghost">Sign in</Link>
+          ))}
+
+          <Link href="/organizer/register" className="v-btn v-btn-solid hide-xs">List your event</Link>
+
+          <button
+            type="button"
+            className="v-icon-btn v-nav-burger"
+            onClick={() => setMobileOpen(o => !o)}
+            aria-expanded={mobileOpen}
+            aria-label={mobileOpen ? 'Close menu' : 'Open menu'}
+          >
+            {mobileOpen ? <X size={19} /> : <Menu size={19} />}
+          </button>
         </div>
       </div>
+
+      {mobileOpen && (
+        <div className="v-mobile-panel">
+          {NAV_LINKS.map(l => (
+            <Link key={l.href} href={l.href} onClick={() => setMobileOpen(false)}>{l.label}</Link>
+          ))}
+          <Link href="/organizer/register" onClick={() => setMobileOpen(false)} style={{ color: 'var(--purple-lt)' }}>List your event</Link>
+        </div>
+      )}
     </nav>
   );
 }
