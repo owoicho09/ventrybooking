@@ -106,6 +106,7 @@ service instead. Go to **cron-job.org**, make a free account, and create
 | Ventry Reconcile Orders | `https://www.ventrybooking.com/api/cron/reconcile-orders` | Every 5 minutes |
 | Ventry Complete Events | `https://www.ventrybooking.com/api/cron/complete-events` | Every day, 08:30 |
 | Ventry Admin Digest | `https://www.ventrybooking.com/api/cron/admin-digest` | Every hour |
+| Ventry Daily Sales | `https://www.ventrybooking.com/api/cron/daily-sales` | Every day, 00:05 (Lagos time). Emails each organiser who sold tickets the day before; no sale, no email. Add `?dryRun=1` to preview without sending. |
 
 For **every one of the 4 jobs**, also do this:
 - Request method: `GET`

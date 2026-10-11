@@ -60,7 +60,7 @@ export function EventCardV2({ event, cta = 'Get tickets', priority = false, size
       <div className="v-ev-img" style={{ background: categoryGradient(event.eventMode === 'online' ? 'online' : meta.key) }}>
         <span className="v-ev-ph" aria-hidden="true">{initial(event.name)}</span>
         <EventImage sources={images} sizes={sizes} priority={priority} />
-        {event.organizer.verified && !completed && <span className="v-vfd">✓ Verified</span>}
+        {event.verified && !completed && <span className="v-vfd">✓ Verified</span>}
         {completed
           ? <span className="v-flag muted">{event.soldOut ? 'Sold out' : 'Ended'}</span>
           : event.urgency && (

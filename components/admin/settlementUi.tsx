@@ -1,5 +1,6 @@
 'use client';
 
+import { useState } from 'react';
 import { CheckCircle, AlertCircle, Clock, X } from 'lucide-react';
 import { Badge } from '@/components/ui/Badge';
 import { Button } from '@/components/ui/Button';
@@ -144,4 +145,98 @@ export async function postRelease(organizerIds: string[]): Promise<ReleaseOutcom
     // afterwards, and a repeat release of the same period is a no-op anyway.
     return organizerIds.map(id => ({ organizerId: id, outcome: 'error', message: 'Network error — refresh to see what went through' }));
   }
+}
+
+export interface ManualPayTarget {
+  /** Organiser receiving the money. */
+  organizerName: string;
+  bankName: string | null;
+  accountNumber: string | null;
+  accountName: string | null;
+  net: number;
+  period: string;
+}
+
+/**
+ * "Mark as paid": for when the admin has paid an organiser by bank transfer
+ * themselves. Records the transfer reference against the settlement and runs
+ * everything a Paystack payout would (organiser email + notification).
+ */
+export function ManualPayModal({
+  target, busy, error, onCancel, onConfirm,
+}: {
+  target: ManualPayTarget | null;
+  busy: boolean;
+  error?: string;
+  onCancel: () => void;
+  onConfirm: (p: { reference: string; note: string }) => void;
+}) {
+  const [reference, setReference] = useState('');
+  const [note, setNote] = useState('');
+  const [sent, setSent] = useState(false);
+  const [lastTarget, setLastTarget] = useState(target);
+  // Reset the form whenever a different settlement is opened.
+  if (target !== lastTarget) {
+    setLastTarget(target);
+    setReference(''); setNote(''); setSent(false);
+  }
+  const ready = !!reference.trim() && sent && !busy;
+
+  return (
+    <Modal open={!!target} onClose={busy ? () => {} : onCancel} title="Mark as paid by bank transfer">
+      {target && (
+        <div className="flex flex-col gap-4">
+          <div className="rounded-lg border p-3 text-sm" style={{ borderColor: 'var(--color-border)', backgroundColor: 'var(--color-surface-2)' }}>
+            <p className="text-xs" style={{ color: 'var(--color-text-dim)' }}>Send to</p>
+            <p className="font-medium" style={{ color: 'var(--color-text)' }}>{target.accountName ?? target.organizerName}</p>
+            <p style={{ color: 'var(--color-text-muted)' }}>{target.bankName ?? 'No bank on file'} · <span className="font-mono">{target.accountNumber ?? '—'}</span></p>
+            <div className="flex justify-between items-baseline border-t mt-3 pt-3" style={{ borderColor: 'var(--color-border)' }}>
+              <span className="text-xs" style={{ color: 'var(--color-text-muted)' }}>Sales {target.period}, after Ventry&apos;s fee</span>
+              <span className="text-lg font-bold" style={{ color: 'var(--color-text)' }}>{formatNGN(target.net)}</span>
+            </div>
+          </div>
+
+          <label className="flex flex-col gap-1 text-sm">
+            <span style={{ color: 'var(--color-text)' }}>Bank transfer reference <span style={{ color: 'var(--color-red)' }}>*</span></span>
+            <input
+              value={reference}
+              onChange={e => setReference(e.target.value)}
+              placeholder="e.g. session ID or narration from your bank app"
+              maxLength={120}
+              className="rounded-lg border px-3 py-2 text-sm outline-none focus:border-[var(--color-purple)]"
+              style={{ backgroundColor: 'var(--color-surface)', borderColor: 'var(--color-border)', color: 'var(--color-text)' }}
+            />
+          </label>
+          <label className="flex flex-col gap-1 text-sm">
+            <span style={{ color: 'var(--color-text)' }}>Note <span style={{ color: 'var(--color-text-dim)' }}>(optional, admin only)</span></span>
+            <input
+              value={note}
+              onChange={e => setNote(e.target.value)}
+              maxLength={500}
+              className="rounded-lg border px-3 py-2 text-sm outline-none focus:border-[var(--color-purple)]"
+              style={{ backgroundColor: 'var(--color-surface)', borderColor: 'var(--color-border)', color: 'var(--color-text)' }}
+            />
+          </label>
+
+          <label className="flex items-start gap-2 text-sm cursor-pointer" style={{ color: 'var(--color-text)' }}>
+            <input type="checkbox" checked={sent} onChange={e => setSent(e.target.checked)} className="mt-1" />
+            <span>I have already sent exactly {formatNGN(target.net)} to this account.</span>
+          </label>
+
+          <p className="text-xs" style={{ color: 'var(--color-text-dim)' }}>
+            This records the payment; it does not move any money. The organiser is emailed their payout breakdown and the
+            tickets are marked settled, so they can never be paid again.
+          </p>
+          {error && <p className="text-sm" style={{ color: 'var(--color-red)' }}>{error}</p>}
+
+          <div className="flex flex-col-reverse sm:flex-row gap-2 sm:justify-end">
+            <Button variant="ghost" disabled={busy} onClick={onCancel} className="w-full sm:w-auto">Cancel</Button>
+            <Button variant="success" disabled={!ready} onClick={() => onConfirm({ reference: reference.trim(), note: note.trim() })} className="w-full sm:w-auto" size="lg">
+              {busy ? 'Recording…' : `Record ${formatNGN(target.net)} as paid`}
+            </Button>
+          </div>
+        </div>
+      )}
+    </Modal>
+  );
 }

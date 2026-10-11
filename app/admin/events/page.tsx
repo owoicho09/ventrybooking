@@ -35,6 +35,7 @@ interface EventData {
   event_mode?: 'physical' | 'online';
   address?: string; landmark?: string | null; location_hidden?: boolean;
   venue_proof_url?: string | null;
+  verified?: boolean; verified_at?: string | null; verified_by?: string | null;
   meeting_link?: string | null; meeting_passcode?: string | null;
   description: string; status: string;
   organizer: { name: string; tier?: string };
@@ -58,6 +59,31 @@ export default function AdminEventsPage() {
   const [events, setEvents]             = useState<EventData[]>([]);
   const [loading, setLoading]           = useState(true);
   const [selectedEvent, setSelectedEvent] = useState<EventData | null>(null);
+  const [badgeBusy, setBadgeBusy] = useState(false);
+
+  // The event's Verified badge: venue proof on file AND the booking confirmed
+  // with the venue. Separate from the organiser's own verified tick.
+  const setEventVerified = async (ev: EventData, verified: boolean) => {
+    if (badgeBusy) return;
+    setBadgeBusy(true);
+    try {
+      const res = await fetch(`/api/admin/events/${ev.id}/verify`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ verified }),
+      });
+      const d = await res.json();
+      if (!res.ok || !d.success) { toast(d.error ?? 'Could not update the badge', 'error'); return; }
+      const patchEv = (e: EventData) => (e.id === ev.id ? { ...e, ...d.data } : e);
+      setEvents(list => list.map(patchEv));
+      setSelectedEvent(cur => (cur ? patchEv(cur) : cur));
+      toast(verified ? 'Verified badge on' : 'Verified badge removed', 'success');
+    } catch {
+      toast('Network error', 'error');
+    } finally {
+      setBadgeBusy(false);
+    }
+  };
   const [rejecting, setRejecting]       = useState(false);
   const [reason, setReason]             = useState('');
   const [acting, setActing]             = useState(false);
@@ -302,6 +328,27 @@ export default function AdminEventsPage() {
                     No venue proof was uploaded for this event.
                   </p>
                 )}
+
+                <div className="mt-3 pt-3 border-t flex flex-col gap-2" style={{ borderColor: 'var(--color-border)' }}>
+                  <p className="text-xs" style={{ color: 'var(--color-text-muted)' }}>
+                    {selectedEvent.verified
+                      ? <>Verified badge is <strong style={{ color: 'var(--color-green)' }}>on</strong>{selectedEvent.verified_by ? <> · confirmed by {selectedEvent.verified_by}</> : null}{selectedEvent.verified_at ? <> on {new Date(selectedEvent.verified_at).toLocaleDateString('en-GB', { day: 'numeric', month: 'short', year: 'numeric' })}</> : null}</>
+                      : <>Verified badge is off. Turn it on only after you have the written proof <em>and</em> the venue has confirmed the booking for this date.</>}
+                  </p>
+                  <div>
+                    <Button
+                      size="sm"
+                      variant={selectedEvent.verified ? 'outline' : 'success'}
+                      disabled={badgeBusy || (!selectedEvent.verified && !selectedEvent.venue_proof_url)}
+                      onClick={() => setEventVerified(selectedEvent, !selectedEvent.verified)}
+                    >
+                      {badgeBusy ? 'Saving…' : selectedEvent.verified ? 'Remove Verified badge' : 'Venue confirmed: add Verified badge'}
+                    </Button>
+                  </div>
+                  {!selectedEvent.verified && !selectedEvent.venue_proof_url && (
+                    <p className="text-xs" style={{ color: 'var(--color-text-dim)' }}>Needs venue proof on file first.</p>
+                  )}
+                </div>
               </div>
             )}
 

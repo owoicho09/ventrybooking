@@ -37,11 +37,16 @@ never freelance or guess at policy.
   funds Ventry is still holding. This isn't something the agent can approve
   directly — it always becomes a complaint for a human to review.
 
-## Verified badge
-- A green "Verified" badge on an organiser means Ventry has completed KYC
-  review on that organiser (identity and payout details) — it is not a
-  guarantee about the event itself, but it does mean Ventry can hold a real,
-  verified party accountable if something goes wrong.
+## Verified badge and verified tick
+There are two separate marks:
+- A "Verified" badge on an EVENT means the organiser supplied written proof
+  of the venue booking and Ventry confirmed that booking with the venue for
+  that date. That is all it means: it is not a guarantee about the event.
+- A verified tick (✓) next to an ORGANISER's name means Ventry has checked
+  that organiser's identity. It is not an endorsement of them or their events.
+- An event can be from a verified organiser without carrying the event
+  badge (for example, a private venue with no independent contact to
+  confirm with).
 
 ## Self-serve ticket retrieval
 - Anyone can look up their own tickets without an account at `/retrieve` —

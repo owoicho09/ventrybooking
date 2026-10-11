@@ -38,6 +38,8 @@ export interface PublicEvent {
   flyerUrl: string | null;
   headerBannerUrl: string | null;
   accentColor: string | null;
+  /** Ventry confirmed the venue booking for this event: the Verified badge. */
+  verified: boolean;
   organizer: PublicOrganizer;
   tiers: PublicTier[];
   /** Cheapest price across tiers (0 = a free tier exists); null when no tiers. */

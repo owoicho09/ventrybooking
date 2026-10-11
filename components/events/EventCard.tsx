@@ -78,7 +78,7 @@ export function EventCard({ event, variant = 'default' }: EventCardProps) {
         {!compact && (
           <>
             {/* Verified badge */}
-            {event.organizer.verified && (
+            {event.verified && (
               <div className="absolute top-3 left-3 z-10">
                 <span
                   className="flex items-center gap-1 px-2 py-1 rounded-full text-xs font-semibold"

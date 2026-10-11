@@ -3,13 +3,13 @@
 import { useCallback, useEffect, useState } from 'react';
 import Link from 'next/link';
 import { useParams } from 'next/navigation';
-import { ArrowLeft, RefreshCw, ExternalLink } from 'lucide-react';
+import { ArrowLeft, RefreshCw, ExternalLink, Landmark } from 'lucide-react';
 import { Button } from '@/components/ui/Button';
 import { Badge } from '@/components/ui/Badge';
 import { formatNGN } from '@/lib/utils';
 import {
   fmtDay, fmtPeriod, fmtDateTime, SettlementStatusBadge, ReleaseConfirmModal, ReleaseResults, postRelease,
-  type ReleaseCandidate, type ReleaseOutcome,
+  ManualPayModal, type ReleaseCandidate, type ReleaseOutcome, type ManualPayTarget,
 } from '@/components/admin/settlementUi';
 
 interface Attempt {
@@ -22,6 +22,7 @@ interface Settlement {
   gross: number; refunds_deducted: number; adjustments_deducted: number; fee: number; net: number; fee_rate: number; ticket_count: number;
   status: string; failure_reason: string | null; transfer_reference: string | null;
   released_by: string | null; released_at: string; settled_at: string | null; event_name: string | null;
+  payment_method?: 'paystack' | 'manual'; manual_reference?: string | null; manual_note?: string | null; paid_by?: string | null;
   attempts: Attempt[];
 }
 
@@ -65,6 +66,10 @@ export default function OrganizerSettlementHistoryPage() {
   const [results, setResults] = useState<ReleaseOutcome[]>([]);
   const [rowBusy, setRowBusy] = useState<string | null>(null);
   const [rowMsg, setRowMsg] = useState<Record<string, string>>({});
+  // Manual payment: either the releasable balance (settlementId null) or a failed settlement.
+  const [manual, setManual] = useState<(ManualPayTarget & { settlementId: string | null }) | null>(null);
+  const [manualBusy, setManualBusy] = useState(false);
+  const [manualError, setManualError] = useState('');
 
   const load = useCallback(() => {
     fetch(`/api/admin/settlements/organizers/${id}`, { cache: 'no-store' })
@@ -102,6 +107,34 @@ export default function OrganizerSettlementHistoryPage() {
     }
     setRowBusy(null);
     load();
+  };
+
+  const recordManual = async ({ reference, note }: { reference: string; note: string }) => {
+    if (!manual || manualBusy) return;
+    setManualBusy(true);
+    setManualError('');
+    try {
+      const res = manual.settlementId
+        ? await fetch(`/api/admin/settlements/${manual.settlementId}/mark-paid`, {
+            method: 'POST', headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ reference, note }),
+          })
+        : await fetch('/api/admin/settlements/manual', {
+            method: 'POST', headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ organizerId: id, reference, note, expectedNet: manual.net }),
+          });
+      const d = await res.json();
+      const r = d?.data as ReleaseOutcome | undefined;
+      if (!res.ok || !r) { setManualError(d?.error ?? 'Could not record the payment'); return; }
+      if (r.outcome !== 'released') { setManualError(r.message ?? 'Nothing was recorded'); load(); return; }
+      setResults([r]);
+      setManual(null);
+      load();
+    } catch {
+      setManualError('Network error. Refresh to check whether it was recorded before trying again.');
+    } finally {
+      setManualBusy(false);
+    }
   };
 
   const org = data?.organizer;
@@ -163,6 +196,10 @@ export default function OrganizerSettlementHistoryPage() {
               <Button className="mt-3" fullWidth variant="success" disabled={!canRelease || busy}
                 onClick={() => setConfirming([{ id: org!.id, name: org!.name, net: rel.net, period: fmtPeriod(rel.periodStart, rel.periodEnd) }])}>
                 Release {formatNGN(rel.net)}
+              </Button>
+              <Button className="mt-2" fullWidth variant="outline" disabled={!canRelease || busy}
+                onClick={() => { setManualError(''); setManual({ settlementId: null, organizerName: org!.name, bankName: org!.bankName, accountNumber: org!.accountNumber, accountName: org!.accountName, net: rel.net, period: fmtPeriod(rel.periodStart, rel.periodEnd) }); }}>
+                <Landmark size={14} />Paid by bank transfer? Mark as paid
               </Button>
             </div>
           )}
@@ -240,7 +277,13 @@ export default function OrganizerSettlementHistoryPage() {
                 {s.kind === 'daily'
                   ? <p>Released {fmtDateTime(s.released_at)} by {s.released_by ?? '—'}</p>
                   : <p>Released {fmtDateTime(s.released_at)} (before daily settlement)</p>}
-                {s.settled_at && <p>Confirmed by Paystack {fmtDateTime(s.settled_at)}</p>}
+                {s.settled_at && (s.payment_method === 'manual'
+                  ? <p>Paid by bank transfer, recorded {fmtDateTime(s.settled_at)} by {s.paid_by ?? '—'}</p>
+                  : <p>Confirmed by Paystack {fmtDateTime(s.settled_at)}</p>)}
+                {s.payment_method === 'manual' && s.manual_reference && (
+                  <p>Bank reference: <span className="font-mono" style={{ color: 'var(--color-text)' }}>{s.manual_reference}</span></p>
+                )}
+                {s.payment_method === 'manual' && s.manual_note && <p style={{ color: 'var(--color-text-dim)' }}>Note: {s.manual_note}</p>}
                 {s.transfer_reference && <p className="font-mono break-all" style={{ color: 'var(--color-text-dim)' }}>{s.transfer_reference}</p>}
                 {s.kind === 'legacy_escrow' && (
                   <p style={{ color: 'var(--color-text-dim)' }}>Amount shown is the recorded escrow net; any partial-release percentage applied at the time isn&apos;t recorded.</p>
@@ -259,6 +302,12 @@ export default function OrganizerSettlementHistoryPage() {
                   {s.kind === 'daily' && s.status === 'failed' && (
                     <Button size="sm" variant="success" disabled={rowBusy === s.id} onClick={() => rowAction(s, 'retry')}>
                       <RefreshCw size={13} />{rowBusy === s.id ? 'Retrying…' : `Retry ${formatNGN(s.net)}`}
+                    </Button>
+                  )}
+                  {s.kind === 'daily' && s.status === 'failed' && org && (
+                    <Button size="sm" variant="outline" disabled={rowBusy === s.id}
+                      onClick={() => { setManualError(''); setManual({ settlementId: s.id, organizerName: org.name, bankName: org.bankName, accountNumber: org.accountNumber, accountName: org.accountName, net: s.net, period: fmtPeriod(s.period_start, s.period_end) }); }}>
+                      <Landmark size={13} />Mark paid by transfer
                     </Button>
                   )}
                   {(s.status === 'processing' || s.status === 'otp_pending') && (
@@ -294,6 +343,7 @@ export default function OrganizerSettlementHistoryPage() {
       )}
 
       <ReleaseConfirmModal candidates={confirming} busy={busy} onCancel={() => setConfirming([])} onConfirm={doRelease} />
+      <ManualPayModal target={manual} busy={manualBusy} error={manualError} onCancel={() => setManual(null)} onConfirm={recordManual} />
     </div>
   );
 }

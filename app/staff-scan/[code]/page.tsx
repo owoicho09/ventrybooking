@@ -2,7 +2,8 @@
 
 import { useEffect, useState } from 'react';
 import { useParams, useRouter } from 'next/navigation';
-import { CheckCircle, AlertCircle, Loader2, ScanLine, Keyboard } from 'lucide-react';
+import { CheckCircle, AlertCircle, Loader2, ScanLine, Keyboard, Camera, ArrowLeft } from 'lucide-react';
+import { ScanStation } from '@/components/scan/ScanStation';
 
 type PageState = 'loading' | 'error' | 'ready';
 
@@ -19,6 +20,10 @@ interface StaffInfo {
 // to open QR URLs — inherits from Safari's cookie jar. From that point on, every
 // ticket the staff member scans with their camera auto-authenticates via the cookie
 // with no prompts.
+//
+// Staff can also scan without leaving this page: "Scan with Ventry" opens the
+// in-app camera (components/scan/ScanStation), which validates through the
+// same scan API using this staff code.
 export default function StaffSetupPage() {
   const params = useParams();
   const router = useRouter();
@@ -29,6 +34,7 @@ export default function StaffSetupPage() {
   const [errorMsg,   setErrorMsg]   = useState('');
   const [manualId,   setManualId]   = useState('');
   const [manualErr,  setManualErr]  = useState('');
+  const [inApp,      setInApp]      = useState(false);
 
   useEffect(() => {
     if (!code) {
@@ -107,6 +113,31 @@ export default function StaffSetupPage() {
     );
   }
 
+  if (inApp && staffInfo) {
+    return (
+      <div className="min-h-screen flex flex-col items-center px-4 py-5" style={{ backgroundColor: 'var(--color-bg)' }}>
+        <div className="w-full max-w-md flex items-center gap-3 mb-4">
+          <button
+            type="button"
+            onClick={() => setInApp(false)}
+            className="w-10 h-10 rounded-full flex items-center justify-center border flex-shrink-0"
+            style={{ borderColor: 'var(--color-border)', color: 'var(--color-text)' }}
+            aria-label="Back"
+          >
+            <ArrowLeft size={18} />
+          </button>
+          <div className="min-w-0 text-left">
+            <p className="font-bold truncate" style={{ color: 'var(--color-text)', fontFamily: 'var(--font-syne), sans-serif' }}>{staffInfo.eventName}</p>
+            <p className="text-xs truncate" style={{ color: 'var(--color-text-dim)' }}>{staffInfo.label ?? 'Door staff'} · {staffInfo.code}</p>
+          </div>
+        </div>
+        <div className="w-full max-w-md">
+          <ScanStation staffCode={staffInfo.code} />
+        </div>
+      </div>
+    );
+  }
+
   // Ready — cookie is set. Staff can now scan tickets with their camera.
   const expiryTime = staffInfo?.expiresAt
     ? new Date(staffInfo.expiresAt).toLocaleString([], {
@@ -143,6 +174,17 @@ export default function StaffSetupPage() {
         )}
       </div>
 
+      {/* In-app scanner: no need to leave Ventry */}
+      <button
+        type="button"
+        onClick={() => setInApp(true)}
+        className="w-full max-w-xs mb-6 py-3.5 rounded-xl font-bold text-base flex items-center justify-center gap-2"
+        style={{ backgroundColor: 'var(--color-purple)', color: '#fff' }}
+      >
+        <Camera size={19} /> Scan with Ventry
+      </button>
+      <p className="text-xs mb-4" style={{ color: 'var(--color-text-dim)' }}>Or use your phone&rsquo;s own camera:</p>
+
       {/* Instructions */}
       <div
         className="w-full max-w-xs rounded-2xl p-5 border text-left"
@@ -156,7 +198,7 @@ export default function StaffSetupPage() {
         </div>
         <ol className="flex flex-col gap-3">
           {[
-            'Open your iPhone Camera app',
+            "Open your phone's Camera app",
             'Point it at the attendee\'s QR code',
             'Tap the notification banner that appears',
             'The result shows automatically — no prompts',

@@ -1,7 +1,8 @@
 'use client';
 
 import { useState, useEffect } from 'react';
-import { ScanLine, Smartphone, CheckCircle, XCircle, AlertCircle } from 'lucide-react';
+import { ScanLine, Smartphone, Camera, CheckCircle, XCircle, AlertCircle } from 'lucide-react';
+import { ScanStation } from '@/components/scan/ScanStation';
 import { Select } from '@/components/ui/Select';
 import { Input } from '@/components/ui/Input';
 import { Button } from '@/components/ui/Button';
@@ -30,6 +31,16 @@ export default function ScanPage() {
   const [stats, setStats]             = useState({ scanned: 0, rejected: 0, remaining: 0 });
   const [eventOptions, setEventOptions] = useState<EventOption[]>([]);
   const [selectedEvent, setSelectedEvent] = useState('');
+  // Two ways to scan: the phone's own camera app (opens the ticket URL), or
+  // Ventry's in-app camera. The choice is remembered on this device.
+  const [mode, setMode] = useState<'phone' | 'inapp'>(() => {
+    if (typeof window === 'undefined') return 'phone';
+    try { return localStorage.getItem('ventry_scan_mode') === 'inapp' ? 'inapp' : 'phone'; } catch { return 'phone'; }
+  });
+  const chooseMode = (m: 'phone' | 'inapp') => {
+    setMode(m);
+    try { localStorage.setItem('ventry_scan_mode', m); } catch { /* storage blocked */ }
+  };
 
   useEffect(() => {
     fetch('/api/organizer/events')
@@ -139,10 +150,47 @@ export default function ScanPage() {
 
         {/* ── Left: instructions + manual fallback ── */}
         <div
-          className="flex-1 flex flex-col items-center justify-center gap-6 p-6"
+          className="flex-1 flex flex-col items-center justify-start sm:justify-center gap-5 p-4 sm:p-6 overflow-y-auto"
           style={{ backgroundColor: 'var(--color-bg)' }}
         >
+          {/* Scan mode switch */}
+          <div
+            className="w-full max-w-sm grid grid-cols-2 gap-1 p-1 rounded-xl border"
+            style={{ backgroundColor: 'var(--color-surface)', borderColor: 'var(--color-border)' }}
+            role="tablist"
+            aria-label="How to scan"
+          >
+            {([
+              { id: 'phone', label: 'Phone camera', Icon: Smartphone },
+              { id: 'inapp', label: 'Ventry scanner', Icon: Camera },
+            ] as const).map(({ id, label, Icon }) => (
+              <button
+                key={id}
+                type="button"
+                role="tab"
+                aria-selected={mode === id}
+                onClick={() => chooseMode(id)}
+                className="flex items-center justify-center gap-2 rounded-lg py-2 text-sm font-medium transition-colors"
+                style={{
+                  backgroundColor: mode === id ? 'var(--color-purple)' : 'transparent',
+                  color: mode === id ? '#fff' : 'var(--color-text-muted)',
+                }}
+              >
+                <Icon size={15} />{label}
+              </button>
+            ))}
+          </div>
+
+          {mode === 'inapp' && (
+            <div className="w-full max-w-sm">
+              {selectedEvent
+                ? <ScanStation key={selectedEvent} eventId={selectedEvent} onScanned={() => refreshLogs(selectedEvent)} />
+                : <p className="text-sm text-center" style={{ color: 'var(--color-text-muted)' }}>Pick an event above to start scanning.</p>}
+            </div>
+          )}
+
           {/* Camera instructions card */}
+          {mode === 'phone' && (
           <div
             className="w-full max-w-sm rounded-2xl p-6 border"
             style={{ backgroundColor: 'var(--color-surface)', borderColor: 'var(--color-border)' }}
@@ -188,6 +236,7 @@ export default function ScanPage() {
               Make sure your browser is signed in as an organizer before scanning begins.
             </p>
           </div>
+          )}
 
           {/* Manual result card */}
           {manualResult && (

@@ -353,7 +353,7 @@ export function EventDetailContent({ identifier }: EventDetailContentProps) {
             <div className="v-badges">
               {cat.key !== 'other' && <span className="v-apill">{cat.label}</span>}
               {isOnline && <span className="v-apill">Online</span>}
-              {org?.verified && <span className="v-vbadge">✓ Ventry Verified</span>}
+              {event.verified && <span className="v-vbadge">✓ Ventry Verified</span>}
               {isCompleted && <span className="v-gbadge">Ended</span>}
               {isCompleted && wasSoldOut && <span className="v-gbadge">Sold out</span>}
             </div>
@@ -511,8 +511,11 @@ export function EventDetailContent({ identifier }: EventDetailContentProps) {
             <aside className="v-buy" aria-label="Tickets">
               {ticketPanel}
               <div className="v-trust">
+                {event.verified && (
+                  <div><ShieldCheck size={15} color="#34D399" /><span>Venue booking confirmed by Ventry for this date.</span></div>
+                )}
                 {org?.verified && (
-                  <div><ShieldCheck size={15} color="#34D399" /><span>Organiser identity checked by Ventry before their first sale.</span></div>
+                  <div><ShieldCheck size={15} color="#34D399" /><span>Organiser identity checked by Ventry.</span></div>
                 )}
                 <div><QrCode size={15} color="var(--accent)" /><span>Your QR ticket arrives by email the moment you {allFree ? 'claim' : 'pay'}. It works once, at the door.</span></div>
                 <div><Clock3 size={15} color="var(--muted)" /><span>Lost it? Get it back at <Link href="/retrieve">ventrybooking.com/retrieve</Link>.</span></div>

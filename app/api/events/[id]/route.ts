@@ -35,7 +35,7 @@ export async function GET(
       .from('events')
       .select(`
         id, slug, event_name, category, description, date, time, event_mode, venue, address, city, landmark, location_hidden,
-        status, total_sold, banner_color, banner_url, header_banner_url, accent_color, lineup, allowed_email_domains,
+        status, total_sold, banner_color, banner_url, header_banner_url, accent_color, lineup, allowed_email_domains, verified,
         organizer:users!events_organizer_id_fkey(id, name, tier, verified, member_since, events_hosted, handle, socials, avatar_url, cover_image_url),
         tiers:ticket_tiers(id, name, price, available, sold)
       `)
@@ -86,6 +86,7 @@ export async function GET(
       banner_url: data.banner_url ?? null,
       headerBannerUrl: data.header_banner_url ?? null,
       accentColor: data.accent_color ?? null,
+      verified: data.verified === true,
       lineup: redactSurpriseNames(data.lineup),
       allowedEmailDomains: data.allowed_email_domains ?? null,
       totalSold: data.total_sold,

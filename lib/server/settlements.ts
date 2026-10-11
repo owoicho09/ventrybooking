@@ -4,6 +4,7 @@ import { getBankCode } from '@/lib/banks';
 import { generateSettlementRef } from '@/lib/server/ids';
 import { createTransferRecipient, initiateTransferChecked, verifyTransfer } from '@/lib/server/paystack';
 import { notify } from '@/lib/server/notify';
+import { sendSettlementPaidEmail } from '@/lib/server/email';
 
 /*
  * Daily settlements. Sales on Lagos calendar day D become releasable on the
@@ -39,6 +40,10 @@ export interface SettlementRow {
   settled_at: string | null;
   event_name: string | null;
   updated_at: string;
+  payment_method?: 'paystack' | 'manual';
+  manual_reference?: string | null;
+  manual_note?: string | null;
+  paid_by?: string | null;
 }
 
 export interface OrganizerRow {
@@ -328,6 +333,9 @@ export async function applyTransferOutcome(
     })
     .eq('transfer_reference', reference)
     .in('status', fromStates)
+    // A settlement the admin recorded as paid by hand is settled for good:
+    // a late webhook about its earlier Paystack attempt must not reopen it.
+    .neq('payment_method', 'manual')
     .select('*');
 
   return ((data ?? [])[0] as SettlementRow | undefined) ?? null;
@@ -340,7 +348,14 @@ function periodLabel(s: Pick<SettlementRow, 'period_start' | 'period_end'>) {
 const fmt = (n: number) =>
   new Intl.NumberFormat('en-NG', { style: 'currency', currency: 'NGN', minimumFractionDigits: 0 }).format(n);
 
+/**
+ * Everything that happens once a settlement is paid, by Paystack or by hand:
+ * the organiser's in-app notification and their payout email (with a
+ * per-event breakdown). A settlement can only become successful once, so
+ * this runs once per payout.
+ */
 export function notifySettlementSuccess(s: SettlementRow) {
+  emailSettlementPaid(s).catch(err => console.error('settlement: payout email error', err));
   notify(
     { type: 'organizer', id: s.organizer_id },
     {
@@ -429,6 +444,49 @@ async function sendTransfer(db: Db, s: SettlementRow, org: OrganizerRow): Promis
   return data as SettlementRow;
 }
 
+async function emailSettlementPaid(s: SettlementRow) {
+  const db = getServerSupabase();
+  const [{ data: org }, { data: tickets }] = await Promise.all([
+    db.from('users').select('name, email, bank_name, account_number').eq('id', s.organizer_id).maybeSingle(),
+    db.from('tickets')
+      .select('subtotal, tier:ticket_tiers!tickets_tier_id_fkey(price), event:events!tickets_event_id_fkey(event_name)')
+      .eq('settlement_id', s.id),
+  ]);
+  if (!org?.email) return;
+
+  type T = { subtotal: number | null; tier: { price: number } | { price: number }[] | null; event: { event_name: string } | { event_name: string }[] | null };
+  const byEvent = new Map<string, { name: string; tickets: number; amount: number }>();
+  for (const t of (tickets ?? []) as unknown as T[]) {
+    const tier = Array.isArray(t.tier) ? t.tier[0] : t.tier;
+    const ev = Array.isArray(t.event) ? t.event[0] : t.event;
+    const name = ev?.event_name?.trim() || 'Your event';
+    const cur = byEvent.get(name) ?? { name, tickets: 0, amount: 0 };
+    cur.tickets += 1;
+    cur.amount += Number(t.subtotal ?? tier?.price ?? 0);
+    byEvent.set(name, cur);
+  }
+
+  const day = (d: string) => new Date(d + 'T12:00:00Z').toLocaleDateString('en-GB', { weekday: 'short', day: 'numeric', month: 'short', timeZone: 'UTC' });
+  const manual = s.payment_method === 'manual';
+  await sendSettlementPaidEmail({
+    to: org.email,
+    organizerName: org.name?.trim() || 'there',
+    periodLabel: s.period_start === s.period_end ? day(s.period_start) : day(s.period_start) + ' – ' + day(s.period_end),
+    ticketCount: s.ticket_count,
+    gross: Number(s.gross),
+    refundsDeducted: Number(s.refunds_deducted ?? 0),
+    adjustmentsDeducted: Number(s.adjustments_deducted ?? 0),
+    fee: Number(s.fee),
+    feeRate: Number(s.fee_rate),
+    net: Number(s.net),
+    events: [...byEvent.values()].sort((a, b) => b.amount - a.amount),
+    bankName: org.bank_name,
+    accountNumber: org.account_number,
+    reference: (manual ? s.manual_reference : s.transfer_reference) ?? s.id,
+    manual,
+  });
+}
+
 async function loadOrganizer(db: Db, organizerId: string): Promise<OrganizerRow | null> {
   const { data } = await db
     .from('users')
@@ -513,6 +571,147 @@ export async function retrySettlement(db: Db, settlementId: string, by: string):
 
   const settlement = await sendTransfer(db, row, org);
   return { organizerId: org.id, outcome: 'released', settlement };
+}
+
+// ── Manual payment (admin paid by bank transfer) ───────────────────────────
+
+export interface ManualPayment {
+  /** The bank transfer reference / narration the admin used. */
+  reference: string;
+  note?: string | null;
+}
+
+function cleanManual(p: ManualPayment): { reference: string; note: string | null } | null {
+  const reference = p.reference?.trim().slice(0, 120);
+  if (!reference) return null;
+  return { reference, note: p.note?.trim().slice(0, 500) || null };
+}
+
+/** Marks a claimed or failed settlement as paid by hand and runs the post-payout steps. */
+async function completeManually(
+  db: Db,
+  settlementId: string,
+  fromStatus: SettlementStatus,
+  by: string,
+  m: { reference: string; note: string | null },
+): Promise<SettlementRow | null> {
+  const now = new Date().toISOString();
+  const { data } = await db.from('settlements')
+    .update({
+      status: 'successful',
+      payment_method: 'manual',
+      manual_reference: m.reference,
+      manual_note: m.note,
+      paid_by: by,
+      failure_reason: null,
+      settled_at: now,
+      updated_at: now,
+    })
+    .eq('id', settlementId)
+    .eq('status', fromStatus)
+    .select('*');
+  const row = ((data ?? [])[0] as SettlementRow | undefined) ?? null;
+  if (row) notifySettlementSuccess(row);
+  return row;
+}
+
+/**
+ * The admin has already sent this organiser's releasable balance by bank
+ * transfer: claim exactly the tickets a release would (the same atomic claim,
+ * so nothing can be paid twice) and record the payment against them. No
+ * Paystack call is made.
+ */
+export async function recordManualRelease(
+  db: Db,
+  organizerId: string,
+  by: string,
+  holidays: Map<string, string>,
+  payment: ManualPayment,
+  expectedNet?: number,
+): Promise<ReleaseResult> {
+  const m = cleanManual(payment);
+  if (!m) return { organizerId, outcome: 'error', message: 'Enter the bank transfer reference' };
+  const org = await loadOrganizer(db, organizerId);
+  if (!org) return { organizerId, outcome: 'error', message: 'Organiser not found' };
+
+  const feeRate = feeRateOf(org);
+  const cutoff  = releaseCutoff(lagosDate(), holidays);
+  const pending = (await loadUnsettled(db, organizerId)).get(organizerId);
+  const summary = summarizePending(pending?.days ?? [], pending?.owed ?? null, feeRate, cutoff, holidays, pending?.adjustments);
+  if (!summary.releasable) {
+    return { organizerId, outcome: 'noop', message: 'Nothing to record: already paid or not yet eligible' };
+  }
+  // The admin confirmed a specific amount; refuse if new sales or refunds
+  // changed it since the page loaded, rather than recording the wrong figure.
+  if (expectedNet != null && Math.round(summary.releasable.net) !== Math.round(expectedNet)) {
+    return { organizerId, outcome: 'blocked', message: `The amount due changed to ${fmt(summary.releasable.net)}. Reload and check before recording.` };
+  }
+  const blockers = eligibilityBlockers({ organizer: org, releasableNet: summary.releasable.net });
+  if (blockers.length > 0) return { organizerId, outcome: 'blocked', message: blockers.join('; ') };
+
+  const reference = generateSettlementRef();
+  const { data, error } = await db.rpc('claim_settlement', {
+    p_organizer_id: organizerId,
+    p_cutoff:       cutoff,
+    p_fee_rate:     feeRate,
+    p_released_by:  by,
+    p_reference:    reference,
+  });
+  if (error) {
+    console.error('recordManualRelease: claim error', error);
+    return { organizerId, outcome: 'error', message: 'Database error while claiming the settlement' };
+  }
+  const claimed = ((data ?? []) as SettlementRow[])[0];
+  if (!claimed) return { organizerId, outcome: 'noop', message: 'Nothing to record: already paid' };
+
+  await db.from('settlement_attempts')
+    .update({ status: 'successful', paystack_status: 'manual', failure_reason: `Paid by bank transfer: ${m.reference}`, finished_at: new Date().toISOString() })
+    .eq('transfer_reference', reference);
+
+  const settlement = await completeManually(db, claimed.id, 'processing', by, m);
+  if (!settlement) return { organizerId, outcome: 'error', message: 'Claimed, but could not be marked paid. Check the payouts page.' };
+  return { organizerId, outcome: 'released', settlement };
+}
+
+/** A Paystack settlement that failed has been paid by hand instead. */
+export async function markSettlementPaidManually(
+  db: Db,
+  settlementId: string,
+  by: string,
+  payment: ManualPayment,
+): Promise<ReleaseResult & { organizerId: string }> {
+  const m = cleanManual(payment);
+  const { data: s } = await db.from('settlements').select('*').eq('id', settlementId).maybeSingle();
+  if (!s) return { organizerId: '', outcome: 'error', message: 'Settlement not found' };
+  const row = s as SettlementRow;
+  if (!m) return { organizerId: row.organizer_id, outcome: 'error', message: 'Enter the bank transfer reference' };
+  if (row.kind !== 'daily') return { organizerId: row.organizer_id, outcome: 'noop', message: 'Only daily settlements can be marked paid here' };
+  if (row.status !== 'failed') {
+    return {
+      organizerId: row.organizer_id,
+      outcome: 'noop',
+      message: row.status === 'successful' ? 'Already paid' : 'Only a failed settlement can be marked paid by hand (this one is still with Paystack)',
+    };
+  }
+
+  const { data: last } = await db.from('settlement_attempts')
+    .select('attempt_no').eq('settlement_id', settlementId)
+    .order('attempt_no', { ascending: false }).limit(1).maybeSingle();
+  await db.from('settlement_attempts').insert({
+    settlement_id: settlementId,
+    attempt_no: (last?.attempt_no ?? 0) + 1,
+    transfer_reference: generateSettlementRef(),
+    amount: row.net,
+    initiated_by: by,
+    status: 'successful',
+    paystack_status: 'manual',
+    failure_reason: `Paid by bank transfer: ${m.reference}`,
+    finished_at: new Date().toISOString(),
+  });
+
+  const settlement = await completeManually(db, settlementId, 'failed', by, m);
+  if (!settlement) return { organizerId: row.organizer_id, outcome: 'noop', message: 'It changed while you were recording it. Reload the page.' };
+  return { organizerId: row.organizer_id, outcome: 'released', settlement };
 }
 
 /** Asks Paystack for the current state of an in-flight settlement. */

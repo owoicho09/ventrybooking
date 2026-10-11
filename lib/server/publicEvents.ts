@@ -8,7 +8,7 @@ import { normalizeCity, todayWAT, type PublicEvent, type PublicTier } from '@/li
 
 const EVENT_SELECT = `
   id, slug, event_name, category, date, time, event_mode, venue, city, landmark, location_hidden,
-  status, total_sold, banner_url, header_banner_url, accent_color,
+  status, total_sold, banner_url, header_banner_url, accent_color, verified,
   organizer:users!events_organizer_id_fkey(id, name, verified, handle, avatar_url, cover_image_url),
   tiers:ticket_tiers(id, name, price, available, sold)
 `;
@@ -48,6 +48,7 @@ function shape(row: any): PublicEvent {
     flyerUrl: row.banner_url ?? null,
     headerBannerUrl: row.header_banner_url ?? null,
     accentColor: row.accent_color ?? null,
+    verified: row.verified === true,
     organizer: {
       id: org?.id ?? '',
       name: String(org?.name ?? '').trim(),

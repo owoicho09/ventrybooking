@@ -56,13 +56,14 @@ async function sendEmail(opts: { to: string; subject: string; html: string; from
   // A successful call here only means Resend accepted the request — actual
   // delivery/bounce/complaint happens asynchronously and is reported later
   // via the /api/webhooks/resend endpoint, matched back to this row by id.
+  // Awaited (but never thrown): on serverless the function can be frozen as
+  // soon as it returns, which silently dropped un-awaited inserts, and the
+  // daily sales email reads this row back to avoid sending twice.
   if (data?.id) {
-    getServerSupabase()
+    const { error: insertError } = await getServerSupabase()
       .from('email_deliveries')
-      .insert({ id: data.id, to_email: opts.to, subject: opts.subject, purpose: opts.purpose ?? null })
-      .then(({ error: insertError }) => {
-        if (insertError) console.error('sendEmail: email_deliveries insert error', insertError.message);
-      });
+      .insert({ id: data.id, to_email: opts.to, subject: opts.subject, purpose: opts.purpose ?? null });
+    if (insertError) console.error('sendEmail: email_deliveries insert error', insertError.message);
   }
 }
 
@@ -710,6 +711,133 @@ export async function sendAdminAlertEmail(params: { title: string; body: string;
       <h1 style="color:#f59e0b;font-size:20px;margin:0 0 12px;">${esc(params.title)}</h1>
       <p style="color:#f1f0ff;white-space:pre-wrap;">${esc(params.body)}</p>
       ${params.link ? `<a href="${APP_URL}${params.link}" class="btn" style="margin-top:16px;">View in Admin</a>` : ''}
+    `),
+  });
+}
+
+/**
+ * Sent to the organiser when a settlement has been paid — by Paystack
+ * transfer or recorded as a manual bank transfer by the admin.
+ */
+export async function sendSettlementPaidEmail(params: {
+  to: string;
+  organizerName: string;
+  periodLabel: string;          // "Thu 9 Oct" or "Thu 9 Oct – Fri 10 Oct"
+  ticketCount: number;
+  gross: number;
+  refundsDeducted: number;
+  adjustmentsDeducted: number;
+  fee: number;
+  feeRate: number;
+  net: number;
+  events: { name: string; tickets: number; amount: number }[];
+  bankName: string | null;
+  accountNumber: string | null;
+  reference: string;
+  manual: boolean;
+}) {
+  const fmt = (n: number) =>
+    new Intl.NumberFormat('en-NG', { style: 'currency', currency: 'NGN', minimumFractionDigits: 0, maximumFractionDigits: 0 }).format(n);
+  const masked = params.accountNumber ? `****${params.accountNumber.slice(-4)}` : '';
+  const feePct = +(params.feeRate * 100).toFixed(1);
+  const row = (label: string, value: string, color = '#f1f0ff') =>
+    `<p style="margin:4px 0;color:#9ca3af;font-size:13px;"><strong style="color:${color};">${label}:</strong> ${value}</p>`;
+
+  await sendEmail({
+    to: params.to,
+    purpose: 'settlement_paid',
+    subject: `${fmt(params.net)} paid to your account — Ventry sales for ${params.periodLabel}`,
+    html: emailShell(`
+      <h1 style="color:#34d399;font-size:22px;margin:0 0 6px;">Payout sent ✓</h1>
+      <p class="label" style="margin:0 0 20px;">Hi ${esc(params.organizerName)}, we&rsquo;ve paid out your ticket sales for <strong style="color:#f1f0ff;">${esc(params.periodLabel)}</strong>.</p>
+
+      <table width="100%" cellpadding="0" cellspacing="0"
+        style="background:#12121a;border:1px solid #2d2d3d;border-radius:8px;margin-bottom:24px;">
+        <tr><td style="padding:20px;">
+          ${params.events.map(e => row(esc(e.name), `${e.tickets} ticket${e.tickets === 1 ? '' : 's'} · ${fmt(e.amount)}`)).join('')}
+          <div style="border-top:1px solid #2d2d3d;margin:12px 0;"></div>
+          ${row('Ticket sales', fmt(params.gross + params.refundsDeducted))}
+          ${params.refundsDeducted > 0 ? row('Refunds recovered', `−${fmt(params.refundsDeducted)}`) : ''}
+          ${row(`Ventry fee (${feePct}%)`, `−${fmt(params.fee)}`)}
+          ${params.adjustmentsDeducted > 0 ? row('Other deductions', `−${fmt(params.adjustmentsDeducted)}`) : ''}
+          <p style="margin:10px 0 4px;color:#34d399;font-size:17px;font-weight:700;">Amount paid: ${fmt(params.net)}</p>
+          ${params.bankName ? row('Sent to', `${esc(params.bankName)} ${masked}`) : ''}
+          ${row(params.manual ? 'Bank transfer reference' : 'Reference', `<span class="mono">${esc(params.reference)}</span>`)}
+        </td></tr>
+      </table>
+
+      <a href="${APP_URL}/organizer/payouts" class="btn">View payout history</a>
+      <p class="footer">Bank transfers can take a few hours to show in your account. If it hasn&rsquo;t arrived by the end of the next working day, reply to this email with the reference above.</p>
+    `),
+  });
+}
+
+export interface DailySalesLine {
+  eventName: string;
+  tierName: string;
+  paid: number;      // paid tickets sold that day
+  free: number;      // free tickets claimed that day
+  value: number;     // base ticket value of the paid tickets, before Ventry's fee
+}
+
+/**
+ * End-of-day sales summary to an organiser. Only ever called for an organiser
+ * who sold or issued at least one ticket that day — no sales, no email.
+ */
+export async function sendDailySalesEmail(params: {
+  to: string;
+  organizerName: string;
+  dayLabel: string;            // e.g. "Friday 10 October"
+  lines: DailySalesLine[];
+  feeRate: number;             // the organiser's platform fee rate, e.g. 0.03
+  purpose: string;             // idempotency key recorded in email_deliveries
+}) {
+  const fmt = (n: number) =>
+    new Intl.NumberFormat('en-NG', { style: 'currency', currency: 'NGN', minimumFractionDigits: 0, maximumFractionDigits: 0 }).format(n);
+  const paid  = params.lines.reduce((s, l) => s + l.paid, 0);
+  const free  = params.lines.reduce((s, l) => s + l.free, 0);
+  const value = params.lines.reduce((s, l) => s + l.value, 0);
+  const net   = Math.round(value * (1 - params.feeRate));
+  const feePct = +(params.feeRate * 100).toFixed(1);
+
+  // Group the tier lines under their event.
+  const byEvent = new Map<string, DailySalesLine[]>();
+  for (const l of params.lines) byEvent.set(l.eventName, [...(byEvent.get(l.eventName) ?? []), l]);
+  const eventBlocks = [...byEvent.entries()].map(([eventName, lines]) => `
+    <p style="margin:16px 0 6px;color:#f1f0ff;font-size:14px;font-weight:700;">${esc(eventName)}</p>
+    ${lines.map(l => `
+      <p style="margin:3px 0;color:#9ca3af;font-size:13px;">
+        ${esc(l.tierName)}: <strong style="color:#f1f0ff;">${l.paid + l.free}</strong>${l.free > 0 && l.paid === 0 ? ' free' : ''}${l.paid > 0 ? ` · ${fmt(l.value)}` : ''}
+      </p>`).join('')}
+  `).join('');
+
+  const total = paid + free;
+  const headline = [
+    paid > 0 ? `${paid} ticket${paid === 1 ? '' : 's'} sold` : null,
+    free > 0 ? `${free} free ticket${free === 1 ? '' : 's'} claimed` : null,
+  ].filter(Boolean).join(' and ');
+
+  await sendEmail({
+    to: params.to,
+    purpose: params.purpose,
+    subject: `${total} ticket${total === 1 ? '' : 's'} today — your Ventry sales for ${params.dayLabel}`,
+    html: emailShell(`
+      <h1 style="color:#a855f7;font-size:22px;margin:0 0 6px;">Today on Ventry</h1>
+      <p class="label" style="margin:0 0 20px;">Hi ${esc(params.organizerName)}, here&rsquo;s what sold on ${esc(params.dayLabel)}: <strong style="color:#f1f0ff;">${headline}</strong>.</p>
+
+      <table width="100%" cellpadding="0" cellspacing="0"
+        style="background:#12121a;border:1px solid #2d2d3d;border-radius:8px;margin-bottom:24px;">
+        <tr><td style="padding:4px 20px 20px;">
+          ${eventBlocks}
+          ${paid > 0 ? `
+          <p style="margin:18px 0 4px;padding-top:12px;border-top:1px solid #2d2d3d;color:#9ca3af;font-size:13px;"><strong style="color:#f1f0ff;">Ticket sales:</strong> ${fmt(value)}</p>
+          <p style="margin:4px 0;color:#9ca3af;font-size:13px;"><strong style="color:#f1f0ff;">Ventry fee (${feePct}%):</strong> ${fmt(value - net)}</p>
+          <p style="margin:8px 0 0;color:#34d399;font-size:16px;font-weight:700;">You receive: ${fmt(net)}</p>` : ''}
+        </td></tr>
+      </table>
+
+      <a href="${APP_URL}/organizer/dashboard" class="btn">Open your dashboard</a>
+      <p class="footer">${paid > 0 ? 'Sales are settled to your payout account on the next working day. ' : ''}You get this email only on days you sell tickets.</p>
     `),
   });
 }
