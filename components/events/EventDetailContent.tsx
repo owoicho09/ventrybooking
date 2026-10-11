@@ -540,7 +540,7 @@ export function EventDetailContent({ identifier, preview }: EventDetailContentPr
                 <p className="fine">
                   Refunds are paid by the organiser, not Ventry. Ventry refunds automatically only where it still holds the money for a cancelled event.
                   The service fee and processing fee are not refundable, and changing your mind is not grounds for a refund.{' '}
-                  <Link href="/terms/buyers#refunds-claims">Full refund terms</Link>
+                  <Link href="/terms/refunds">Full refund terms</Link>
                 </p>
               </div>
 
@@ -576,7 +576,7 @@ export function EventDetailContent({ identifier, preview }: EventDetailContentPr
             <div className="v-flinks">
               <Link href="/events">More events</Link>
               <Link href="/terms/buyers">Buyer terms</Link>
-              <Link href="/terms/buyers#refunds-claims">Refunds</Link>
+              <Link href="/terms/refunds">Refunds</Link>
               <Link href="/privacy">Privacy</Link>
               <Link href="/help">Support</Link>
               <Link href="/retrieve">Retrieve a ticket</Link>

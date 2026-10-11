@@ -1,5 +1,5 @@
 import Link from 'next/link';
-import { ArrowRight, ShoppingBag, Calendar, Users } from 'lucide-react';
+import { ArrowRight, ShoppingBag, Calendar, Users, RotateCcw } from 'lucide-react';
 import { PublicNav } from '@/components/layout/PublicNav';
 import { Footer } from '@/components/layout/Footer';
 import { LEGAL_VERSIONS } from '@/lib/legalVersions';
@@ -18,6 +18,13 @@ const cards = [
     title: 'Organiser Terms of Use',
     description: 'Fees, payouts, venue proof, lineup rules, and when a payout can be withheld as an event organiser.',
     version: `Version ${LEGAL_VERSIONS.organiserTerms.version} · Effective ${LEGAL_VERSIONS.organiserTerms.effective}`,
+  },
+  {
+    href: '/terms/refunds',
+    icon: RotateCcw,
+    title: 'Refund Policy',
+    description: 'Who pays refunds, the 30-day claim window on cancellations, and what is and is not refundable.',
+    version: `Version ${LEGAL_VERSIONS.refundPolicy.version} · Effective ${LEGAL_VERSIONS.refundPolicy.effective}`,
   },
   {
     href: '/terms/affiliates',

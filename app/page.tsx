@@ -330,7 +330,7 @@ export default async function HomePage() {
           </details>
           <details>
             <summary>Who handles refunds?</summary>
-            <p>The organiser pays refunds under the policy published on their event page. Ventry refunds automatically only where it still holds the money for a cancelled event. <Link href="/terms/buyers#refunds-claims">How refunds work</Link>.</p>
+            <p>The organiser pays refunds under the policy published on their event page. Ventry refunds automatically only where it still holds the money for a cancelled event. <Link href="/terms/refunds">How refunds work</Link>.</p>
           </details>
           <details>
             <summary>What does it cost to list?</summary>

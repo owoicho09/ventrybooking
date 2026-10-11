@@ -37,7 +37,7 @@ export function Footer({ cities = [], flush = false }: FooterProps) {
               <h5>Help</h5>
               <Link href="/retrieve">Retrieve a ticket</Link>
               <Link href="/help">Support</Link>
-              <Link href="/terms/buyers#refunds-claims">Refunds</Link>
+              <Link href="/terms/refunds">Refunds</Link>
               <Link href="/terms/buyers">Buyer terms</Link>
               <Link href="/privacy">Privacy</Link>
             </div>
