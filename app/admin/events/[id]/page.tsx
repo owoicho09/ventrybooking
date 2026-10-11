@@ -34,6 +34,7 @@ interface EventDetail {
   organizerTotalSold: number; organizerTotalEvents: number;
   tiers: Tier[]; totalSold: number; totalRevenue: number;
   payoutReleased: boolean; tickets: TicketRow[];
+  payoutSummary: { paidOut: number; pending: number; nextPayoutOn: string | null } | null;
 }
 
 const statusBadge = (status: string) => {
@@ -168,7 +169,12 @@ export default function AdminEventDetailPage() {
         {[
           { label: 'Tickets Sold', value: event.totalSold.toLocaleString() },
           { label: 'Revenue', value: formatNGN(event.totalRevenue) },
-          { label: 'Payout Status', value: event.payoutReleased ? 'Released' : 'Pending' },
+          {
+            label: 'Paid out to organiser',
+            value: event.payoutSummary
+              ? `${formatNGN(event.payoutSummary.paidOut)}${event.payoutSummary.pending > 0 ? ` · ${formatNGN(event.payoutSummary.pending)} to come` : ''}`
+              : (event.payoutReleased ? 'Released' : 'Pending'),
+          },
         ].map(({ label, value }) => (
           <div key={label} className="rounded-xl border p-4"
             style={{ backgroundColor: 'var(--color-surface)', borderColor: 'var(--color-border)' }}>

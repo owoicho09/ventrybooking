@@ -1,6 +1,8 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { getAuthUser } from '@/lib/server/auth';
 import { getServerSupabase } from '@/lib/supabase/server';
+import { eventPayoutBreakdown } from '@/lib/server/eventPayouts';
+import { feeRateOf, loadHolidays } from '@/lib/server/settlements';
 
 // GET — admin event drill-down: summary + full ticket/buyer list + payout status
 export async function GET(
@@ -64,6 +66,19 @@ export async function GET(
 
   const totalSold = tiers.reduce((s, t) => s + (t.sold ?? 0), 0);
 
+  // Real payout position under daily settlement (the legacy payouts row above
+  // only exists for escrow-era events and still drives the refund gate).
+  let payoutSummary: { paidOut: number; pending: number; nextPayoutOn: string | null } | null = null;
+  if (organizer) {
+    try {
+      const { data: orgFee } = await db.from('users').select('platform_fee_rate').eq('id', organizer.id).maybeSingle();
+      const [b] = await eventPayoutBreakdown(db, organizer.id, feeRateOf({ platform_fee_rate: orgFee?.platform_fee_rate ?? null }), await loadHolidays(db), id);
+      if (b) payoutSummary = { paidOut: b.paidOut, pending: b.pending, nextPayoutOn: b.nextPayoutOn };
+    } catch (err) {
+      console.error('admin event payout summary error', err);
+    }
+  }
+
   // Released/otp_pending means Paystack funds have already been paid out for this event —
   // refunds can no longer be issued against it (see the refund endpoint's own check,
   // this flag just lets the UI explain why up front).
@@ -108,6 +123,7 @@ export async function GET(
       venue:          event.venue,
       city:           event.city,
       organizer_id:   organizer?.id ?? null,
+      payoutSummary,
       organizer_name: organizer?.name ?? 'Unknown',
       organizerTotalSold,
       organizerTotalEvents,

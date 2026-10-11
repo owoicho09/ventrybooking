@@ -4,6 +4,8 @@ import { getServerSupabase } from '@/lib/supabase/server';
 import {
   feeRateOf, lagosDate, loadHolidays, loadUnsettled, organizerFundsFigures, releaseCutoff, summarizePending,
 } from '@/lib/server/settlements';
+import { eventPayoutBreakdown } from '@/lib/server/eventPayouts';
+import { loadWallet } from '@/lib/server/withdrawals';
 
 /**
  * The organiser's settlement history. Amounts are only ever the organiser's
@@ -24,13 +26,18 @@ export async function GET() {
       loadHolidays(db),
       loadUnsettled(db, user.sub),
       db.from('settlements')
-        .select('id, kind, period_start, period_end, net, ticket_count, status, released_at, settled_at, event_name')
+        .select('id, kind, period_start, period_end, net, ticket_count, status, released_at, settled_at, event_name, payment_method, manual_reference')
         .eq('organizer_id', user.sub)
         .neq('status', 'void')
         .order('released_at', { ascending: false }),
       organizerFundsFigures(db, user.sub, feeRate),
     ]);
     if (settlementsRes.error) throw new Error(settlementsRes.error.message);
+
+    const [events, wallet] = await Promise.all([
+      eventPayoutBreakdown(db, user.sub, feeRate, holidays),
+      loadWallet(db, user.sub),
+    ]);
 
     const u = unsettled.get(user.sub);
     const pending = summarizePending(u?.days ?? [], u?.owed ?? null, feeRate, releaseCutoff(lagosDate(), holidays), holidays, u?.adjustments);
@@ -49,6 +56,8 @@ export async function GET() {
             ...pending.accruing.map(a => ({ label: 'Releasable', periodStart: a.periodStart, periodEnd: a.periodEnd, net: a.net, eligibleOn: a.eligibleOn as string | null })),
           ],
           settlements: settlementsRes.data ?? [],
+          events,
+          wallet,
         },
       },
       { headers: { 'Cache-Control': 'no-store' } },

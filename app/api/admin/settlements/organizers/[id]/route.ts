@@ -5,6 +5,7 @@ import {
   eligibilityBlockers, feeRateOf, lagosDate, loadHolidays, loadUnsettled,
   releaseCutoff, summarizePending, loadSettledTotals, ORGANIZER_COLUMNS, type OrganizerRow,
 } from '@/lib/server/settlements';
+import { eventPayoutBreakdown } from '@/lib/server/eventPayouts';
 
 /** One organiser's settlement history: pending (releasable + accruing) and every settlement with its attempts. */
 export async function GET(_req: NextRequest, { params }: { params: Promise<{ id: string }> }) {
@@ -34,6 +35,12 @@ export async function GET(_req: NextRequest, { params }: { params: Promise<{ id:
     ]);
     if (settlementsRes.error) throw new Error(settlementsRes.error.message);
 
+    const [events, requestsRes] = await Promise.all([
+      eventPayoutBreakdown(db, id, feeRateOf(org), holidays),
+      db.from('withdrawal_requests').select('id, amount, status, requested_at, resolved_at, resolved_by, note, settlement_id')
+        .eq('organizer_id', id).order('requested_at', { ascending: false }).limit(10),
+    ]);
+
     const cutoff  = releaseCutoff(lagosDate(), holidays);
     const u       = unsettled.get(id);
     const pending = summarizePending(u?.days ?? [], u?.owed ?? null, feeRateOf(org), cutoff, holidays, u?.adjustments);
@@ -53,6 +60,8 @@ export async function GET(_req: NextRequest, { params }: { params: Promise<{ id:
           pending,
           blockers,
           settlements: settlementsRes.data ?? [],
+          events,
+          withdrawals: requestsRes.data ?? [],
         },
       },
       { headers: { 'Cache-Control': 'no-store' } },

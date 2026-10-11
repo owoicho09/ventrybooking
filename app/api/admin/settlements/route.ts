@@ -43,6 +43,8 @@ export async function GET() {
       orgRows = (data ?? []) as unknown as OrganizerRow[];
     }
     const settledTotals = await loadSettledTotals(db, ids);
+    const { data: openRequests } = await db.from('withdrawal_requests').select('organizer_id, amount, requested_at').eq('status', 'pending');
+    const requested = new Map(((openRequests ?? []) as { organizer_id: string; amount: number; requested_at: string }[]).map(r => [r.organizer_id, r]));
     const orgs = new Map(orgRows.map(o => [o.id, o]));
 
     const organizers = Array.from(unsettled.entries())
@@ -59,6 +61,7 @@ export async function GET() {
           feeRate: feeRateOf(org),
           ...summary,
           blockers,
+          withdrawalRequested: requested.get(id) ?? null,
         };
       })
       .sort((a, b) => (b.releasable?.net ?? -Infinity) - (a.releasable?.net ?? -Infinity));

@@ -402,6 +402,11 @@ const fmt = (n: number) =>
  */
 export function notifySettlementSuccess(s: SettlementRow) {
   emailSettlementPaid(s).catch(err => console.error('settlement: payout email error', err));
+  // A "withdraw now" request is answered by any successful payout. Imported
+  // lazily: withdrawals.ts imports this module.
+  import('@/lib/server/withdrawals')
+    .then(m => m.closeWithdrawalOnSettlement(s.organizer_id, s.id))
+    .catch(err => console.error('settlement: close withdrawal error', err));
   notify(
     { type: 'organizer', id: s.organizer_id },
     {

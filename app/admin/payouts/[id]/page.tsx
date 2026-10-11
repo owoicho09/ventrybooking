@@ -3,7 +3,9 @@
 import { useCallback, useEffect, useState } from 'react';
 import Link from 'next/link';
 import { useParams } from 'next/navigation';
-import { ArrowLeft, RefreshCw, ExternalLink, Landmark } from 'lucide-react';
+import { ArrowLeft, RefreshCw, ExternalLink, Landmark, ArrowUpRight } from 'lucide-react';
+import { EventPayoutList } from '@/components/payouts/EventPayoutList';
+import type { EventPayoutSummary } from '@/lib/server/eventPayouts';
 import { Button } from '@/components/ui/Button';
 import { Badge } from '@/components/ui/Badge';
 import { formatNGN } from '@/lib/utils';
@@ -36,6 +38,8 @@ interface History {
   };
   blockers: string[];
   settlements: Settlement[];
+  events: EventPayoutSummary[];
+  withdrawals: { id: string; amount: number; status: 'pending' | 'paid' | 'cancelled'; requested_at: string; resolved_at: string | null; resolved_by: string | null; note: string | null }[];
 }
 
 function Amounts({ gross, fee, net, refunds }: { gross: number; fee: number; net: number; refunds?: number }) {
@@ -137,7 +141,17 @@ export default function OrganizerSettlementHistoryPage() {
     }
   };
 
+  const closeRequest = async (requestId: string) => {
+    const note = window.prompt('Reason shown to the organiser (optional)') ?? null;
+    const res = await fetch(`/api/admin/withdrawals/${requestId}/cancel`, {
+      method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ note }),
+    });
+    if (!res.ok) { const d = await res.json().catch(() => null); setError(d?.error ?? 'Could not close the request'); }
+    load();
+  };
+
   const org = data?.organizer;
+  const openRequest = data?.withdrawals.find(w => w.status === 'pending') ?? null;
   const rel = data?.pending.releasable;
   const canRelease = !!rel && rel.net > 0 && (data?.blockers.length ?? 1) === 0;
 
@@ -168,6 +182,22 @@ export default function OrganizerSettlementHistoryPage() {
       )}
 
       <ReleaseResults results={results} names={org ? { [org.id]: org.name } : {}} onDismiss={() => setResults([])} />
+
+      {openRequest && (
+        <div className="rounded-xl border p-4 flex flex-wrap items-start gap-3" style={{ borderColor: 'var(--color-amber)', backgroundColor: '#f59e0b10' }}>
+          <ArrowUpRight size={18} className="flex-shrink-0 mt-0.5" style={{ color: 'var(--color-amber)' }} />
+          <div className="flex-1 min-w-[200px]">
+            <p className="text-sm font-semibold" style={{ color: 'var(--color-text)' }}>
+              Withdrawal requested: {formatNGN(openRequest.amount)}
+            </p>
+            <p className="text-xs mt-0.5" style={{ color: 'var(--color-text-muted)' }}>
+              Asked {fmtDateTime(openRequest.requested_at)}. Pay it with Release or &ldquo;Paid by bank transfer? Mark as paid&rdquo; below;
+              the request closes itself when the payout succeeds.
+            </p>
+          </div>
+          <Button size="sm" variant="ghost" onClick={() => closeRequest(openRequest.id)}>Close without paying now</Button>
+        </div>
+      )}
 
       {data && (
         <section className="flex flex-col gap-2">
@@ -339,6 +369,15 @@ export default function OrganizerSettlementHistoryPage() {
               )}
             </div>
           ))}
+        </section>
+      )}
+
+      {data && (
+        <section className="flex flex-col gap-2">
+          <h2 className="text-sm font-semibold" style={{ color: 'var(--color-text)' }}>By event</h2>
+          <div className="rounded-xl border overflow-hidden" style={{ backgroundColor: 'var(--color-surface)', borderColor: 'var(--color-border)' }}>
+            <EventPayoutList events={data.events} admin />
+          </div>
         </section>
       )}
 

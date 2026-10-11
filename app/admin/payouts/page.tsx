@@ -22,6 +22,7 @@ interface OrganizerPending {
   accruing: { eligibleOn: string; periodStart: string; periodEnd: string; net: number; ticketCount: number }[];
   refundsOwed: { gross: number; ticketCount: number };
   blockers: string[];
+  withdrawalRequested: { amount: number; requested_at: string } | null;
 }
 
 interface AttentionRow {
@@ -238,6 +239,11 @@ export default function AdminPayoutsPage() {
                     <p className="text-sm font-medium truncate" style={{ color: 'var(--color-text)' }}>{o.name}</p>
                     <p className="text-base font-bold flex-shrink-0" style={{ color: 'var(--color-text)' }}>{formatNGN(r.net)}</p>
                   </div>
+                  {o.withdrawalRequested && (
+                  <span className="inline-block text-[10px] font-semibold uppercase tracking-wide px-1.5 py-0.5 rounded mt-0.5" style={{ backgroundColor: '#f59e0b20', color: 'var(--color-amber)' }}>
+                    Withdrawal requested
+                  </span>
+                )}
                   <p className="text-xs mt-0.5" style={{ color: 'var(--color-text-muted)' }}>
                     Sales {fmtPeriod(r.periodStart, r.periodEnd)} · {r.ticketCount} ticket{r.ticketCount === 1 ? '' : 's'}
                   </p>
@@ -271,6 +277,11 @@ export default function AdminPayoutsPage() {
               style={{ backgroundColor: 'var(--color-surface)', borderColor: 'var(--color-border)' }}>
               <div className="min-w-0">
                 <p className="text-sm font-medium truncate" style={{ color: 'var(--color-text)' }}>{o.name}</p>
+                {o.withdrawalRequested && (
+                  <span className="inline-block text-[10px] font-semibold uppercase tracking-wide px-1.5 py-0.5 rounded mt-0.5" style={{ backgroundColor: '#f59e0b20', color: 'var(--color-amber)' }}>
+                    Withdrawal requested
+                  </span>
+                )}
                 {o.blockers.map(b => (
                   <p key={b} className="text-xs" style={{ color: 'var(--color-red)' }}>{b}</p>
                 ))}

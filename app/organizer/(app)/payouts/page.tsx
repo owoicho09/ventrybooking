@@ -8,6 +8,10 @@ import { VerificationPanel, type IdentityStatus } from '@/components/organizer/V
 import { Input } from '@/components/ui/Input';
 import { formatNGN, formatShortDate } from '@/lib/utils';
 import { NIGERIAN_BANKS } from '@/lib/banks';
+import { EventPayoutList } from '@/components/payouts/EventPayoutList';
+import { WalletCard } from '@/components/payouts/WalletCard';
+import type { EventPayoutSummary } from '@/lib/server/eventPayouts';
+import type { Wallet as WalletData } from '@/lib/server/withdrawals';
 
 interface Settlement {
   id: string; kind: 'daily' | 'legacy_escrow'; period_start: string; period_end: string;
@@ -31,6 +35,22 @@ export default function PayoutsPage() {
   const [settlements, setSettlements] = useState<Settlement[]>([]);
   const [upcoming, setUpcoming] = useState<Upcoming[]>([]);
   const [figures, setFigures] = useState<{ settled: number; pending: number } | null>(null);
+  const [events, setEvents] = useState<EventPayoutSummary[]>([]);
+  const [wallet, setWallet] = useState<WalletData | null>(null);
+  const [tab, setTab] = useState<'events' | 'history'>('events');
+
+  const loadPayouts = () =>
+    fetch('/api/organizer/payouts', { cache: 'no-store' })
+      .then(r => r.json())
+      .then(p => {
+        if (!p.success) return;
+        setSettlements(p.data.settlements);
+        setUpcoming(p.data.upcoming);
+        setFigures({ settled: p.data.fundsSettled, pending: p.data.fundsPending });
+        setEvents(p.data.events ?? []);
+        setWallet(p.data.wallet ?? null);
+      })
+      .catch(() => {});
   const [editingBank, setEditingBank] = useState(false);
   const [bank, setBank] = useState({ bankName: '', accountNumber: '', accountName: '', legalName: '' });
   const [identity, setIdentity] = useState<IdentityStatus | null>(null);
@@ -47,6 +67,8 @@ export default function PayoutsPage() {
         setSettlements(p.data.settlements);
         setUpcoming(p.data.upcoming);
         setFigures({ settled: p.data.fundsSettled, pending: p.data.fundsPending });
+        setEvents(p.data.events ?? []);
+        setWallet(p.data.wallet ?? null);
       }
       if (m.success) setBank({
         bankName: m.data.bank_name || '',
@@ -93,10 +115,20 @@ export default function PayoutsPage() {
         </div>
       </div>
 
+      {wallet && <WalletCard wallet={wallet} onRequested={loadPayouts} />}
+
       <div className="rounded-xl border overflow-hidden" style={{ backgroundColor: 'var(--color-surface)', borderColor: 'var(--color-border)' }}>
-        <div className="px-4 sm:px-6 py-4 border-b" style={{ borderColor: 'var(--color-border)' }}>
-          <h2 className="font-semibold" style={{ color: 'var(--color-text)' }}>Settlement History</h2>
+        <div className="px-4 sm:px-6 pt-4 border-b flex items-end gap-5" style={{ borderColor: 'var(--color-border)' }} role="tablist">
+          {([['events', 'By event'], ['history', 'All payouts']] as const).map(([id, label]) => (
+            <button key={id} type="button" role="tab" aria-selected={tab === id} onClick={() => setTab(id)}
+              className="pb-3 text-sm font-semibold border-b-2 -mb-px"
+              style={{ borderColor: tab === id ? 'var(--color-purple)' : 'transparent', color: tab === id ? 'var(--color-text)' : 'var(--color-text-muted)' }}>
+              {label}
+            </button>
+          ))}
         </div>
+        {tab === 'events' && <EventPayoutList events={events} />}
+        {tab === 'history' && <>
         {upcoming.length === 0 && settlements.length === 0 && (
           <p className="px-6 py-8 text-sm text-center" style={{ color: 'var(--color-text-muted)' }}>No settlements yet.</p>
         )}
@@ -133,6 +165,7 @@ export default function PayoutsPage() {
             </li>
           ))}
         </ul>
+        </>}
       </div>
 
       <div className="rounded-xl border p-4 flex items-start gap-3"
