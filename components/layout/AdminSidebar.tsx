@@ -11,6 +11,7 @@ import { RotateCcw,
   ShieldAlert,
   MessageSquareWarning,
   Mail,
+  MailCheck,
   Star,
   Handshake,
   CalendarClock,
@@ -29,6 +30,7 @@ const navItems = [
   { href: '/admin/refunds', label: 'Refunds', icon: RotateCcw },
   { href: '/admin/complaints', label: 'Complaints', icon: MessageSquareWarning },
   { href: '/admin/newsletters', label: 'Newsletter Queue', icon: Mail },
+  { href: '/admin/newsletters/subscribers', label: 'Subscribers', icon: MailCheck },
   { href: '/admin/reviews', label: 'Reviews', icon: Star },
   { href: '/admin/affiliates', label: 'Affiliates', icon: Handshake },
   { href: '/admin/fraud', label: 'Fraud Monitor', icon: ShieldAlert },
@@ -73,7 +75,12 @@ export function AdminSidebar() {
       {/* Nav */}
       <nav className="flex-1 p-3 flex flex-col gap-1 overflow-y-auto">
         {navItems.map(({ href, label, icon: Icon }) => {
-          const active = href === '/admin' ? pathname === '/admin' : pathname.startsWith(href);
+          // Longest matching href wins, so Subscribers (/admin/newsletters/subscribers)
+          // doesn't also light up Newsletter Queue (/admin/newsletters).
+          const best = navItems
+            .filter(i => i.href !== '/admin' && pathname.startsWith(i.href))
+            .sort((a, b) => b.href.length - a.href.length)[0]?.href;
+          const active = href === '/admin' ? pathname === '/admin' : best === href;
           return (
             <Link
               key={href}

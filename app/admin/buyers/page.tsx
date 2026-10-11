@@ -50,6 +50,7 @@ function AdminBuyersPageInner() {
   const [search, setSearch] = useState(searchParams.get('search') || '');
   const [buyers, setBuyers] = useState<BuyerData[]>([]);
   const [loading, setLoading] = useState(true);
+  const [stats, setStats] = useState<{ tickets: number; buyers: number; paidTickets: number; revenue: number } | null>(null);
   const [reconciling, setReconciling] = useState(false);
   const [reconcileMsg, setReconcileMsg] = useState<string | null>(null);
   const [regenRef, setRegenRef] = useState('');
@@ -65,7 +66,7 @@ function AdminBuyersPageInner() {
 
     fetch(`/api/admin/buyers${qs ? `?${qs}` : ''}`)
       .then(r => r.json())
-      .then(d => { if (d.success) setBuyers(d.data); })
+      .then(d => { if (d.success) { setBuyers(d.data); if (d.stats) setStats(d.stats); } })
       .catch(console.error)
       .finally(() => setLoading(false));
   }, [activeFilter, search]);
@@ -125,6 +126,23 @@ function AdminBuyersPageInner() {
           Every ticket purchase across all events.
         </p>
       </div>
+
+      {stats && (
+        <div className="grid grid-cols-2 lg:grid-cols-4 gap-3">
+          {[
+            { label: 'Buyers processed', value: stats.buyers.toLocaleString(), hint: 'unique email addresses' },
+            { label: 'Tickets issued', value: stats.tickets.toLocaleString(), hint: 'paid, free and refunded' },
+            { label: 'Paid tickets', value: stats.paidTickets.toLocaleString(), hint: 'excluding refunds' },
+            { label: 'Total taken', value: formatNGN(stats.revenue), hint: 'what buyers paid, excluding refunds' },
+          ].map(s => (
+            <div key={s.label} className="rounded-xl border p-4" style={{ backgroundColor: 'var(--color-surface)', borderColor: 'var(--color-border)' }}>
+              <p className="text-xs" style={{ color: 'var(--color-text-muted)' }}>{s.label}</p>
+              <p className="text-2xl font-bold mt-0.5" style={{ color: 'var(--color-text)', fontFamily: 'var(--font-syne), sans-serif' }}>{s.value}</p>
+              <p className="text-[11px] mt-0.5" style={{ color: 'var(--color-text-dim)' }}>{s.hint}</p>
+            </div>
+          ))}
+        </div>
+      )}
 
       <div className="flex flex-col sm:flex-row gap-3 sm:items-center sm:justify-between">
         <div className="flex gap-1.5 flex-wrap">

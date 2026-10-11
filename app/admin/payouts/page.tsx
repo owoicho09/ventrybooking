@@ -2,13 +2,17 @@
 
 import { useCallback, useEffect, useMemo, useState } from 'react';
 import Link from 'next/link';
-import { CalendarDays, ChevronRight, RefreshCw, AlertTriangle, ExternalLink } from 'lucide-react';
+import { CalendarDays, ChevronRight, ChevronDown, RefreshCw, AlertTriangle, ExternalLink } from 'lucide-react';
 import { Button } from '@/components/ui/Button';
 import { formatNGN } from '@/lib/utils';
 import {
   fmtDay, fmtPeriod, fmtDateTime, SettlementStatusBadge, ReleaseConfirmModal, ReleaseResults, postRelease,
   type ReleaseCandidate, type ReleaseOutcome,
 } from '@/components/admin/settlementUi';
+import type { EventPayoutSummary } from '@/lib/server/eventPayouts';
+
+type HistoryEvent = EventPayoutSummary & { organizerId: string; organizerName: string };
+interface History { events: HistoryEvent[]; totals: { paidOut: number; pending: number; payouts: number } }
 
 interface OrganizerPending {
   id: string; name: string; email: string;
@@ -46,6 +50,9 @@ export default function AdminPayoutsPage() {
   const [results, setResults]   = useState<ReleaseOutcome[]>([]);
   const [rowBusy, setRowBusy]   = useState<string | null>(null);
   const [rowMsg, setRowMsg]     = useState<Record<string, string>>({});
+  const [history, setHistory]   = useState<History | null>(null);
+  const [historyError, setHistoryError] = useState('');
+  const [openEvents, setOpenEvents] = useState<Set<string>>(new Set());
 
   const load = useCallback(() => {
     fetch('/api/admin/settlements', { cache: 'no-store' })
@@ -55,6 +62,13 @@ export default function AdminPayoutsPage() {
         else setLoadError(d.error ?? 'Failed to load');
       })
       .catch(() => setLoadError('Network error'));
+    fetch('/api/admin/settlements/history', { cache: 'no-store' })
+      .then(r => r.json())
+      .then(d => {
+        if (d.success) { setHistory(d.data); setHistoryError(''); }
+        else setHistoryError(d.error ?? 'Failed to load payout history');
+      })
+      .catch(() => setHistoryError('Network error'));
   }, []);
 
   useEffect(() => { load(); }, [load]);
@@ -97,7 +111,13 @@ export default function AdminPayoutsPage() {
     load();
   };
 
-  const rowAction = async (row: AttentionRow, action: 'retry' | 'verify') => {
+  const toggleEvent = (id: string) => setOpenEvents(prev => {
+    const next = new Set(prev);
+    if (next.has(id)) next.delete(id); else next.add(id);
+    return next;
+  });
+
+  const rowAction = async (row: { id: string }, action: 'retry' | 'verify') => {
     if (rowBusy) return;
     setRowBusy(row.id);
     try {
@@ -299,6 +319,104 @@ export default function AdminPayoutsPage() {
           ))}
         </section>
       )}
+
+      {/* ── Settlement history: one card per event, every payout that carried its tickets ── */}
+      <section className="flex flex-col gap-2">
+        <h2 className="text-sm font-semibold" style={{ color: 'var(--color-text)' }}>Settlement history</h2>
+        {historyError && <p className="text-sm" style={{ color: 'var(--color-red)' }}>{historyError}</p>}
+        {!history && !historyError && <p className="text-sm" style={{ color: 'var(--color-text-muted)' }}>Loading…</p>}
+        {history && (
+          <div className="grid grid-cols-3 gap-2">
+            {[
+              { label: 'Paid out', value: formatNGN(history.totals.paidOut) },
+              { label: 'Still owed', value: formatNGN(history.totals.pending) },
+              { label: 'Payouts', value: String(history.totals.payouts) },
+            ].map(t => (
+              <div key={t.label} className="rounded-xl border p-3" style={{ backgroundColor: 'var(--color-surface)', borderColor: 'var(--color-border)' }}>
+                <p className="text-[11px]" style={{ color: 'var(--color-text-muted)' }}>{t.label}</p>
+                <p className="text-base font-bold mt-0.5 truncate" style={{ color: 'var(--color-text)' }}>{t.value}</p>
+              </div>
+            ))}
+          </div>
+        )}
+        {history && history.events.length === 0 && (
+          <p className="text-sm" style={{ color: 'var(--color-text-muted)' }}>No payouts yet.</p>
+        )}
+        {history?.events.map(ev => {
+          const open = openEvents.has(ev.id);
+          const latest = ev.payouts[0];
+          return (
+            <div key={ev.id} className="rounded-xl border" style={{ backgroundColor: 'var(--color-surface)', borderColor: 'var(--color-border)' }}>
+              <button type="button" onClick={() => toggleEvent(ev.id)} aria-expanded={open}
+                className="w-full text-left p-3 flex items-start justify-between gap-3">
+                <div className="min-w-0">
+                  <p className="text-sm font-medium truncate" style={{ color: 'var(--color-text)' }}>{ev.name}</p>
+                  <p className="text-xs truncate" style={{ color: 'var(--color-text-muted)' }}>
+                    {ev.organizerName} · event {fmtDay(ev.date)}
+                  </p>
+                  <p className="text-xs" style={{ color: 'var(--color-text-dim)' }}>
+                    {ev.payouts.length} payout{ev.payouts.length === 1 ? '' : 's'} · {ev.paidTickets} paid ticket{ev.paidTickets === 1 ? '' : 's'}
+                    {ev.pending > 0 && <> · <span style={{ color: 'var(--color-amber)' }}>{formatNGN(ev.pending)} owed</span></>}
+                  </p>
+                </div>
+                <div className="text-right flex-shrink-0 flex items-start gap-2">
+                  <div>
+                    <p className="text-sm font-semibold" style={{ color: 'var(--color-text)' }}>{formatNGN(ev.paidOut)}</p>
+                    {latest && <SettlementStatusBadge status={latest.status} />}
+                  </div>
+                  <ChevronDown size={16} className="mt-0.5 transition-transform" style={{ color: 'var(--color-text-dim)', transform: open ? 'rotate(180deg)' : undefined }} />
+                </div>
+              </button>
+              {open && (
+                <div className="border-t px-3 pb-3 flex flex-col gap-2" style={{ borderColor: 'var(--color-border)' }}>
+                  {ev.payouts.map(p => (
+                    <div key={p.settlementId} className="pt-2 flex flex-col gap-1.5">
+                      <div className="flex items-start justify-between gap-2">
+                        <div className="min-w-0">
+                          <p className="text-xs font-medium" style={{ color: 'var(--color-text)' }}>{fmtDateTime(p.date)}</p>
+                          <p className="text-[11px]" style={{ color: 'var(--color-text-muted)' }}>
+                            {p.tickets} ticket{p.tickets === 1 ? '' : 's'} · {p.method === 'manual' ? 'Manual transfer' : 'Paystack'}
+                            {p.shared && ' · share of a multi-event payout'}
+                          </p>
+                          {p.reference && <p className="text-[11px] font-mono truncate" style={{ color: 'var(--color-text-dim)' }}>{p.reference}</p>}
+                        </div>
+                        <div className="text-right flex-shrink-0">
+                          <p className="text-sm font-semibold" style={{ color: 'var(--color-text)' }}>{formatNGN(p.amount)}</p>
+                          <SettlementStatusBadge status={p.status} />
+                        </div>
+                      </div>
+                      {rowMsg[p.settlementId] && <p className="text-xs" style={{ color: 'var(--color-text-muted)' }}>{rowMsg[p.settlementId]}</p>}
+                      {p.status === 'failed' && (
+                        <div className="flex gap-2">
+                          <Button size="sm" variant="success" disabled={rowBusy === p.settlementId} onClick={() => rowAction({ id: p.settlementId }, 'retry')}>
+                            <RefreshCw size={13} />{rowBusy === p.settlementId ? 'Retrying…' : 'Retry'}
+                          </Button>
+                        </div>
+                      )}
+                      {(p.status === 'processing' || p.status === 'otp_pending') && (
+                        <div className="flex gap-2">
+                          <Button size="sm" variant="outline" disabled={rowBusy === p.settlementId} onClick={() => rowAction({ id: p.settlementId }, 'verify')}>
+                            {rowBusy === p.settlementId ? 'Checking…' : 'Check status'}
+                          </Button>
+                        </div>
+                      )}
+                    </div>
+                  ))}
+                  {ev.pending > 0 && (
+                    <p className="text-xs pt-2" style={{ color: 'var(--color-amber)' }}>
+                      {formatNGN(ev.pending)} for {ev.pendingTickets} ticket{ev.pendingTickets === 1 ? '' : 's'} not paid out yet
+                      {ev.nextPayoutOn && <> · releasable {fmtDay(ev.nextPayoutOn)}</>}
+                    </p>
+                  )}
+                  <Link href={`/admin/payouts/${ev.organizerId}`} className="text-xs font-medium pt-1 flex items-center gap-1" style={{ color: 'var(--color-purple-light)' }}>
+                    {ev.organizerName}&rsquo;s payouts, attempts and manual pay <ChevronRight size={13} />
+                  </Link>
+                </div>
+              )}
+            </div>
+          );
+        })}
+      </section>
 
       {/* ── Sticky bulk bar (sits above the mobile bottom nav) ── */}
       {selectedList.length > 0 && (

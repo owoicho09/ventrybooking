@@ -896,7 +896,7 @@ export async function sendDailySalesEmail(params: {
   await sendEmail({
     to: params.to,
     purpose: params.purpose,
-    subject: `${total} ticket${total === 1 ? '' : 's'} today — your Ventry sales for ${params.dayLabel}`,
+    subject: `${total} ticket${total === 1 ? '' : 's'} sold on ${params.dayLabel} — your Ventry daily sales`,
     html: emailShell(`
       <h1 style="color:#a855f7;font-size:22px;margin:0 0 6px;">Today on Ventry</h1>
       <p class="label" style="margin:0 0 20px;">Hi ${esc(params.organizerName)}, here&rsquo;s what sold on ${esc(params.dayLabel)}: <strong style="color:#f1f0ff;">${headline}</strong>.</p>

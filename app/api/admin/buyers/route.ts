@@ -17,7 +17,7 @@ export async function GET(req: NextRequest) {
     .from('tickets')
     .select('id, buyer_name, buyer_email, total_paid, status, purchased_at, paystack_reference, event_id, organizer_id, event:events(event_name, date), organizer:users!tickets_organizer_id_fkey(name)')
     .order('purchased_at', { ascending: false })
-    .limit(500);
+    .limit(2000);
 
   if (status) qb = qb.eq('status', status);
   if (search) qb = qb.or(`buyer_name.ilike.%${search}%,buyer_email.ilike.%${search}%,id.ilike.%${search}%`);
@@ -47,5 +47,30 @@ export async function GET(req: NextRequest) {
     };
   });
 
-  return NextResponse.json({ success: true, data: rows });
+  return NextResponse.json({ success: true, data: rows, stats: await buyerStats(db) });
+}
+
+/**
+ * All-time totals for the header, independent of the filter/search and the
+ * list's row cap: tickets issued, distinct buyers (by email) and money taken.
+ */
+async function buyerStats(db: ReturnType<typeof getServerSupabase>) {
+  const PAGE = 1000;
+  const emails = new Set<string>();
+  let tickets = 0, paidTickets = 0, revenue = 0;
+  for (let from = 0; ; from += PAGE) {
+    const { data, error } = await db.from('tickets')
+      .select('buyer_email, total_paid, status')
+      .order('id')
+      .range(from, from + PAGE - 1);
+    if (error) { console.error('buyerStats error', error); return null; }
+    for (const t of data ?? []) {
+      tickets++;
+      if (t.buyer_email) emails.add(String(t.buyer_email).trim().toLowerCase());
+      const paid = Number(t.total_paid) || 0;
+      if (paid > 0 && t.status !== 'refunded') { paidTickets++; revenue += paid; }
+    }
+    if (!data || data.length < PAGE) break;
+  }
+  return { tickets, buyers: emails.size, paidTickets, revenue };
 }

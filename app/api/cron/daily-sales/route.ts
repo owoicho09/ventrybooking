@@ -6,9 +6,9 @@ import { PLATFORM_FEE_RATE } from '@/lib/fees';
 // End-of-day sales email to organisers: how many tickets each of their
 // events sold that day. No sale, no email.
 //
-// Schedule (external cron, like the other jobs): every day at 00:05 WAT.
-// A run before 06:00 WAT reports the whole of the previous Nigerian calendar
-// day, so every email covers a complete day. `?date=YYYY-MM-DD` overrides it
+// Schedule (external cron, like the other jobs): every day at 08:00 WAT.
+// Each run reports the whole of the previous Nigerian calendar day, so every
+// email covers a complete day. `?date=YYYY-MM-DD` overrides it
 // (e.g. to re-send a missed day); `?dryRun=1` returns what would be sent
 // without sending anything. Each organiser/day is sent at most once:
 // the send is recorded in email_deliveries under a per-organiser, per-day
@@ -27,10 +27,7 @@ function lagosDay(at: Date): string {
 
 function dayToReport(now: Date, override: string | null): string {
   if (override && /^\d{4}-\d{2}-\d{2}$/.test(override)) return override;
-  const lagosHour = Number(now.toLocaleString('en-GB', { timeZone: 'Africa/Lagos', hour: '2-digit', hour12: false }));
-  const today = lagosDay(now);
-  if (lagosHour >= 6) return today;
-  const d = new Date(`${today}T12:00:00Z`);
+  const d = new Date(`${lagosDay(now)}T12:00:00Z`);
   d.setUTCDate(d.getUTCDate() - 1);
   return d.toISOString().slice(0, 10);
 }
