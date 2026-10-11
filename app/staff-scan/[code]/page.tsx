@@ -174,6 +174,10 @@ export default function StaffSetupPage() {
         )}
       </div>
 
+      <p className="text-sm mb-4 max-w-xs text-center" style={{ color: 'var(--color-text-muted)' }}>
+        Scan tickets right here with the Ventry scanner, or with your phone&rsquo;s own camera app. Both work the same way.
+      </p>
+
       {/* In-app scanner: no need to leave Ventry */}
       <button
         type="button"

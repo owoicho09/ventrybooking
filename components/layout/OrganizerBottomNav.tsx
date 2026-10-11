@@ -22,7 +22,7 @@ const navItems = [
   { href: '/organizer/dashboard',     label: 'Overview',   icon: LayoutDashboard },
   { href: '/organizer/events',        label: 'My Events',  icon: CalendarDays },
   { href: '/organizer/events/create', label: 'Create',     icon: PlusCircle },
-  { href: '/organizer/affiliates',    label: 'Affiliates', icon: Share2 },
+  { href: '/organizer/scan',          label: 'Scanner',    icon: ScanLine },
 ];
 
 // Secondary items that don't fit directly on the bar — reachable via "More".
@@ -31,7 +31,7 @@ const moreItems = [
   { href: '/organizer/staff',    label: 'Staff IDs', icon: KeyRound },
   { href: '/organizer/payouts',  label: 'Payouts',   icon: Wallet },
   { href: '/organizer/refunds',  label: 'Refunds',   icon: RotateCcw },
-  { href: '/organizer/scan',     label: 'Scanner',   icon: ScanLine },
+  { href: '/organizer/affiliates', label: 'Affiliates', icon: Share2 },
   { href: '/organizer/settings', label: 'Settings',  icon: Settings },
 ];
 

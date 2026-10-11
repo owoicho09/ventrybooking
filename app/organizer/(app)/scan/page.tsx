@@ -31,11 +31,11 @@ export default function ScanPage() {
   const [stats, setStats]             = useState({ scanned: 0, rejected: 0, remaining: 0 });
   const [eventOptions, setEventOptions] = useState<EventOption[]>([]);
   const [selectedEvent, setSelectedEvent] = useState('');
-  // Two ways to scan: the phone's own camera app (opens the ticket URL), or
-  // Ventry's in-app camera. The choice is remembered on this device.
+  // Two ways to scan: Ventry's in-app camera (the default), or the phone's own
+  // camera app (opens the ticket URL). The choice is remembered on this device.
   const [mode, setMode] = useState<'phone' | 'inapp'>(() => {
-    if (typeof window === 'undefined') return 'phone';
-    try { return localStorage.getItem('ventry_scan_mode') === 'inapp' ? 'inapp' : 'phone'; } catch { return 'phone'; }
+    if (typeof window === 'undefined') return 'inapp';
+    try { return localStorage.getItem('ventry_scan_mode') === 'phone' ? 'phone' : 'inapp'; } catch { return 'inapp'; }
   });
   const chooseMode = (m: 'phone' | 'inapp') => {
     setMode(m);
@@ -153,6 +153,11 @@ export default function ScanPage() {
           className="flex-1 flex flex-col items-center justify-start sm:justify-center gap-5 p-4 sm:p-6 overflow-y-auto"
           style={{ backgroundColor: 'var(--color-bg)' }}
         >
+          <p className="w-full max-w-sm text-sm text-center" style={{ color: 'var(--color-text-muted)' }}>
+            Scan tickets right here with the Ventry scanner, or use your phone&rsquo;s own camera app.
+            Both check the ticket the same way, and every scan shows up in Recent Scans.
+          </p>
+
           {/* Scan mode switch */}
           <div
             className="w-full max-w-sm grid grid-cols-2 gap-1 p-1 rounded-xl border"
@@ -161,8 +166,8 @@ export default function ScanPage() {
             aria-label="How to scan"
           >
             {([
-              { id: 'phone', label: 'Phone camera', Icon: Smartphone },
               { id: 'inapp', label: 'Ventry scanner', Icon: Camera },
+              { id: 'phone', label: 'Phone camera', Icon: Smartphone },
             ] as const).map(({ id, label, Icon }) => (
               <button
                 key={id}
@@ -183,6 +188,10 @@ export default function ScanPage() {
 
           {mode === 'inapp' && (
             <div className="w-full max-w-sm">
+              <p className="text-xs text-center mb-3" style={{ color: 'var(--color-text-dim)' }}>
+                Allow camera access when asked, then hold each QR code in the frame. The result flashes
+                full screen (green = let in, amber = already used, red = invalid) and the camera carries on by itself.
+              </p>
               {selectedEvent
                 ? <ScanStation key={selectedEvent} eventId={selectedEvent} onScanned={() => refreshLogs(selectedEvent)} />
                 : <p className="text-sm text-center" style={{ color: 'var(--color-text-muted)' }}>Pick an event above to start scanning.</p>}

@@ -4,6 +4,12 @@ import { createTicketFromPayment, createTicketFromClaimedPayment, type PaymentDa
 import { notify } from '@/lib/server/notify';
 
 const STALE_MINUTES = 10;
+// How far back the sweep looks. Abandoned and failed checkouts are never
+// deleted, so without a horizon every run re-verified the whole history
+// against Paystack one by one and blew past cron-job.org's 30s timeout
+// (156 such rows on 2026-10-11, all confirmed unpaid). A real payment whose
+// webhook was missed is caught within minutes; two days is generous.
+const HORIZON_HOURS = 48;
 
 interface PendingOrderRow {
   reference: string;
@@ -69,6 +75,7 @@ async function recoverOrder(order: PendingOrderRow, alreadyClaimed: boolean): Pr
 export async function reconcilePendingOrders() {
   const db = getServerSupabase();
   const staleBefore = new Date(Date.now() - STALE_MINUTES * 60 * 1000).toISOString();
+  const horizon = new Date(Date.now() - HORIZON_HOURS * 60 * 60 * 1000).toISOString();
 
   // Oldest-stale-first: if checkout volume ever outpaces what one sweep can
   // verify, newest-first would let a constant trickle of new stale rows keep
@@ -78,6 +85,7 @@ export async function reconcilePendingOrders() {
     .from('pending_orders')
     .select('*')
     .lt('created_at', staleBefore)
+    .gt('created_at', horizon)
     .order('created_at', { ascending: true })
     .limit(200);
 
