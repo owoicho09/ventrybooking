@@ -22,7 +22,7 @@ export async function GET(
   const { data: org, error: orgErr } = await db
     .from('users')
     .select(`
-      id, name, email, phone, handle, avatar_url, socials, tier, verified,
+      id, name, legal_name, email, phone, handle, avatar_url, socials, tier, verified,
       member_since, created_at, kyc_status, kyc_submitted_at, kyc_gov_id_path,
       kyc_selfie_path, kyc_social_twitter, kyc_social_instagram, kyc_social_facebook,
       kyc_venue_proof_path, kyc_rejection_reason, kyc_phone_verified,

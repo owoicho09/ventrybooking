@@ -54,7 +54,8 @@
      Horizontal clipping is scoped to the rails, hero and marquee themselves. */
 }
 
-html.light .v2 {
+html.light .v2,
+.v2[data-theme="light"] {
   --bg: #F8F7FF;
   --surface: #FFFFFF;
   --surface-2: #F1EEFC;
@@ -75,6 +76,30 @@ html.light .v2 {
   --card-shadow: 0 22px 50px rgba(30, 20, 60, .28);
   --h1-shadow: none;
   --perf-dot: rgba(124, 58, 237, .16);
+}
+
+/* Forced dark (data-theme="dark") while the site is in light mode. */
+html.light .v2[data-theme="dark"] {
+  --bg: #09070F;
+  --surface: #13101C;
+  --surface-2: #1A1626;
+  --line: #272034;
+  --line-hi: #3A3150;
+  --text: #F3F0F8;
+  --text-2: #CFC8DD;
+  --muted: #968EAB;
+  --dim: #6B6480;
+  --head: #FFFFFF;
+  --purple-lt: #A78BFA;
+  --purple-dim: #2A1A4D;
+  --purple-dim-line: #3B2A66;
+  --green-lt: #34D399;
+  --star: #FBBF24;
+  --nav-bg: rgba(9, 7, 15, .8);
+  --sheet-shadow: 0 -24px 60px rgba(0, 0, 0, .72);
+  --card-shadow: 0 26px 60px rgba(0, 0, 0, .65);
+  --h1-shadow: 0 2px 24px rgba(9, 7, 15, .9);
+  --perf-dot: rgba(167, 139, 250, .14);
 }
 
 .v2 h1, .v2 h2, .v2 h3, .v2 h4, .v2 h5 {
@@ -533,6 +558,39 @@ html.light .v2 .v-scard { box-shadow: 0 -10px 34px rgba(30,20,60,.12); }
 
 /* ══════════════════════ EVENT DETAIL ══════════════════════ */
 .v-ed { --maxw: 1080px; min-height: 100vh; min-height: 100dvh; }
+
+/* Organiser accent across the whole event page (not just buttons and text):
+   dark = the accent over Ventry's purple-black, light = the accent over white.
+   --accent is already contrast-corrected for the active theme in JS. */
+.v2.v-ed {
+  --bg: color-mix(in srgb, var(--accent) 7%, #09070F);
+  --surface: color-mix(in srgb, var(--accent) 9%, #13101C);
+  --surface-2: color-mix(in srgb, var(--accent) 14%, #1A1626);
+  --line: color-mix(in srgb, var(--accent) 24%, #272034);
+  --line-hi: color-mix(in srgb, var(--accent) 40%, #3A3150);
+  --nav-bg: color-mix(in srgb, var(--bg) 88%, transparent);
+}
+html.light .v2.v-ed,
+.v2.v-ed[data-theme="light"] {
+  --bg: color-mix(in srgb, var(--accent) 5%, #FFFFFF);
+  --surface: #FFFFFF;
+  --surface-2: color-mix(in srgb, var(--accent) 8%, #FFFFFF);
+  --line: color-mix(in srgb, var(--accent) 20%, #E9E6F2);
+  --line-hi: color-mix(in srgb, var(--accent) 36%, #D5D0E5);
+  --nav-bg: color-mix(in srgb, var(--bg) 88%, transparent);
+}
+html.light .v2.v-ed[data-theme="dark"] {
+  --bg: color-mix(in srgb, var(--accent) 7%, #09070F);
+  --surface: color-mix(in srgb, var(--accent) 9%, #13101C);
+  --surface-2: color-mix(in srgb, var(--accent) 14%, #1A1626);
+  --line: color-mix(in srgb, var(--accent) 24%, #272034);
+  --line-hi: color-mix(in srgb, var(--accent) 40%, #3A3150);
+  --nav-bg: color-mix(in srgb, var(--bg) 88%, transparent);
+}
+.v-ed .v-sheet { border-top: 2px solid var(--accent-line); }
+.v-ed .v-tiers { border-top: 3px solid var(--accent); }
+.v-ed .v-card h3 { border-left: 3px solid var(--accent); padding-left: 9px; }
+.v-ed .v-policy h3 { border-left: 0; padding-left: 0; }
 .v-ed-topbar { position: fixed; top: 0; left: 0; right: 0; z-index: 70; display: flex; align-items: center; justify-content: space-between; gap: 12px; padding: 12px 20px; background: linear-gradient(rgba(6,4,12,.75), transparent); transition: background .25s, border-color .25s; border-bottom: 1px solid transparent; }
 .v-ed-topbar.solid { background: var(--nav-bg); backdrop-filter: blur(14px); -webkit-backdrop-filter: blur(14px); border-bottom-color: var(--line); }
 .v-ed-topbar-l, .v-ed-topbar-r { display: flex; align-items: center; gap: 10px; min-width: 0; }
@@ -546,12 +604,12 @@ html.light .v2 .v-ed-topbar.solid .v-icbtn { background: var(--surface); color: 
 
 .v-masthead { position: fixed; top: 0; left: 0; right: 0; height: 52vh; min-height: 300px; z-index: 1; overflow: hidden; background: #0D0A16; }
 .v-masthead img { width: 100%; height: 100%; object-fit: cover; }
-.v-masthead::after { content: ''; position: absolute; inset: 0; background: linear-gradient(rgba(6,4,12,.1) 30%, rgba(9,7,15,.92)); }
+.v-masthead::after { content: ''; position: absolute; inset: 0; background: linear-gradient(rgba(6,4,12,.1) 30%, color-mix(in srgb, var(--bg) 94%, transparent)); }
 .v-ed-spacer { height: calc(52vh - 60px); min-height: 240px; }
 
 /* No dedicated banner: flyer shown whole at its natural ratio over a dimmed
    copy of itself, scrolling with the page (the previous behaviour). */
-.v-ed-hero { position: relative; overflow: hidden; padding: 76px 24px 64px; display: grid; place-items: center; background: #0D0A16; }
+.v-ed-hero { position: relative; overflow: hidden; padding: 76px 24px 64px; display: grid; place-items: center; background: radial-gradient(ellipse 70% 60% at 50% 35%, color-mix(in srgb, var(--accent) 45%, #0D0A16), #0D0A16); }
 .v-ed-hero-bg { position: absolute; inset: -40px; background-size: cover; background-position: center; filter: blur(34px) saturate(1.1); opacity: .55; transform: scale(1.1); }
 .v-ed-hero::after { content: ''; position: absolute; inset: 0; background: linear-gradient(rgba(6,4,12,.35), rgba(9,7,15,.7)); }
 .v-ed-hero-img { position: relative; z-index: 2; width: auto; max-width: min(380px, 100%); max-height: 520px; border-radius: 16px; box-shadow: 0 30px 70px rgba(0,0,0,.6); border: 1px solid rgba(255,255,255,.1); }
@@ -816,3 +874,22 @@ html.light .v2 .v-ed-topbar.solid .v-icbtn { background: var(--surface); color: 
   .v-scard { position: relative; top: auto; margin-bottom: 30px; }
   .v-stack-list::after { display: none; }
 }
+
+/* Organiser preview overlay (components/events/EventPreview.tsx). */
+.v-preview { position: fixed; inset: 0; z-index: 300; overflow-y: auto; overscroll-behavior: contain; background: var(--color-bg); }
+.v-preview .v-ed-topbar { position: fixed; }
+.v-preview-bar {
+  position: fixed; left: 50%; bottom: 18px; transform: translateX(-50%); z-index: 320;
+  display: flex; align-items: center; gap: 6px; padding: 6px; border-radius: 100px;
+  background: rgba(15, 12, 26, .92); border: 1px solid rgba(255,255,255,.14); box-shadow: 0 14px 40px rgba(0,0,0,.45);
+  backdrop-filter: blur(12px); -webkit-backdrop-filter: blur(12px); color: #fff; font-family: var(--font-dm-sans), system-ui, sans-serif;
+  max-width: calc(100vw - 24px);
+}
+.v-preview-bar .lab { font-size: 12px; padding: 0 10px 0 8px; color: rgba(255,255,255,.75); white-space: nowrap; }
+.v-preview-bar .seg { display: flex; background: rgba(255,255,255,.08); border-radius: 100px; padding: 2px; }
+.v-preview-bar button { border: 0; cursor: pointer; font: inherit; font-size: 12.5px; border-radius: 100px; padding: 7px 13px; background: none; color: rgba(255,255,255,.8); white-space: nowrap; }
+.v-preview-bar .seg button.on { background: #fff; color: #14101F; font-weight: 600; }
+.v-preview-bar .close { background: #7C3AED; color: #fff; font-weight: 600; }
+@media (max-width: 900px) { .v-preview-bar { bottom: calc(86px + env(safe-area-inset-bottom)); } }
+@media (max-width: 420px) { .v-preview-bar .lab { display: none; } }
+.v-preview-note { font-size: 12px; color: var(--muted); background: var(--surface-2); border: 1px dashed var(--line-hi); border-radius: 10px; padding: 9px 12px; margin-top: 12px; text-align: center; }

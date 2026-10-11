@@ -18,6 +18,7 @@ import { useTheme } from '@/components/layout/ThemeProvider';
 import { getContrastText, accentForBackground } from '@/lib/accentColors';
 import { categoryMeta } from '@/lib/categories';
 import { fmtDayYear, normalizeCity, initial } from '@/lib/publicEvents';
+import { describeRefundPolicy, MINIMUM_STANDARDS } from '@/lib/refundPolicy';
 
 // The two fixed v2 page backgrounds (app/v2.css --bg) — not user input, so
 // safe to hardcode for the contrast walk.
@@ -30,21 +31,34 @@ const VENTRY_PURPLE = '#7c3aed';
 const FREE_TIER_ORDER_CAP = 2;
 const PAID_TIER_ORDER_CAP = 10;
 
-interface EventDetailContentProps {
-  /** The event's slug (or, for the legacy /events/[id] shim, its UUID) — whatever was fetched to resolve this page. */
-  identifier: string;
+export type DetailEvent = Event & { organizer: Event['organizer'] & { avatar_url?: string | null; cover_image_url?: string | null } };
+
+/** Organiser preview: render a not-yet-saved event exactly as buyers will see it. */
+export interface EventPreviewOptions {
+  event: DetailEvent;
+  theme: 'light' | 'dark';
+  onClose: () => void;
+  /** The scrolling element of the preview overlay (the page itself doesn't scroll). */
+  scrollRoot: HTMLElement | null;
 }
 
-type DetailEvent = Event & { organizer: Event['organizer'] & { avatar_url?: string | null; cover_image_url?: string | null } };
+interface EventDetailContentProps {
+  /** The event's slug (or, for the legacy /events/[id] shim, its UUID) — whatever was fetched to resolve this page. */
+  identifier?: string;
+  /** Preview mode: no fetch, no tracking, no checkout. */
+  preview?: EventPreviewOptions;
+}
 
-export function EventDetailContent({ identifier }: EventDetailContentProps) {
+export function EventDetailContent({ identifier, preview }: EventDetailContentProps) {
   const router = useRouter();
   const searchParams = useSearchParams();
   const { toast } = useToast();
   const { loggedIn: buyerLoggedIn } = useBuyerAuth();
-  const { theme } = useTheme();
-  const [event, setEvent] = useState<DetailEvent | null>(null);
-  const [loading, setLoading] = useState(true);
+  const { theme: siteTheme } = useTheme();
+  const theme = preview?.theme ?? siteTheme;
+  const [fetchedEvent, setEvent] = useState<DetailEvent | null>(null);
+  const event = preview?.event ?? fetchedEvent;
+  const [loading, setLoading] = useState(!preview);
   const [selectedId, setSelectedId] = useState<string | null>(null);
   const [qty, setQty] = useState(1);
   const [orgReputation, setOrgReputation] = useState<{ avg: number | null; count: number } | null>(null);
@@ -53,7 +67,7 @@ export function EventDetailContent({ identifier }: EventDetailContentProps) {
   const tiersRef = useRef<HTMLDivElement>(null);
 
   useEffect(() => {
-    if (!identifier) return;
+    if (!identifier || preview) return;
     fetch(`/api/events/${identifier}`)
       .then(r => r.json())
       .then(d => {
@@ -67,12 +81,13 @@ export function EventDetailContent({ identifier }: EventDetailContentProps) {
       })
       .catch(console.error)
       .finally(() => setLoading(false));
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [identifier]);
 
   // Affiliate link tracking: capture ?ref=, credit one click, and remember it
   // so it can be attached to the order if this buyer checks out.
   useEffect(() => {
-    if (!event) return;
+    if (!event || preview) return;
     const ref = searchParams.get('ref');
     if (!ref || refTracked.current) return;
     refTracked.current = true;
@@ -82,26 +97,32 @@ export function EventDetailContent({ identifier }: EventDetailContentProps) {
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({ code: ref }),
     }).catch(() => {});
-  }, [event, searchParams]);
+  }, [event, searchParams, preview]);
 
   // Top bar turns solid once the banner has scrolled away (rAF-throttled).
+  // In preview the overlay scrolls instead of the window.
+  const scrollRoot = preview?.scrollRoot ?? null;
   useEffect(() => {
     let ticking = false;
+    const target: HTMLElement | Window = scrollRoot ?? window;
     const update = () => {
       ticking = false;
+      const y = scrollRoot ? scrollRoot.scrollTop : window.scrollY;
       const threshold = Math.max(120, window.innerHeight * (window.innerWidth <= 900 ? 0.4 : 0.52) - 80);
-      setSolidBar(window.scrollY > threshold);
+      setSolidBar(y > threshold);
     };
     const onScroll = () => { if (!ticking) { ticking = true; requestAnimationFrame(update); } };
-    window.addEventListener('scroll', onScroll, { passive: true });
-    update();
-    return () => window.removeEventListener('scroll', onScroll);
-  }, []);
+    target.addEventListener('scroll', onScroll, { passive: true });
+    requestAnimationFrame(update);
+    return () => target.removeEventListener('scroll', onScroll);
+  }, [scrollRoot]);
 
   const maxQtyForTier = (tier: TicketTier) =>
     Math.max(0, Math.min(tier.price === 0 ? FREE_TIER_ORDER_CAP : PAID_TIER_ORDER_CAP, tier.available - tier.sold));
 
-  const selectedTier = event?.tiers.find(t => t.id === selectedId) ?? null;
+  // In preview the event arrives as a prop, so fall back to the cheapest tier on sale.
+  const defaultTierId = event ? [...event.tiers].sort((a, b) => a.price - b.price).find(t => t.available - t.sold > 0)?.id ?? null : null;
+  const selectedTier = event?.tiers.find(t => t.id === (selectedId ?? (preview ? defaultTierId : null))) ?? null;
   const maxQty = selectedTier ? maxQtyForTier(selectedTier) : 0;
   const quantity = selectedTier ? Math.min(qty, maxQty) : 0;
   const hasSelection = !!selectedTier && quantity > 0;
@@ -116,6 +137,7 @@ export function EventDetailContent({ identifier }: EventDetailContentProps) {
   };
 
   const handlePurchase = () => {
+    if (preview) { toast('This is a preview. Checkout opens once your event is live.', 'success'); return; }
     if (!event || !hasSelection || event.status === 'completed') return;
     const ref = sessionStorage.getItem(`ventry_ref_${event.id}`) || undefined;
     sessionStorage.setItem('ventry_cart', JSON.stringify({
@@ -130,12 +152,16 @@ export function EventDetailContent({ identifier }: EventDetailContentProps) {
       }],
       ref,
       allowedEmailDomains: event.allowedEmailDomains ?? null,
+      // Shown again at checkout so the buyer sees it right before paying.
+      refundPolicy: event.refundPolicy ?? null,
+      organizerName: event.organizer?.name?.trim() || null,
+      eventSlug: event.slug || null,
     }));
     router.push('/checkout');
   };
 
   const handleShare = async () => {
-    if (!event) return;
+    if (!event || preview) return;
     const url = `${window.location.origin}/${event.slug || event.id}`;
     const shareData = { title: event.name, text: `Check out ${event.name} on Ventry`, url };
     try {
@@ -151,6 +177,7 @@ export function EventDetailContent({ identifier }: EventDetailContentProps) {
   };
 
   const goBack = () => {
+    if (preview) { preview.onClose(); return; }
     if (window.history.length > 1 && document.referrer.startsWith(window.location.origin)) router.back();
     else router.push('/events');
   };
@@ -176,14 +203,14 @@ export function EventDetailContent({ identifier }: EventDetailContentProps) {
       </div>
       {event && <div className="v-ed-mini-t" aria-hidden="true">{event.name}</div>}
       <div className="v-ed-topbar-r">
-        {event && <button type="button" className="v-icbtn" onClick={handleShare} aria-label="Share event"><Share2 size={16} /></button>}
+        {event && !preview && <button type="button" className="v-icbtn" onClick={handleShare} aria-label="Share event"><Share2 size={16} /></button>}
       </div>
     </div>
   );
 
   if (loading || !event) {
     return (
-      <div className="v2 v-ed" style={accentVars}>
+      <div className="v2 v-ed" style={accentVars} data-theme={preview?.theme}>
         {topbar}
         {loading ? (
           <>
@@ -262,7 +289,7 @@ export function EventDetailContent({ identifier }: EventDetailContentProps) {
         {sortedTiers.map(tier => {
           const remaining = tier.available - tier.sold;
           const out = remaining <= 0;
-          const on = !isCompleted && tier.id === selectedId;
+          const on = !isCompleted && tier.id === selectedTier?.id;
           const urgency = ticketUrgency(tier.available, tier.sold);
           return (
             <button
@@ -320,13 +347,14 @@ export function EventDetailContent({ identifier }: EventDetailContentProps) {
             {allFree ? '' : 'The total above is exactly what leaves your account. Service and processing fees are not refundable. '}
             Ventry provides the platform; {orgName} runs the event and handles refunds.
           </p>
+          {preview && <p className="v-preview-note">Preview: checkout is switched off until your event is live.</p>}
         </>
       )}
     </div>
   );
 
   return (
-    <div className="v2 v-ed" style={accentVars}>
+    <div className="v2 v-ed" style={accentVars} data-theme={preview?.theme}>
       {topbar}
 
       {banner ? (
@@ -482,14 +510,28 @@ export function EventDetailContent({ identifier }: EventDetailContentProps) {
                 )}
               </div>
 
-              <div className="v-card v-policy">
-                <h3><Info size={16} />Refund terms for this event</h3>
-                <p>{orgName} is bound by Ventry&apos;s minimum refund standards:</p>
-                <ul>
-                  <li>If the event is cancelled, the full base ticket price is refunded to everyone who claims in time.</li>
-                  <li>A postponement with no confirmed new date, or a venue or date change within 7 days of the event, counts as a cancellation.</li>
-                  <li>If a billed headliner doesn&apos;t appear, you can claim.</li>
-                </ul>
+              <div className="v-card v-policy" id="refund-policy">
+                {event.refundPolicy ? (
+                  <>
+                    <h3><Info size={16} />Refund policy for this event</h3>
+                    <p>Published by {orgName} before tickets went on sale:</p>
+                    <ul>
+                      {describeRefundPolicy(event.refundPolicy, orgName).map(s => (
+                        <li key={s.title}><b>{s.title}.</b> {s.text}</li>
+                      ))}
+                      <li><b>Always.</b> {MINIMUM_STANDARDS.slice(1).join(' ')}</li>
+                    </ul>
+                    <p style={{ marginTop: 10 }}>Refund questions: <a href={`mailto:${event.refundPolicy.contactEmail}`} style={{ color: 'var(--accent)', textDecoration: 'underline' }}>{event.refundPolicy.contactEmail}</a></p>
+                  </>
+                ) : (
+                  <>
+                    <h3><Info size={16} />Refund terms for this event</h3>
+                    <p>{orgName} is bound by Ventry&apos;s minimum refund standards:</p>
+                    <ul>
+                      {MINIMUM_STANDARDS.map(m => <li key={m}>{m}</li>)}
+                    </ul>
+                  </>
+                )}
                 <p className="fine">
                   Refunds are paid by the organiser, not Ventry. Ventry refunds automatically only where it still holds the money for a cancelled event.
                   The service fee and processing fee are not refundable, and changing your mind is not grounds for a refund.{' '}
@@ -497,14 +539,14 @@ export function EventDetailContent({ identifier }: EventDetailContentProps) {
                 </p>
               </div>
 
-              <div className="v-sheet-block">
+              {!preview && <div className="v-sheet-block">
                 <EventReviews
                   eventId={event.id}
                   eventDate={event.date}
                   canReview={isCompleted}
                   onOrgReputation={(avg, count) => setOrgReputation({ avg, count })}
                 />
-              </div>
+              </div>}
             </div>
 
             {/* ── Right: buy ── */}

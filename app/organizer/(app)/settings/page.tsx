@@ -178,7 +178,12 @@ export default function OrganizerSettingsPage() {
         style={{ backgroundColor: 'var(--color-surface)', borderColor: 'var(--color-border)' }}>
         <h2 className="font-semibold" style={{ color: 'var(--color-text)' }}>Profile</h2>
         <form onSubmit={saveProfile} className="flex flex-col gap-4">
-          <Input label="Full Name" value={me.name || ''} onChange={set('name')} />
+          <Input
+            label="Display name"
+            value={me.name || ''}
+            onChange={set('name')}
+            helper="What buyers see on your events, tickets and profile. Your legal name, used for verification and payouts, is under Bank Details below."
+          />
           <Input label="Email" type="email" value={me.email || ''} disabled />
           <Input label="Phone Number" type="tel" value={me.phone || ''} onChange={set('phone')} />
           <Textarea label="Bio" value={me.bio || ''} onChange={set('bio')} placeholder="Tell attendees about yourself…" rows={3} />

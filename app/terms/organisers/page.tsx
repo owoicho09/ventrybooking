@@ -227,7 +227,7 @@ export default function OrganiserTermsPage() {
         </Sub>
         <Sub title="4.4 You must set a refund policy">
           <P>
-            Before your event can go live you must answer Ventry&rsquo;s four refund questions. Ventry generates your
+            Before your event can go live you must answer Ventry&rsquo;s five refund questions. Ventry generates your
             published refund policy from your answers and displays it on your event page and again at checkout, so
             buyers see it before they pay.
           </P>
@@ -237,6 +237,7 @@ export default function OrganiserTermsPage() {
               ['If you cancel, how long after receiving the claim list will you refund buyers?', '7, 14 or 30 days'],
               ['If you postpone to a confirmed new date, what happens?', 'All buyers refunded, or ticket stays valid with refund on request, or ticket stays valid with no refund'],
               ['If you change the venue more than 7 days out, what happens?', 'Refund on request, or no refund and the ticket stays valid'],
+              ['If a Guest Artist or Special Guest does not appear, what happens?', 'Refund on request, or no refund'],
               ['Which email address should buyers use for refund questions?', 'Your own working address, which you must monitor'],
             ]}
           />

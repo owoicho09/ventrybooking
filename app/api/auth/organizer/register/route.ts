@@ -9,9 +9,9 @@ import { notify } from '@/lib/server/notify';
 
 export async function POST(req: NextRequest) {
   try {
-    const { name, email, phone, password, confirmPassword, referralCode, termsVersion } = await req.json();
+    const { name, legalName, email, phone, password, confirmPassword, referralCode, termsVersion } = await req.json();
 
-    if (!name || !email || !phone || !password) {
+    if (!name || !legalName || !email || !phone || !password) {
       return NextResponse.json({ error: 'All fields are required' }, { status: 400 });
     }
     if (!termsVersion) {
@@ -37,7 +37,10 @@ export async function POST(req: NextRequest) {
     const { data: user, error } = await db
       .from('users')
       .insert({
-        name,
+        // Display name (what buyers see) and legal name (what verification
+        // and payouts are matched against) are separate — Organiser Terms 3.6.
+        name: String(name).trim().slice(0, 120),
+        legal_name: String(legalName).trim().slice(0, 200),
         email,
         phone,
         password_hash: passwordHash,

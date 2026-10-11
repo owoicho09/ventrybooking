@@ -73,6 +73,8 @@ export interface Event {
   banner_url?: string | null;
   headerBannerUrl?: string | null;
   accentColor?: string | null;
+  /** The organiser's published refund-policy answers (lib/refundPolicy.ts); null until set. */
+  refundPolicy?: import('@/lib/refundPolicy').RefundPolicyAnswers | null;
   /** Venue booking confirmed by Ventry for this event (the public Verified badge). Distinct from organizer.verified. */
   verified?: boolean;
   lineup?: { name: string; role: string; liability?: 'headliner' | 'guest' | 'surprise'; photoUrl?: string | null }[];

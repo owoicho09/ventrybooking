@@ -9,6 +9,7 @@ import { isValidAccentColor } from '@/lib/accentColors';
 import { PLATFORM_FEE_RATE } from '@/lib/fees';
 import { normalizeLineup } from '@/lib/server/lineup';
 import { normalizeEmailDomains } from '@/lib/server/domainRestriction';
+import { parseRefundPolicy } from '@/lib/refundPolicy';
 
 export async function GET(req: NextRequest) {
   try {
@@ -103,6 +104,18 @@ export async function POST(req: NextRequest) {
 
     if (!name || !category || !description || !date || !time) {
       return NextResponse.json({ error: 'Missing required fields' }, { status: 400 });
+    }
+
+    // Organiser Terms 4.4 and 4.8: a refund policy and an accuracy
+    // confirmation are both required before an event can go live.
+    let refundPolicyRaw: unknown = null;
+    try { refundPolicyRaw = JSON.parse((formData.get('refundPolicy') as string) || 'null'); } catch { /* invalid JSON */ }
+    const refundPolicy = parseRefundPolicy(refundPolicyRaw);
+    if (!refundPolicy.ok) {
+      return NextResponse.json({ error: refundPolicy.error }, { status: 400 });
+    }
+    if (formData.get('confirmAccurate') !== 'true') {
+      return NextResponse.json({ error: 'Confirm that your event information is accurate' }, { status: 400 });
     }
     if (eventMode === 'physical' && (!venue || !address)) {
       return NextResponse.json({ error: 'Venue name and address are required' }, { status: 400 });
@@ -207,6 +220,8 @@ export async function POST(req: NextRequest) {
       venue_proof_url: venueProofUrl,
       banner_color: 'from-purple-900 to-indigo-900',
       accent_color: accentColor,
+      refund_policy: refundPolicy.value,
+      refund_policy_set_at: new Date().toISOString(),
       lineup: normalizedLineup,
       allowed_email_domains: allowedEmailDomains.length > 0 ? allowedEmailDomains : null,
       created_at: new Date().toISOString(),

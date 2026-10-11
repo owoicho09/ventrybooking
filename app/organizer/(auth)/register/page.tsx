@@ -19,7 +19,7 @@ export default function OrganizerRegisterPage() {
   const [agreed, setAgreed] = useState(false);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState('');
-  const [form, setForm] = useState({ name: '', email: '', phone: '', password: '', confirmPassword: '', referralCode: '' });
+  const [form, setForm] = useState({ legalName: '', name: '', email: '', phone: '', password: '', confirmPassword: '', referralCode: '' });
 
   const set = (field: string) => (e: React.ChangeEvent<HTMLInputElement>) =>
     setForm((prev) => ({ ...prev, [field]: e.target.value }));
@@ -101,7 +101,22 @@ export default function OrganizerRegisterPage() {
           )}
 
           <form onSubmit={handleSubmit} className="flex flex-col gap-4">
-            <Input label="Full Name" value={form.name} onChange={set('name')} placeholder="Chukwuemeka Obi" required />
+            <Input
+              label="Your legal name"
+              value={form.legalName}
+              onChange={set('legalName')}
+              placeholder="Chukwuemeka Obi"
+              helper="As it appears on your NIN and bank account. Used for verification and payouts; never shown to buyers."
+              required
+            />
+            <Input
+              label="Display name"
+              value={form.name}
+              onChange={set('name')}
+              placeholder="e.g. Afrobeat Nights Lagos"
+              helper="The name buyers see on your events and profile. It can be your brand or event name."
+              required
+            />
             <Input label="Email" type="email" value={form.email} onChange={set('email')} placeholder="you@example.com" required />
             <Input label="Phone Number" type="tel" value={form.phone} onChange={set('phone')} placeholder="+234 801 234 5678" required />
             <Input label="Password" type="password" value={form.password} onChange={set('password')} placeholder="Create a strong password" required />

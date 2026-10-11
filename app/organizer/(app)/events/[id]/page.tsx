@@ -15,6 +15,11 @@ import { useToast } from '@/components/ui/Toast';
 import { formatNGN, formatShortDate } from '@/lib/utils';
 import { PLATFORM_FEE_RATE } from '@/lib/fees';
 import { ACCENT_COLOR_PRESETS } from '@/lib/accentColors';
+import { RefundPolicyFields, type RefundPolicyDraft } from '@/components/organizer/RefundPolicyFields';
+import { parseRefundPolicy, type RefundPolicyAnswers } from '@/lib/refundPolicy';
+import { EventPreview } from '@/components/events/EventPreview';
+import type { DetailEvent } from '@/components/events/EventDetailContent';
+import type { EventCategory } from '@/types';
 import { BannerCropInput } from '@/components/organizer/BannerCropInput';
 import { FlyerUploadInput } from '@/components/organizer/FlyerUploadInput';
 import { EventQRCode } from '@/components/organizer/EventQRCode';
@@ -42,6 +47,7 @@ interface OrgEvent {
   meeting_link: string | null; meeting_passcode: string | null;
   status: string; total_sold: number; banner_url: string | null; header_banner_url: string | null; banner_color: string;
   accent_color: string | null; lineup: LineupAct[]; allowed_email_domains: string[] | null;
+  refund_policy: RefundPolicyAnswers | null; refund_policy_set_at: string | null;
   organizer_id: string; tiers: Tier[];
 }
 
@@ -159,6 +165,20 @@ export default function OrganizerEventDetailPage() {
   const [restrictedDomainsInput, setRestrictedDomainsInput] = useState('');
   const [savingBranding, setSavingBranding] = useState(false);
   const [platformFeeRate, setPlatformFeeRate] = useState(PLATFORM_FEE_RATE);
+  const [policyDraft, setPolicyDraft] = useState<RefundPolicyDraft>({});
+  const [policyConfirmed, setPolicyConfirmed] = useState(false);
+  const [savingPolicy, setSavingPolicy] = useState(false);
+  const [displayName, setDisplayName] = useState('');
+  const [accountEmail, setAccountEmail] = useState('');
+  const [me, setMe] = useState<{ id?: string; name?: string; verified?: boolean; handle?: string | null; avatar_url?: string | null; member_since?: string; socials?: Record<string, string> } | null>(null);
+  const [previewing, setPreviewing] = useState(false);
+
+  useEffect(() => {
+    fetch('/api/organizer/me')
+      .then(r => r.json())
+      .then(d => { setDisplayName(d?.data?.name ?? ''); setAccountEmail(d?.data?.email ?? ''); setMe(d?.data ?? null); })
+      .catch(() => {});
+  }, []);
 
   const load = () => {
     setLoading(true);
@@ -181,6 +201,11 @@ export default function OrganizerEventDetailPage() {
           setAccentColor(d.data.accent_color ?? null);
           setLineup(d.data.lineup ?? []);
           setRestrictedDomainsInput((d.data.allowed_email_domains ?? []).join(', '));
+          const rp = d.data.refund_policy as RefundPolicyAnswers | null;
+          setPolicyDraft(rp
+            ? { cancelDays: String(rp.cancelDays), postponement: rp.postponement, venueChange: rp.venueChange, guestNoShow: rp.guestNoShow, contactEmail: rp.contactEmail }
+            : {});
+          setPolicyConfirmed(false);
         } else {
           toast(d.error || 'Event not found', 'error');
           router.push('/organizer/events');
@@ -246,6 +271,72 @@ export default function OrganizerEventDetailPage() {
       load();
     } finally {
       setSavingBranding(false);
+    }
+  };
+
+  // The account email pre-fills the refund contact until the organiser types one.
+  const policyValue: RefundPolicyDraft = { ...policyDraft, contactEmail: policyDraft.contactEmail ?? (event?.refund_policy ? undefined : accountEmail) };
+
+  const draftPolicy = parseRefundPolicy(policyValue);
+  const previewEvent: DetailEvent | null = event ? {
+    id: event.id,
+    slug: event.slug,
+    name: event.event_name,
+    category: event.category as EventCategory,
+    description,
+    date: date || event.date,
+    time: time || event.time,
+    event_mode: event.event_mode,
+    venue: locationHidden ? 'Exact location undisclosed' : venue,
+    address: locationHidden ? '' : address,
+    city,
+    landmark: landmark || null,
+    location_hidden: locationHidden,
+    locationHidden,
+    status: event.status === 'completed' ? 'completed' : 'approved',
+    totalSold: event.total_sold,
+    bannerColor: event.banner_color,
+    banner_url: event.banner_url,
+    headerBannerUrl: event.header_banner_url,
+    accentColor,
+    verified: false,
+    refundPolicy: draftPolicy.ok ? draftPolicy.value : event.refund_policy,
+    allowedEmailDomains: restrictedDomainsInput.split(',').map(d => d.trim()).filter(Boolean),
+    lineup: lineup.filter(a => a.name.trim() || a.liability === 'surprise').map(a => ({ name: a.name, role: a.role, liability: a.liability, photoUrl: a.photoUrl ?? null })),
+    tiers: event.tiers,
+    organizer: {
+      id: me?.id ?? event.organizer_id,
+      name: me?.name ?? displayName,
+      email: '',
+      phone: '',
+      tier: 'Standard',
+      verified: !!me?.verified,
+      memberSince: me?.member_since ?? '',
+      eventsHosted: 0,
+      handle: me?.handle ?? null,
+      avatar_url: me?.avatar_url ?? null,
+      kycStatus: 'approved',
+      socials: me?.socials,
+    },
+  } : null;
+
+  const handleSavePolicy = async () => {
+    const parsed = parseRefundPolicy(policyValue);
+    if (!parsed.ok) { toast(parsed.error, 'error'); return; }
+    if (!policyConfirmed) { toast('Tick the confirmation to publish your refund policy', 'error'); return; }
+    setSavingPolicy(true);
+    try {
+      const res = await fetch(`/api/organizer/events/${id}`, {
+        method: 'PATCH',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ refund_policy: parsed.value }),
+      });
+      const data = await res.json();
+      if (!res.ok) { toast(data.error || 'Could not save the refund policy', 'error'); return; }
+      toast('Refund policy published', 'success');
+      load();
+    } finally {
+      setSavingPolicy(false);
     }
   };
 
@@ -442,6 +533,7 @@ export default function OrganizerEventDetailPage() {
             </p>
           </div>
           <div className="flex items-center gap-2 flex-wrap">
+            <Button size="sm" variant="outline" onClick={() => setPreviewing(true)}><Eye size={14} />Preview page</Button>
             {allSoldOut && <Badge variant="gray">Sold Out</Badge>}
             {event.status === 'approved'    && <Badge variant="green">Live</Badge>}
             {event.status === 'under_review' && <Badge variant="amber">Under Review</Badge>}
@@ -674,7 +766,7 @@ export default function OrganizerEventDetailPage() {
 
         <div>
           <p className="text-sm font-medium mb-1.5" style={{ color: 'var(--color-text)' }}>Accent Colour</p>
-          <p className="text-xs mb-3" style={{ color: 'var(--color-text-dim)' }}>Threaded through your event page — the buy button, ticket tiers, prices and section icons. Auto-adjusted for readability in both themes.</p>
+          <p className="text-xs mb-3" style={{ color: 'var(--color-text-dim)' }}>Tints your whole event page: the background, cards, ticket panel and buy button. In light mode it sits on white, in dark mode on Ventry&apos;s purple-black. Auto-adjusted for readability in both themes; use Preview to check both.</p>
           <div className="flex flex-wrap gap-2.5">
             <button
               type="button"
@@ -766,9 +858,38 @@ export default function OrganizerEventDetailPage() {
           />
         </div>
 
-        <Button size="sm" disabled={savingBranding} onClick={handleSaveBranding} className="self-start">
-          {savingBranding ? 'Saving…' : 'Save Branding'}
-        </Button>
+        <div className="flex flex-wrap gap-2">
+          <Button size="sm" disabled={savingBranding} onClick={handleSaveBranding}>
+            {savingBranding ? 'Saving…' : 'Save Branding'}
+          </Button>
+          <Button size="sm" variant="outline" onClick={() => setPreviewing(true)}><Eye size={14} />Preview before saving</Button>
+        </div>
+      </div>
+
+      {/* Refund policy */}
+      <div className="rounded-xl border p-5 flex flex-col gap-4"
+        style={{ backgroundColor: 'var(--color-surface)', borderColor: event.refund_policy ? 'var(--color-border)' : 'var(--color-amber)' }}>
+        <div>
+          <h2 className="font-semibold" style={{ color: 'var(--color-text)' }}>Refund Policy</h2>
+          <p className="text-xs mt-0.5" style={{ color: event.refund_policy ? 'var(--color-text-muted)' : 'var(--color-amber)' }}>
+            {event.refund_policy
+              ? `Published${event.refund_policy_set_at ? ` on ${new Date(event.refund_policy_set_at).toLocaleDateString('en-GB', { day: 'numeric', month: 'short', year: 'numeric' })}` : ''}. Shown on your event page and at checkout.`
+              : 'Not set yet. Buyers currently only see Ventry\u2019s minimum standards. Answer the five questions to publish your policy.'}
+          </p>
+        </div>
+        <RefundPolicyFields
+          value={policyValue}
+          onChange={setPolicyDraft}
+          organizerName={displayName}
+          confirmed={policyConfirmed}
+          onConfirmedChange={setPolicyConfirmed}
+          lockedReason={hasSales && event.refund_policy ? 'Tickets have been sold under this policy, so it is locked. Contact support if something needs correcting.' : null}
+        />
+        {!(hasSales && event.refund_policy) && (
+          <Button size="sm" disabled={savingPolicy || !policyConfirmed} onClick={handleSavePolicy} className="self-start">
+            {savingPolicy ? 'Saving…' : event.refund_policy ? 'Update refund policy' : 'Publish refund policy'}
+          </Button>
+        )}
       </div>
 
       {/* QR code */}
@@ -895,6 +1016,7 @@ export default function OrganizerEventDetailPage() {
           </button>
         </div>
       </div>
+      {previewing && previewEvent && <EventPreview event={previewEvent} onClose={() => setPreviewing(false)} />}
     </div>
   );
 }

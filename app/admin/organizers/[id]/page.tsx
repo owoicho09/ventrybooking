@@ -11,7 +11,7 @@ import { useToast } from '@/components/ui/Toast';
 import { formatNGN, formatShortDate } from '@/lib/utils';
 
 interface Profile {
-  id: string; name: string; email: string; phone: string; handle: string | null;
+  id: string; name: string; legal_name: string | null; email: string; phone: string; handle: string | null;
   tier: string; verified: boolean; member_since: string | null; kyc_status: string;
   kyc_submitted_at: string | null; kyc_gov_id_path: string | null; kyc_selfie_path: string | null;
   kyc_social_twitter: string | null; kyc_social_instagram: string | null; kyc_social_facebook: string | null;
@@ -133,6 +133,10 @@ export default function AdminOrganizerDetailPage() {
             <h1 className="text-2xl font-bold" style={{ color: 'var(--color-text)', fontFamily: 'var(--font-syne), sans-serif' }}>
               {profile.name}
             </h1>
+            <p className="text-sm mt-0.5" style={{ color: 'var(--color-text-muted)' }}>
+              Legal name: <span style={{ color: 'var(--color-text)' }}>{profile.legal_name || 'not given yet'}</span>
+              <span style={{ color: 'var(--color-text-dim)' }}> · display name above is what buyers see</span>
+            </p>
             <p className="text-sm mt-0.5" style={{ color: 'var(--color-text-muted)' }}>
               {profile.email} &bull; {profile.phone}{profile.handle && <> &bull; @{profile.handle}</>}
             </p>

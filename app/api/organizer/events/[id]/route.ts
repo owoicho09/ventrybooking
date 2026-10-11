@@ -5,6 +5,7 @@ import { sendLocationUpdatedEmail, sendMeetingLinkUpdatedEmail } from '@/lib/ser
 import { isValidAccentColor } from '@/lib/accentColors';
 import { normalizeLineup, type LineupAct } from '@/lib/server/lineup';
 import { normalizeEmailDomains } from '@/lib/server/domainRestriction';
+import { parseRefundPolicy, type RefundPolicyAnswers } from '@/lib/refundPolicy';
 import { createChangeRefundWindow, countAppliedEventChanges, FREE_ORGANIZER_CHANGE_LIMIT } from '@/lib/server/eventChangeWindow';
 import { notify } from '@/lib/server/notify';
 import { PLATFORM_FEE_RATE } from '@/lib/fees';
@@ -26,7 +27,7 @@ export async function GET(
       .from('events')
       .select(`
         id, slug, event_name, category, description, date, time, event_mode, venue, address, city, landmark,
-        location_hidden, meeting_link, meeting_passcode, status, total_sold, banner_color, banner_url, header_banner_url, accent_color, lineup, allowed_email_domains, organizer_id, created_at,
+        location_hidden, meeting_link, meeting_passcode, status, total_sold, banner_color, banner_url, header_banner_url, accent_color, lineup, allowed_email_domains, organizer_id, created_at, refund_policy, refund_policy_set_at,
         tiers:ticket_tiers(id, name, price, available, sold)
       `)
       .eq('id', id)
@@ -60,7 +61,7 @@ export async function PATCH(
 
     const { data: event } = await db
       .from('events')
-      .select('id, slug, organizer_id, status, event_name, date, time, event_mode, venue, address, city, landmark, location_hidden, meeting_link, meeting_passcode')
+      .select('id, slug, organizer_id, status, event_name, date, time, event_mode, venue, address, city, landmark, location_hidden, meeting_link, meeting_passcode, refund_policy')
       .eq('id', id)
       .single();
 
@@ -90,7 +91,20 @@ export async function PATCH(
       allowedFields = ['event_name', 'description', 'date', 'time', 'venue', 'address', 'city', 'landmark', 'location_hidden', 'meeting_link', 'meeting_passcode', 'category', 'banner_url', 'accent_color', 'lineup', 'allowed_email_domains'];
     }
 
-    const updates: Record<string, string | boolean | null | LineupAct[] | string[]> = {};
+    const updates: Record<string, string | boolean | null | LineupAct[] | string[] | RefundPolicyAnswers> = {};
+
+    // Refund policy (Organiser Terms 4.4): free to set or change until a
+    // ticket is sold; an event already selling without one may set it once.
+    // After that it is what buyers paid under, so it is locked.
+    if (body.refund_policy !== undefined) {
+      if (hasSales && event.refund_policy) {
+        return NextResponse.json({ error: 'Tickets have been sold under this refund policy, so it can\u2019t be changed. Contact support if something is wrong.' }, { status: 409 });
+      }
+      const parsed = parseRefundPolicy(body.refund_policy);
+      if (!parsed.ok) return NextResponse.json({ error: parsed.error }, { status: 400 });
+      updates.refund_policy = parsed.value;
+      updates.refund_policy_set_at = new Date().toISOString();
+    }
     for (const key of allowedFields) {
       if (body[key] !== undefined) {
         if (key === 'location_hidden') {

@@ -2,6 +2,7 @@
 
 import { useState, useEffect } from 'react';
 import Link from 'next/link';
+import { readRefundPolicy, describeRefundPolicy, MINIMUM_STANDARDS } from '@/lib/refundPolicy';
 import { Shield, Lock } from 'lucide-react';
 import { PublicNav } from '@/components/layout/PublicNav';
 import { Button } from '@/components/ui/Button';
@@ -23,6 +24,10 @@ interface Cart {
   items: CartLine[];
   ref?: string;
   allowedEmailDomains?: string[] | null;
+  /** The event's published refund policy (absent on carts saved before it existed). */
+  refundPolicy?: unknown;
+  organizerName?: string | null;
+  eventSlug?: string | null;
 }
 
 export default function CheckoutPage() {
@@ -294,6 +299,32 @@ export default function CheckoutPage() {
               </div>
             </div>
 
+            {(() => {
+              const policy = readRefundPolicy(cart.refundPolicy);
+              const href = cart.eventSlug ? `/${cart.eventSlug}#refund-policy` : null;
+              return (
+                <div className="rounded-lg border p-3 mb-4 text-xs leading-relaxed"
+                  style={{ borderColor: 'var(--color-border)', backgroundColor: 'var(--color-surface-2)' }}>
+                  <p className="font-semibold mb-1" style={{ color: 'var(--color-text)' }}>
+                    Refund policy{cart.organizerName ? ` · set by ${cart.organizerName}` : ''}
+                  </p>
+                  {policy ? (
+                    <ul className="flex flex-col gap-1" style={{ color: 'var(--color-text-muted)' }}>
+                      {describeRefundPolicy(policy, cart.organizerName ?? '').map(s => (
+                        <li key={s.title}><span style={{ color: 'var(--color-text)' }}>{s.title}:</span> {s.text}</li>
+                      ))}
+                    </ul>
+                  ) : (
+                    <p style={{ color: 'var(--color-text-muted)' }}>{MINIMUM_STANDARDS.join(' ')}</p>
+                  )}
+                  <p className="mt-1.5" style={{ color: 'var(--color-text-dim)' }}>
+                    Refunds are paid by the organiser, not Ventry. Changing your mind is not grounds for a refund.
+                    {href && <> <Link href={href} className="underline">Full policy</Link></>}
+                  </p>
+                </div>
+              );
+            })()}
+
             {!isFree && (
               <p className="text-[10px] leading-snug mb-4" style={{ color: 'var(--color-text-dim)' }}>
                 The service fee (2%, capped at ₦3,000 per ticket for tickets above ₦150,000) and processing fee are non-refundable under any circumstances.
@@ -414,7 +445,8 @@ export default function CheckoutPage() {
 
               <p className="text-[11px] leading-relaxed" style={{ color: 'var(--color-text-dim)' }}>
                 By {isFree ? 'getting this ticket' : 'purchasing'} you agree to Ventry&apos;s{' '}
-                <Link href="/terms/buyers" className="underline" style={{ color: 'var(--color-text-muted)' }}>Buyer Terms of Use</Link>.
+                <Link href="/terms/buyers" className="underline" style={{ color: 'var(--color-text-muted)' }}>Buyer Terms of Use</Link>
+                {' '}and this event&apos;s refund policy shown above.
               </p>
 
               <Button type="submit" size="lg" fullWidth disabled={loading || !email || domainBlocked}>

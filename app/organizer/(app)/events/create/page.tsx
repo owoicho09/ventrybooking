@@ -1,9 +1,9 @@
 'use client';
 
-import { useState } from 'react';
+import { useEffect, useMemo, useState } from 'react';
 import { useRouter } from 'next/navigation';
 import Link from 'next/link';
-import { Plus, Trash2, Upload } from 'lucide-react';
+import { Plus, Trash2, Upload, Eye } from 'lucide-react';
 import { Input, Textarea } from '@/components/ui/Input';
 import { Select } from '@/components/ui/Select';
 import { Button } from '@/components/ui/Button';
@@ -12,6 +12,11 @@ import { ACCENT_COLOR_PRESETS } from '@/lib/accentColors';
 import { BannerCropInput } from '@/components/organizer/BannerCropInput';
 import { FlyerUploadInput } from '@/components/organizer/FlyerUploadInput';
 import { compressImageFile } from '@/lib/compressImage';
+import { RefundPolicyFields, type RefundPolicyDraft } from '@/components/organizer/RefundPolicyFields';
+import { parseRefundPolicy } from '@/lib/refundPolicy';
+import { EventPreview } from '@/components/events/EventPreview';
+import type { DetailEvent } from '@/components/events/EventDetailContent';
+import type { EventCategory } from '@/types';
 
 interface Tier { id: string; name: string; price: string; quantity: string; }
 type LineupLiability = 'headliner' | 'guest' | 'surprise';
@@ -77,6 +82,78 @@ export default function CreateEventPage() {
   };
   const [lineup, setLineup] = useState<LineupAct[]>([]);
   const [restrictedDomainsInput, setRestrictedDomainsInput] = useState('');
+  const [refundPolicy, setRefundPolicy] = useState<RefundPolicyDraft>({});
+  const [policyConfirmed, setPolicyConfirmed] = useState(false);
+  const [accuracyConfirmed, setAccuracyConfirmed] = useState(false);
+  const [displayName, setDisplayName] = useState('');
+  const [me, setMe] = useState<{ id?: string; name?: string; verified?: boolean; handle?: string | null; avatar_url?: string | null; member_since?: string; socials?: Record<string, string> } | null>(null);
+  const [previewing, setPreviewing] = useState(false);
+
+  // The organiser's display name, for the refund-policy preview; their
+  // account email pre-fills the refund contact (they can change it).
+  useEffect(() => {
+    fetch('/api/organizer/me')
+      .then(r => r.json())
+      .then(d => {
+        if (!d?.data) return;
+        setDisplayName(d.data.name ?? '');
+        setMe(d.data);
+        setRefundPolicy(p => (p.contactEmail ? p : { ...p, contactEmail: d.data.email ?? '' }));
+      })
+      .catch(() => {});
+  }, []);
+  const policyCheck = parseRefundPolicy(refundPolicy);
+
+  const flyerUrl = useMemo(() => (banner ? URL.createObjectURL(banner) : null), [banner]);
+  const headerUrl = useMemo(() => (headerBanner ? URL.createObjectURL(headerBanner) : null), [headerBanner]);
+  useEffect(() => () => { if (flyerUrl) URL.revokeObjectURL(flyerUrl); }, [flyerUrl]);
+  useEffect(() => () => { if (headerUrl) URL.revokeObjectURL(headerUrl); }, [headerUrl]);
+
+  // The event exactly as the page will render it once live, built from the
+  // unsaved form. Nothing is uploaded or saved to preview it.
+  const previewEvent: DetailEvent = {
+    id: 'preview',
+    slug: 'preview',
+    name: name.trim() || 'Your event name',
+    category: category as EventCategory,
+    description,
+    date: date || new Date().toISOString().slice(0, 10),
+    time,
+    event_mode: eventMode,
+    venue: locationHidden ? 'Exact location undisclosed' : venue,
+    address: locationHidden ? '' : address,
+    city,
+    landmark: landmark || null,
+    location_hidden: locationHidden,
+    locationHidden,
+    status: 'approved',
+    totalSold: 0,
+    bannerColor: 'from-purple-900 to-indigo-900',
+    banner_url: flyerUrl,
+    headerBannerUrl: headerUrl,
+    accentColor,
+    verified: false,
+    refundPolicy: policyCheck.ok ? policyCheck.value : null,
+    allowedEmailDomains: restrictedDomainsInput.split(',').map(d => d.trim()).filter(Boolean),
+    lineup: lineup
+      .filter(a => a.name.trim() || a.liability === 'surprise')
+      .map(a => ({ name: a.liability === 'surprise' ? '' : a.name, role: a.role, liability: a.liability, photoUrl: a.photoPreview ?? null })),
+    tiers: tiers.map((t, i) => ({ id: `preview-${i}`, name: t.name.trim() || `Tier ${i + 1}`, price: Number(t.price) || 0, available: Number(t.quantity) || 0, sold: 0 })),
+    organizer: {
+      id: me?.id ?? 'preview',
+      name: me?.name ?? displayName,
+      email: '',
+      phone: '',
+      tier: 'Standard',
+      verified: !!me?.verified,
+      memberSince: me?.member_since ?? '',
+      eventsHosted: 0,
+      handle: me?.handle ?? null,
+      avatar_url: me?.avatar_url ?? null,
+      kycStatus: 'approved',
+      socials: me?.socials,
+    },
+  };
 
   const addTier = () => setTiers(p => [...p, { id: Date.now().toString(), name: '', price: '', quantity: '' }]);
   const removeTier = (id: string) => { if (tiers.length > 1) setTiers(p => p.filter(t => t.id !== id)); };
@@ -99,6 +176,9 @@ export default function CreateEventPage() {
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
+    if (!policyCheck.ok) { toast(policyCheck.error, 'error'); return; }
+    if (!policyConfirmed) { toast('Confirm your refund policy before publishing', 'error'); return; }
+    if (!accuracyConfirmed) { toast('Confirm your event information is accurate before publishing', 'error'); return; }
     setLoading(true);
     try {
       const fd = new FormData();
@@ -121,6 +201,8 @@ export default function CreateEventPage() {
       }
       fd.append('tiers', JSON.stringify(tiers.map(t => ({ name: t.name, price: t.price, quantity: t.quantity }))));
       if (accentColor) fd.append('accentColor', accentColor);
+      fd.append('refundPolicy', JSON.stringify(policyCheck.value));
+      fd.append('confirmAccurate', 'true');
       const domains = restrictedDomainsInput.split(',').map(d => d.trim()).filter(Boolean);
       if (domains.length) fd.append('allowedEmailDomains', JSON.stringify(domains));
       const validLineup = lineup.filter(a => a.name.trim() || a.liability === 'surprise');
@@ -206,7 +288,7 @@ export default function CreateEventPage() {
         </div>
         <div>
           <label className="text-sm font-medium block mb-1.5" style={{ color: 'var(--color-text)' }}>Accent Colour</label>
-          <p className="text-xs mb-3" style={{ color: 'var(--color-text-dim)' }}>Threaded through your event page — the buy button, ticket tiers, prices and section icons. Auto-adjusted for readability in both themes. The Ventry masthead and checkout always stay Ventry purple.</p>
+          <p className="text-xs mb-3" style={{ color: 'var(--color-text-dim)' }}>Tints your whole event page: the background, cards, ticket panel and buy button. In light mode it sits on white, in dark mode on Ventry&apos;s purple-black. Auto-adjusted for readability in both themes. Checkout always stays Ventry purple.</p>
           {accentAutoDetected && accentColor && (
             <p className="text-xs mb-2 flex items-center gap-1.5" style={{ color: 'var(--color-purple-light)' }}>
               <span className="w-3 h-3 rounded-full inline-block" style={{ backgroundColor: accentColor }} />
@@ -252,6 +334,9 @@ export default function CreateEventPage() {
               />
             )}
           </div>
+          <button type="button" onClick={() => setPreviewing(true)} className="mt-3 inline-flex items-center gap-2 text-sm font-medium" style={{ color: 'var(--color-purple-light)' }}>
+            <Eye size={15} />See it on your event page (light and dark)
+          </button>
         </div>
         <div>
           <label className="text-sm font-medium block mb-1.5" style={{ color: 'var(--color-text)' }}>Restrict to Email Domains (optional)</label>
@@ -418,7 +503,23 @@ export default function CreateEventPage() {
       </section>
 
       <section className="rounded-xl border p-6 flex flex-col gap-5" style={{ backgroundColor: 'var(--color-surface)', borderColor: 'var(--color-border)' }}>
-        <h2 className="font-semibold text-lg" style={{ color: 'var(--color-text)' }}>5. Review & Publish</h2>
+        <div>
+          <h2 className="font-semibold text-lg" style={{ color: 'var(--color-text)' }}>5. Refund Policy</h2>
+          <p className="text-xs mt-0.5" style={{ color: 'var(--color-text-dim)' }}>
+            Required before your event can go live. Five questions; Ventry writes your published policy from your answers.
+          </p>
+        </div>
+        <RefundPolicyFields
+          value={refundPolicy}
+          onChange={setRefundPolicy}
+          organizerName={displayName}
+          confirmed={policyConfirmed}
+          onConfirmedChange={setPolicyConfirmed}
+        />
+      </section>
+
+      <section className="rounded-xl border p-6 flex flex-col gap-5" style={{ backgroundColor: 'var(--color-surface)', borderColor: 'var(--color-border)' }}>
+        <h2 className="font-semibold text-lg" style={{ color: 'var(--color-text)' }}>6. Review & Publish</h2>
         <div className="rounded-lg p-4 text-sm" style={{ backgroundColor: 'var(--color-surface-2)', color: 'var(--color-text-muted)' }}>
           <p className="font-medium mb-2" style={{ color: 'var(--color-text)' }}>Summary</p>
           <p>Event: {name || '(not set)'}</p>
@@ -430,14 +531,30 @@ export default function CreateEventPage() {
             Your event goes <strong style={{ color: 'var(--color-text)' }}>live immediately</strong> after you submit — no waiting. Our team reviews new events shortly after publishing and may reach out if anything needs your attention.
           </p>
         </div>
+        <label className="flex items-start gap-3 text-sm cursor-pointer" style={{ color: 'var(--color-text)' }}>
+          <input
+            type="checkbox"
+            checked={accuracyConfirmed}
+            onChange={e => setAccuracyConfirmed(e.target.checked)}
+            className="mt-0.5 w-4 h-4 flex-shrink-0 accent-[var(--color-purple)]"
+          />
+          <span>
+            I confirm that everything I&apos;ve entered about this event is accurate and complete, that I have the right to hold it as
+            described, and that I have secured the venue.
+          </span>
+        </label>
         <p className="text-xs leading-relaxed" style={{ color: 'var(--color-text-dim)' }}>
           By listing this event you agree to Ventry&apos;s{' '}
           <Link href="/terms/organisers" className="underline" style={{ color: 'var(--color-text-muted)' }}>Organiser Terms of Use</Link>.
         </p>
-        <Button type="submit" size="lg" fullWidth disabled={loading}>
+        <Button type="button" variant="outline" size="lg" fullWidth onClick={() => setPreviewing(true)}>
+          <Eye size={16} />Preview event page
+        </Button>
+        <Button type="submit" size="lg" fullWidth disabled={loading || !policyCheck.ok || !policyConfirmed || !accuracyConfirmed}>
           {loading ? 'Publishing...' : 'Publish Event'}
         </Button>
       </section>
+      {previewing && <EventPreview event={previewEvent} onClose={() => setPreviewing(false)} />}
     </form>
   );
 }
