@@ -21,11 +21,11 @@ const faqItems = [
   },
   {
     q: 'Will I get a refund if an event is cancelled?',
-    a: 'Yes. If an event is cancelled or rescheduled outright, or flagged as fraudulent, every ticket holder is refunded the base ticket price automatically — you don’t need to file anything. It typically appears back in your account within 3-5 business days. The Ventry service fee (2%, capped at ₦3,000 per ticket for tickets above ₦150,000) and the payment processing fee are non-refundable in every case.',
+    a: 'Yes, the base ticket price. If Ventry is still holding the money for your ticket, we refund it to your card automatically. Otherwise the organiser refunds you: we email you a refund ID and you claim at ventrybooking.com/refunds/claim within 30 days (we remind you on days 15, 25 and 30). At the end, the organiser gets one list of everyone who claimed and pays you directly within the time they published (7, 14 or 30 days). The service fee and processing fee are not refundable.',
   },
   {
     q: 'What if the venue, date or a billed headliner changes?',
-    a: 'A change of venue or date, or a billed Headliner not appearing, opens a 48-hour window from the moment we notify you to request a refund — after that the window closes and your ticket stands as-is for the new details. If the event itself goes wrong on the day (e.g. it doesn’t happen as promised), that claim must be filed within 24 hours of the event ending. See our Buyer Terms for the full policy.',
+    a: 'An event can be postponed or moved once, and never within 7 days of the date. Your ticket stays valid; whether you can claim a refund instead depends on the refund policy shown on the event page before you paid, and our email tells you how. A new start time on the same day keeps your ticket valid with no refund. If an act billed as Headliner does not appear, you can claim within 24 hours after the event ends at ventrybooking.com/refunds/claim; Ventry checks it with the organiser and the venue before the organiser pays.',
   },
   {
     q: 'How do I report a suspicious or fraudulent event?',

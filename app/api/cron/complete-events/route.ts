@@ -2,6 +2,8 @@ import { NextRequest, NextResponse } from 'next/server';
 import { getServerSupabase } from '@/lib/supabase/server';
 import { sendReviewRequestEmail } from '@/lib/server/email';
 import { signTicketLink } from '@/lib/server/ticketLinks';
+import { readRefundPolicy } from '@/lib/refundPolicy';
+import { noShowClaimsClose } from '@/lib/server/refundCases';
 
 // Sequential sends of a few hundred emails need more than the platform's
 // default function time.
@@ -53,7 +55,7 @@ export async function GET(req: NextRequest) {
     // already-completed ones may still have review emails outstanding.
     const { data: events } = await db
       .from('events')
-      .select('id, slug, event_name, date, time, status, organizer:users!events_organizer_id_fkey(name)')
+      .select('id, slug, event_name, date, time, status, lineup, refund_policy, organizer:users!events_organizer_id_fkey(name)')
       .in('status', ['approved', 'completed'])
       .gte('date', windowStartStr)
       .lte('date', todayStr)
@@ -80,6 +82,17 @@ export async function GET(req: NextRequest) {
         }
         completedCount++;
       }
+
+      // Billed acts buyers can claim for if they didn't appear: the Headliner
+      // always; guests only where the organiser's policy offers it.
+      const guestCover = readRefundPolicy(event.refund_policy)?.guestNoShow === 'refund_on_request';
+      const coveredActs = (Array.isArray(event.lineup) ? event.lineup as { name?: string; liability?: string }[] : [])
+        .filter(a => a.name && (a.liability === 'headliner' || (guestCover && a.liability === 'guest')))
+        .map(a => String(a.name));
+      const noShowCloses = noShowClaimsClose(String(event.date), event.time);
+      const noShow = coveredActs.length && now < noShowCloses
+        ? { acts: coveredActs, closesAt: noShowCloses.toISOString(), claimUrl: `${process.env.NEXT_PUBLIC_APP_URL}/refunds/claim?type=no_show` }
+        : null;
 
       const organizerRaw = event.organizer as { name: string }[] | { name: string } | null;
       const organizerName = (Array.isArray(organizerRaw) ? organizerRaw[0] : organizerRaw)?.name ?? null;
@@ -142,6 +155,7 @@ export async function GET(req: NextRequest) {
             eventName: event.event_name,
             reviewUrl: `${process.env.NEXT_PUBLIC_APP_URL}/review/${token}`,
             organizerName,
+            noShow: noShow ? { ...noShow, claimUrl: `${noShow.claimUrl}&ticket=${encodeURIComponent(anchor.id)}` } : null,
           });
           await db
             .from('tickets')

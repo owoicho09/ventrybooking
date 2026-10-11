@@ -23,6 +23,7 @@ const statusBadge = (status: string) => {
     case 'valid':    return <Badge variant="green">Valid</Badge>;
     case 'used':     return <Badge variant="blue">Used</Badge>;
     case 'refunded': return <Badge variant="red">Refunded</Badge>;
+    case 'cancelled': return <Badge variant="amber">Cancelled (refund via claim)</Badge>;
     default:         return <Badge variant="gray">{status}</Badge>;
   }
 };

@@ -2,9 +2,11 @@ import { NextRequest, NextResponse } from 'next/server';
 import { getServerSupabase } from '@/lib/supabase/server';
 import { sendAdminDigestEmail } from '@/lib/server/email';
 import { runAddressReveals } from '@/lib/server/addressRevealJob';
+import { runRefundJobs } from '@/lib/server/refundCases';
 
-// Hourly. Also releases hidden event addresses whose reveal time has passed
-// (no separate schedule needed); a failure there never blocks the digest.
+// Hourly. Also releases hidden event addresses whose reveal time has passed,
+// and runs refund claim windows (notices, claim lists, overdue flags). A
+// failure in either never blocks the digest.
 export const maxDuration = 60;
 
 export async function GET(req: NextRequest) {
@@ -15,7 +17,11 @@ export async function GET(req: NextRequest) {
   }
 
   try {
-    await runAddressReveals(30_000)
+    await runRefundJobs(20_000)
+      .then(r => { if (r.notices || r.listsSent || r.overdue) console.log('refund jobs', r); })
+      .catch(err => console.error('refund jobs error', err));
+
+    await runAddressReveals(20_000)
       .then(r => { if (r.events) console.log('address reveals', r); })
       .catch(err => console.error('address reveal job error', err));
 

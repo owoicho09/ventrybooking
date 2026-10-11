@@ -7,10 +7,10 @@ const resend = new Resend(process.env.RESEND_API_KEY!);
 const FROM    = process.env.RESEND_FROM_EMAIL!;
 const APP_URL = process.env.NEXT_PUBLIC_APP_URL!;
 
-const esc = (s: string) =>
+export const esc = (s: string) =>
   s.replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/"/g, '&quot;');
 
-function emailShell(content: string) {
+export function emailShell(content: string) {
   return `<!DOCTYPE html>
 <html lang="en">
 <head><meta charset="UTF-8"><meta name="viewport" content="width=device-width,initial-scale=1">
@@ -43,7 +43,7 @@ const SUPPORT_EMAIL = 'support@ventrybooking.com';
 // OTP, payouts, etc.) reads as coming from Ventry. reply-to always routes to
 // support so organisers never receive buyer replies (e.g. to a refund email)
 // directly.
-async function sendEmail(opts: { to: string; subject: string; html: string; fromName?: string; replyTo?: string; purpose?: string }) {
+export async function sendEmail(opts: { to: string; subject: string; html: string; fromName?: string; replyTo?: string; purpose?: string }) {
   const { data, error } = await resend.emails.send({
     from: `${opts.fromName ?? 'Ventry'} <${FROM}>`,
     to: opts.to,
@@ -702,7 +702,12 @@ export async function sendReviewRequestEmail(params: {
   eventName: string;
   reviewUrl: string;
   organizerName?: string | null;
+  /** Billed acts whose no-show can be claimed for, and the claim deadline (Refund Policy §9). */
+  noShow?: { acts: string[]; closesAt: string; claimUrl: string } | null;
 }) {
+  const noShow = params.noShow && params.noShow.acts.length
+    ? `<p style="color:#9ca3af;font-size:12px;margin:20px 0 0;">Billed act didn&rsquo;t appear (${esc(params.noShow.acts.join(', '))})? You can <a href="${params.noShow.claimUrl}" style="color:#a855f7;">claim a refund</a> until ${esc(new Date(params.noShow.closesAt).toLocaleString('en-GB', { weekday: 'short', day: 'numeric', month: 'short', hour: '2-digit', minute: '2-digit', timeZone: 'Africa/Lagos' }))}.</p>`
+    : '';
   await sendEmail({
     to: params.to,
     fromName: getOrganizerSenderName(params.organizerName),
@@ -712,6 +717,7 @@ export async function sendReviewRequestEmail(params: {
       <p style="color:#f1f0ff;margin:0 0 24px;">Hi ${esc(params.buyerName || params.to)}, thanks for getting a ticket to <strong>${esc(params.eventName)}</strong>. Got a minute to rate it?</p>
       <a href="${params.reviewUrl}" class="btn">Leave a Review</a>
       <p class="footer" style="margin-top:20px;">Takes 10 seconds, no account needed. This link is personal to your ticket and works once.</p>
+      ${noShow}
     `),
   });
 }

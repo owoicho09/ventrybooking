@@ -18,6 +18,11 @@ export function generateRefundCode(): string {
   return `RF-${randomAlphaNum(4)}-${randomAlphaNum(2)}`;
 }
 
+/** Refund ID for a refund claim (Refund Policy §7.1) — longer than the purchase refund code, so it can be issued without a lookup. */
+export function generateClaimRefundId(): string {
+  return `RF-${randomAlphaNum(4)}-${randomAlphaNum(4)}`;
+}
+
 export function generatePayoutRef(): string {
   const year = new Date().getFullYear();
   return `VTR-PAY-${year}-${randomAlphaNum(6)}`;

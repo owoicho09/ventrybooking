@@ -58,10 +58,13 @@ export interface OrganizerRow {
   identity_status?: string | null;
   /** false when the bank account name doesn't match the verified identity. */
   bank_name_matched?: boolean | null;
+  /** Admin hold on all settlements (Organiser Terms §9, §11), e.g. refunds overdue or no-show claims being verified. */
+  settlement_hold?: boolean | null;
+  settlement_hold_reason?: string | null;
 }
 
 /** Every users column the settlement flow reads, in one place. */
-export const ORGANIZER_COLUMNS = 'id, name, email, bank_name, account_number, account_name, platform_fee_rate, identity_status, bank_name_matched';
+export const ORGANIZER_COLUMNS = 'id, name, email, bank_name, account_number, account_name, platform_fee_rate, identity_status, bank_name_matched, settlement_hold, settlement_hold_reason';
 
 /**
  * Organiser Terms 3.7: an organiser without a provider identity check can be
@@ -165,6 +168,17 @@ export const ELIGIBILITY_CONDITIONS: { id: string; check: (ctx: EligibilityConte
       if (settledTotal + releasableNet <= UNVERIFIED_SETTLEMENT_CAP) return null;
       const fmtN = (n: number) => '₦' + Math.round(n).toLocaleString('en-NG');
       return `Identity not verified: ${fmtN(settledTotal)} already paid, and this would pass the ${fmtN(UNVERIFIED_SETTLEMENT_CAP)} limit for unverified organisers. Ask them to verify with NIN or CAC.`;
+    },
+  },
+  {
+    // Organiser Terms §9/§11: admin hold (or automatic, while no-show claims are verified).
+    id: 'settlement_hold',
+    check: ({ organizer }) => {
+      if (!organizer.settlement_hold) return null;
+      const r = organizer.settlement_hold_reason ?? '';
+      return r.startsWith('no_show:')
+        ? 'Held while refund claims for a billed act not appearing are verified (Refunds page)'
+        : `Settlements held by admin${r ? `: ${r}` : ''}`;
     },
   },
   {

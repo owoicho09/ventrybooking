@@ -61,6 +61,14 @@ export default async function HomePage() {
 
       {/* ── Hero ── */}
       <header className="v-hero">
+        {/* Background loop: muted/inline so mobile browsers autoplay it. The loop
+            point is crossfaded in the file itself, and .v-hero-media fades its
+            bottom edge into the page so the hero runs straight into the next section. */}
+        <div className="v-hero-media" aria-hidden="true">
+          <video autoPlay muted loop playsInline preload="auto" poster="/hero-poster.jpg">
+            <source src="/hero.mp4" type="video/mp4" />
+          </video>
+        </div>
         <div className="v-hero-grid">
           <div>
             <h1>Every experience, one ticket away.</h1>

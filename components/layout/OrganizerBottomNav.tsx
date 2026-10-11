@@ -3,7 +3,7 @@
 import { useState, useEffect } from 'react';
 import Link from 'next/link';
 import { usePathname } from 'next/navigation';
-import {
+import { RotateCcw,
   LayoutDashboard,
   CalendarDays,
   PlusCircle,
@@ -30,6 +30,7 @@ const moreItems = [
   { href: '/organizer/audience', label: 'Audience',  icon: Users },
   { href: '/organizer/staff',    label: 'Staff IDs', icon: KeyRound },
   { href: '/organizer/payouts',  label: 'Payouts',   icon: Wallet },
+  { href: '/organizer/refunds',  label: 'Refunds',   icon: RotateCcw },
   { href: '/organizer/scan',     label: 'Scanner',   icon: ScanLine },
   { href: '/organizer/settings', label: 'Settings',  icon: Settings },
 ];

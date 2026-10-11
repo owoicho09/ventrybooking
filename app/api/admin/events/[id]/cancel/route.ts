@@ -1,242 +1,55 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { getAuthUser } from '@/lib/server/auth';
 import { getServerSupabase } from '@/lib/supabase/server';
-import { refundTransaction } from '@/lib/server/paystack';
-import { notify } from '@/lib/server/notify';
-import { calculateFees, basePriceFromTotalPaid } from '@/lib/server/fees';
-import { voidAffiliateCommissionsForEvent } from '@/lib/server/affiliateCommission';
+import { cancelEvent, previewCancellation, runRefundJobs } from '@/lib/server/refundCases';
 
-// GET — preview: count of refundable tickets + total refund amount (no side effects)
-export async function GET(
-  _req: NextRequest,
-  { params }: { params: Promise<{ id: string }> },
-) {
+// Cancelling an event (Refund Policy v3 §2, §6; Organiser Terms §10.9–10.11).
+// Ventry refunds the base price itself only where it still holds the money
+// (tickets not yet settled). Every other paid ticket gets a refund ID and a
+// 30-day claim window; the organiser pays from the claim list at the end.
+
+export const maxDuration = 60;
+
+// GET — preview for the confirm dialog (no side effects).
+export async function GET(_req: NextRequest, { params }: { params: Promise<{ id: string }> }) {
   const user = await getAuthUser();
-  if (!user || user.role !== 'admin') {
-    return NextResponse.json({ error: 'Forbidden' }, { status: 403 });
-  }
+  if (!user || user.role !== 'admin') return NextResponse.json({ error: 'Forbidden' }, { status: 403 });
 
   const { id } = await params;
   const db = getServerSupabase();
-
-  const { data: event } = await db
-    .from('events')
-    .select('id, event_name, status')
-    .eq('id', id)
-    .maybeSingle();
-
+  const { data: event } = await db.from('events').select('id, event_name, status').eq('id', id).maybeSingle();
   if (!event) return NextResponse.json({ error: 'Event not found' }, { status: 404 });
-  if (event.status !== 'approved') {
-    return NextResponse.json({ error: 'Only approved events can be cancelled' }, { status: 400 });
-  }
+  if (event.status !== 'approved') return NextResponse.json({ error: 'Only live events can be cancelled' }, { status: 400 });
 
-  const { data: tickets } = await db
-    .from('tickets')
-    .select('id, tier_id, paystack_reference, total_paid, subtotal')
-    .eq('event_id', id)
-    .neq('status', 'refunded');
-
-  const ticketCount     = tickets?.length ?? 0;
-  const refundableCount = tickets?.filter(t => t.paystack_reference).length ?? 0;
-
-  // Refund basis is what each ticket actually paid for the ticket itself, not the
-  // tier's current price — see the note in approve-refund/route.ts on why live
-  // tier prices drift from what was charged at purchase time.
-  const totalRefund = (tickets ?? []).reduce(
-    (sum, t) => sum + (t.subtotal ?? basePriceFromTotalPaid(t.total_paid)),
-    0,
-  );
-
+  const p = await previewCancellation(db, id);
   return NextResponse.json({
     success: true,
-    data: { eventName: event.event_name, ticketCount, refundableCount, totalRefund },
+    data: {
+      eventName: event.event_name,
+      ticketCount: p.held + p.settled + p.free,
+      heldCount: p.held, heldAmount: p.heldAmount,
+      settledCount: p.settled, settledAmount: p.settledAmount,
+      freeCount: p.free,
+    },
   });
 }
 
-// POST — execute: mark event cancelled, issue Paystack refund per active ticket
-export async function POST(
-  _req: NextRequest,
-  { params }: { params: Promise<{ id: string }> },
-) {
+// POST — cancel: refund held money, open the claim window, start the day-0 emails.
+export async function POST(req: NextRequest, { params }: { params: Promise<{ id: string }> }) {
   const user = await getAuthUser();
-  if (!user || user.role !== 'admin') {
-    return NextResponse.json({ error: 'Forbidden' }, { status: 403 });
-  }
+  if (!user || user.role !== 'admin') return NextResponse.json({ error: 'Forbidden' }, { status: 403 });
 
   const { id } = await params;
+  const { reason } = await req.json().catch(() => ({})) as { reason?: string };
   const db = getServerSupabase();
-
-  const { data: event } = await db
-    .from('events')
-    .select('id, event_name, status, organizer_id')
-    .eq('id', id)
-    .maybeSingle();
-
-  if (!event) return NextResponse.json({ error: 'Event not found' }, { status: 404 });
-  if (event.status !== 'approved') {
-    return NextResponse.json({ error: 'Only approved events can be cancelled' }, { status: 400 });
+  try {
+    const out = await cancelEvent(db, id, { adminId: user.sub, adminEmail: user.email ?? 'admin', reason: reason?.slice(0, 500) ?? null });
+    // Day-0 notices: as many as fit now; the hourly cron sends the rest.
+    await runRefundJobs(25_000, out.caseId).catch(err => console.error('cancel: first notices failed', err));
+    return NextResponse.json({ success: true, data: out });
+  } catch (err) {
+    const message = err instanceof Error ? err.message : 'Cancellation failed';
+    console.error('cancel event error', err);
+    return NextResponse.json({ error: message }, { status: 400 });
   }
-
-  // Mark event cancelled BEFORE processing refunds so no new tickets can be sold.
-  // Check the error — if the DB update fails, abort rather than refunding an event
-  // that is still technically live.
-  const { error: cancelErr } = await db
-    .from('events')
-    .update({ status: 'cancelled' })
-    .eq('id', id)
-    .eq('status', 'approved'); // guard against concurrent cancel requests
-
-  if (cancelErr) {
-    console.error('cancel event: failed to update event status', cancelErr);
-    return NextResponse.json({ error: 'Failed to cancel event — database error' }, { status: 500 });
-  }
-
-  voidAffiliateCommissionsForEvent(db, id).catch(err =>
-    console.error('cancel event: failed to void affiliate commissions', err));
-
-  const { data: tickets } = await db
-    .from('tickets')
-    .select('id, tier_id, paystack_reference, buyer_email, total_paid, subtotal')
-    .eq('event_id', id)
-    .neq('status', 'refunded');
-
-  if (!tickets || tickets.length === 0) {
-    notify({ type: 'admin' }, {
-      notifType: 'event',
-      title: `Event cancelled — ${event.event_name}`,
-      body: 'No outstanding tickets; no refunds required.',
-      link: '/admin/events',
-    }, { emailChannel: 'immediate' }).catch(console.error);
-    return NextResponse.json({ success: true, data: { refunded: 0, failed: 0, failures: [] } });
-  }
-
-  let refunded = 0;
-  let totalRefundedAmount = 0;
-  const failures: { ticketId: string; email: string; reason: string }[] = [];
-
-  // Tracks how many tickets were actually marked refunded per tier, so ticket_tiers.sold
-  // and events.total_sold can be given back to inventory once the loops below finish.
-  const tierRefundCounts = new Map<string, number>();
-  const bumpTierRefundCount = (tierId: string | null) => {
-    if (!tierId) return;
-    tierRefundCounts.set(tierId, (tierRefundCounts.get(tierId) ?? 0) + 1);
-  };
-
-  // Free tickets (no reference) — mark refunded without a Paystack call.
-  const freeTickets  = tickets.filter(t => !t.paystack_reference);
-  const paidTickets  = tickets.filter(t =>  t.paystack_reference);
-
-  for (const ticket of freeTickets) {
-    // Refund basis is what this ticket actually paid for the ticket itself, not the
-    // tier's current price — see the note in approve-refund/route.ts for why.
-    const refundAmount = ticket.subtotal ?? basePriceFromTotalPaid(ticket.total_paid);
-    if (refundAmount > 0) {
-      failures.push({ ticketId: ticket.id, email: ticket.buyer_email, reason: 'No payment reference on file — refund manually via Paystack dashboard' });
-      continue;
-    }
-    await db.from('tickets').update({ status: 'refunded' }).eq('id', ticket.id);
-    refunded++;
-    bumpTierRefundCount(ticket.tier_id);
-  }
-
-  // Group paid tickets by paystack_reference so that multi-ticket orders placed in
-  // one transaction receive a SINGLE Paystack refund call. Calling Paystack once per
-  // ticket row on the same reference causes the second call to be rejected while the
-  // first refund is still pending, leaving the buyer short-changed.
-  const byReference = new Map<string, typeof paidTickets>();
-  for (const ticket of paidTickets) {
-    const ref = ticket.paystack_reference!;
-    if (!byReference.has(ref)) byReference.set(ref, []);
-    byReference.get(ref)!.push(ticket);
-  }
-
-  for (const [reference, group] of byReference) {
-    const totalRefundAmount = group.reduce((sum, t) => sum + (t.subtotal ?? basePriceFromTotalPaid(t.total_paid)), 0);
-
-    if (totalRefundAmount === 0) {
-      // All tickets in this order were free-tier — mark refunded without Paystack.
-      for (const ticket of group) {
-        await db.from('tickets').update({ status: 'refunded' }).eq('id', ticket.id);
-        refunded++;
-        bumpTierRefundCount(ticket.tier_id);
-      }
-      continue;
-    }
-
-    // One Paystack refund call for the entire order (covers all tickets in the group).
-    try {
-      await refundTransaction({ transaction: reference, amount: totalRefundAmount * 100 });
-    } catch (err) {
-      const reason = err instanceof Error ? err.message : 'Paystack refund failed';
-      for (const ticket of group) {
-        failures.push({ ticketId: ticket.id, email: ticket.buyer_email, reason });
-      }
-      continue;
-    }
-
-    // Mark all tickets in the group as refunded. Log DB failures but don't surface
-    // them as refund failures — the Paystack refund already succeeded and retrying
-    // would double-refund the buyer.
-    for (const ticket of group) {
-      const { error: updateErr } = await db
-        .from('tickets')
-        .update({ status: 'refunded' })
-        .eq('id', ticket.id);
-      if (updateErr) {
-        console.error(`cancel event: Paystack refund succeeded but DB update failed for ticket ${ticket.id}`, updateErr);
-      } else {
-        bumpTierRefundCount(ticket.tier_id);
-      }
-      refunded++;
-    }
-    totalRefundedAmount += totalRefundAmount;
-  }
-
-  // Give refunded tickets back to inventory. increment_tier_sold accepts a negative
-  // delta, so this atomically decrements both ticket_tiers.sold and events.total_sold.
-  for (const [tierId, count] of tierRefundCounts) {
-    const { error: tierErr } = await db.rpc('increment_tier_sold', { tier_id: tierId, amount: -count });
-    if (tierErr) {
-      console.error('cancel event: tier sold-count decrement failed', { tierId, count, tierErr });
-    }
-  }
-
-  // Reduce the payout record by the total amount successfully refunded to buyers.
-  if (totalRefundedAmount > 0) {
-    const { data: payout } = await db
-      .from('payouts')
-      .select('id, gross')
-      .eq('event_id', id)
-      .maybeSingle();
-
-    if (payout) {
-      const { data: org } = await db
-        .from('users')
-        .select('platform_fee_rate')
-        .eq('id', event.organizer_id)
-        .maybeSingle();
-      const newGross = Math.max(0, payout.gross - totalRefundedAmount);
-      const { fee, net } = calculateFees(newGross, org?.platform_fee_rate);
-      await db.from('payouts').update({ gross: newGross, fee, net }).eq('id', payout.id);
-    }
-  }
-
-  notify({ type: 'organizer', id: event.organizer_id }, {
-    notifType: 'event',
-    title: `Event cancelled — ${event.event_name}`,
-    body: `Your event was cancelled by admin. ${refunded} ticket${refunded !== 1 ? 's' : ''} will be refunded to buyers.`,
-    link: '/organizer/events',
-  }).catch(console.error);
-
-  notify({ type: 'admin' }, {
-    notifType: 'event',
-    title: `Event cancelled — ${event.event_name}`,
-    body: `${refunded} refund${refunded !== 1 ? 's' : ''} processed${failures.length > 0 ? `, ${failures.length} failed` : ' successfully'}.`,
-    link: '/admin/events',
-  }, { emailChannel: 'immediate' }).catch(console.error);
-
-  return NextResponse.json({
-    success: true,
-    data: { refunded, failed: failures.length, failures },
-  });
 }

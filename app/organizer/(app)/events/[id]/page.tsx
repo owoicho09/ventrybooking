@@ -690,7 +690,7 @@ export default function OrganizerEventDetailPage() {
               <div className="rounded-lg px-4 py-3 flex items-start gap-2 text-sm" style={{ backgroundColor: '#f59e0b10', border: '1px solid #f59e0b30' }}>
                 <AlertTriangle size={15} className="flex-shrink-0 mt-0.5" style={{ color: 'var(--color-amber)' }} />
                 <p style={{ color: 'var(--color-text-muted)' }}>
-                  Saving this date change will email every current ticket holder and give them a 48-hour window to opt out for a full refund. The event keeps selling throughout. This counts as your event&apos;s one postponement: after it, the date and venue can&apos;t move again. A new date must be within 30 days of the original and at least 7 days away, and nothing can move in the last 7 days before the event.
+                  Saving this date change emails every current ticket holder. Their tickets stay valid; if your refund policy offers a refund on postponement, they get 30 days to claim one, and you pay the claims from one list at the end. This counts as your event&apos;s one postponement: after it, the date and venue can&apos;t move again. A new date must be within 30 days of the original and at least 7 days away, and nothing can move in the last 7 days before the event.
                 </p>
               </div>
             )}
@@ -713,7 +713,7 @@ export default function OrganizerEventDetailPage() {
                   <div className="rounded-lg px-4 py-3 flex items-start gap-2 text-sm" style={{ backgroundColor: '#f59e0b10', border: '1px solid #f59e0b30' }}>
                     <AlertTriangle size={15} className="flex-shrink-0 mt-0.5" style={{ color: 'var(--color-amber)' }} />
                     <p style={{ color: 'var(--color-text-muted)' }}>
-                      Saving this venue change will email every current ticket holder and give them a 48-hour window to opt out for a full refund. The event keeps selling throughout. This counts as your event&apos;s one postponement: after it, the date and venue can&apos;t move again. A new date must be within 30 days of the original and at least 7 days away, and nothing can move in the last 7 days before the event.
+                      Saving this venue change emails every current ticket holder. Their tickets stay valid; if your refund policy offers a refund on a venue change, they get 30 days to claim one, and you pay the claims from one list at the end. This counts as your event&apos;s one postponement: after it, the date and venue can&apos;t move again. A new date must be within 30 days of the original and at least 7 days away, and nothing can move in the last 7 days before the event.
                     </p>
                   </div>
                 )}

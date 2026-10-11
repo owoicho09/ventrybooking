@@ -45,12 +45,15 @@ interface EventData {
 interface CancelPreview {
   eventName: string;
   ticketCount: number;
-  refundableCount: number;
-  totalRefund: number;
+  heldCount: number; heldAmount: number;
+  settledCount: number; settledAmount: number;
+  freeCount: number;
 }
 
-interface CancelFailure { ticketId: string; email: string; reason: string; }
-interface CancelResult  { refunded: number; failed: number; failures: CancelFailure[]; }
+interface CancelResult {
+  heldRefunded: number; heldRefundedAmount: number; heldFailed: number;
+  claimable: number; claimableAmount: number; free: number; warnings: string[];
+}
 
 type CancelStep = 'loading' | 'confirm' | 'processing' | 'result' | null;
 
@@ -93,6 +96,7 @@ export default function AdminEventsPage() {
   const [cancelStep,    setCancelStep]    = useState<CancelStep>(null);
   const [cancelPreview, setCancelPreview] = useState<CancelPreview | null>(null);
   const [cancelResult,  setCancelResult]  = useState<CancelResult | null>(null);
+  const [cancelReason,  setCancelReason]  = useState('');
 
   const load = () => {
     setLoading(true);
@@ -159,13 +163,16 @@ export default function AdminEventsPage() {
     if (!selectedEvent) return;
     setCancelStep('processing');
     try {
-      const res  = await fetch(`/api/admin/events/${selectedEvent.id}/cancel`, { method: 'POST' });
+      const res  = await fetch(`/api/admin/events/${selectedEvent.id}/cancel`, {
+        method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ reason: cancelReason }),
+      });
       const data = await res.json();
       if (data.success) {
         setCancelResult(data.data);
         setCancelStep('result');
         load();
       } else {
+        toast(data.error || 'Cancellation failed', 'error');
         setCancelStep('confirm');
       }
     } catch {
@@ -382,34 +389,35 @@ export default function AdminEventsPage() {
                     </p>
                   </div>
                   <p className="text-sm mb-3" style={{ color: 'var(--color-text-muted)' }}>
-                    This will permanently cancel{' '}
-                    <strong style={{ color: 'var(--color-text)' }}>{selectedEvent.name}</strong>{' '}
-                    and automatically refund all buyers with unused tickets.
+                    This permanently cancels{' '}
+                    <strong style={{ color: 'var(--color-text)' }}>{selectedEvent.name}</strong>. Under the Refund Policy, Ventry refunds only money it still holds; the organiser pays everyone else from a claim list after a 30-day claim window.
                   </p>
                   <div className="flex flex-col gap-2 text-sm">
-                    <div className="flex justify-between">
-                      <span style={{ color: 'var(--color-text-muted)' }}>Tickets to refund</span>
-                      <span className="font-semibold" style={{ color: 'var(--color-text)' }}>
-                        {cancelPreview.ticketCount}
-                      </span>
+                    <div className="flex justify-between gap-3">
+                      <span style={{ color: 'var(--color-text-muted)' }}>Not yet settled: Ventry refunds now ({cancelPreview.heldCount})</span>
+                      <span className="font-semibold" style={{ color: 'var(--color-text)' }}>{formatNGN(cancelPreview.heldAmount)}</span>
                     </div>
-                    <div className="flex justify-between">
-                      <span style={{ color: 'var(--color-text-muted)' }}>Total refund amount</span>
-                      <span className="font-semibold" style={{ color: 'var(--color-text)' }}>
-                        {formatNGN(cancelPreview.totalRefund)}
-                      </span>
+                    <div className="flex justify-between gap-3">
+                      <span style={{ color: 'var(--color-text-muted)' }}>Already settled: buyers claim, organiser pays ({cancelPreview.settledCount})</span>
+                      <span className="font-semibold" style={{ color: 'var(--color-text)' }}>{formatNGN(cancelPreview.settledAmount)}</span>
                     </div>
-                    {cancelPreview.ticketCount > cancelPreview.refundableCount && (
-                      <div className="flex justify-between">
-                        <span style={{ color: 'var(--color-text-muted)' }}>Without payment ref (manual)</span>
-                        <span style={{ color: '#f59e0b' }}>
-                          {cancelPreview.ticketCount - cancelPreview.refundableCount}
-                        </span>
+                    {cancelPreview.freeCount > 0 && (
+                      <div className="flex justify-between gap-3">
+                        <span style={{ color: 'var(--color-text-muted)' }}>Free tickets (told, nothing to refund)</span>
+                        <span style={{ color: 'var(--color-text)' }}>{cancelPreview.freeCount}</span>
                       </div>
                     )}
                   </div>
+                  <textarea
+                    value={cancelReason}
+                    onChange={e => setCancelReason(e.target.value)}
+                    placeholder="Reason (kept on the record; e.g. organiser notified us the venue fell through)"
+                    rows={2}
+                    className="mt-3 w-full rounded-lg border px-3 py-2 text-sm"
+                    style={{ backgroundColor: 'var(--color-surface-2)', borderColor: 'var(--color-border)', color: 'var(--color-text)' }}
+                  />
                   <p className="text-xs mt-3" style={{ color: 'var(--color-text-dim)' }}>
-                    Service fee (2% per ticket, capped at ₦3,000 for tickets above ₦150,000) is non-refundable. Only the base ticket price is returned.
+                    Only the base ticket price is refunded; service and processing fees are not. Every buyer is emailed today, then on days 15, 25 and 30.
                   </p>
                 </div>
                 <div className="flex flex-col sm:flex-row gap-3">
@@ -431,46 +439,17 @@ export default function AdminEventsPage() {
             {/* ── Results ── */}
             {cancelStep === 'result' && cancelResult && (
               <div className="flex flex-col gap-4">
-                {cancelResult.failed === 0 ? (
-                  <div className="rounded-lg border p-4"
-                    style={{ backgroundColor: '#10b98110', borderColor: '#10b98130' }}>
-                    <p className="text-sm font-semibold" style={{ color: '#10b981' }}>
-                      All Refunds Processed Successfully
-                    </p>
-                    <p className="text-sm mt-1" style={{ color: 'var(--color-text-muted)' }}>
-                      {cancelResult.refunded} ticket{cancelResult.refunded !== 1 ? 's' : ''} refunded.
-                      Buyers will receive their money within 3–10 business days.
-                    </p>
-                  </div>
-                ) : (
-                  <div className="flex flex-col gap-3">
-                    <div className="rounded-lg border p-4"
-                      style={{ backgroundColor: '#f59e0b10', borderColor: '#f59e0b40' }}>
-                      <p className="text-sm font-semibold" style={{ color: '#f59e0b' }}>Partial Success</p>
-                      <div className="flex gap-4 mt-1.5 text-sm">
-                        <span style={{ color: '#10b981' }}>{cancelResult.refunded} succeeded</span>
-                        <span style={{ color: '#ef4444' }}>{cancelResult.failed} failed</span>
-                      </div>
-                    </div>
-                    {cancelResult.failures.length > 0 && (
-                      <div className="rounded-lg border overflow-hidden"
-                        style={{ borderColor: 'var(--color-border)' }}>
-                        <p className="px-4 py-2 text-xs font-semibold"
-                          style={{ backgroundColor: 'var(--color-surface-2)', color: 'var(--color-text-muted)' }}>
-                          Failed Refunds — Resolve Manually via Paystack Dashboard
-                        </p>
-                        {cancelResult.failures.map((f, i) => (
-                          <div key={i} className="px-4 py-2 border-t text-xs"
-                            style={{ borderColor: 'var(--color-border)' }}>
-                            <div style={{ color: 'var(--color-text)' }}>{f.ticketId}</div>
-                            <div style={{ color: 'var(--color-text-muted)' }}>{f.email}</div>
-                            <div className="mt-0.5" style={{ color: '#ef4444' }}>{f.reason}</div>
-                          </div>
-                        ))}
-                      </div>
-                    )}
-                  </div>
-                )}
+                <div className="rounded-lg border p-4 flex flex-col gap-1.5 text-sm"
+                  style={{ backgroundColor: '#10b98110', borderColor: '#10b98130' }}>
+                  <p className="font-semibold" style={{ color: '#10b981' }}>Event cancelled</p>
+                  <span style={{ color: 'var(--color-text-muted)' }}>Ventry refunded {cancelResult.heldRefunded} held ticket{cancelResult.heldRefunded === 1 ? '' : 's'} ({formatNGN(cancelResult.heldRefundedAmount)}).</span>
+                  <span style={{ color: 'var(--color-text-muted)' }}>{cancelResult.claimable} ticket{cancelResult.claimable === 1 ? '' : 's'} ({formatNGN(cancelResult.claimableAmount)}) can be claimed from the organiser over the next 30 days.</span>
+                  {cancelResult.heldFailed > 0 && (
+                    <span style={{ color: '#ef4444' }}>{cancelResult.heldFailed} held refund{cancelResult.heldFailed === 1 ? '' : 's'} failed. Retry them on the Refunds page.</span>
+                  )}
+                  {cancelResult.warnings.map((w, i) => <span key={i} style={{ color: '#f59e0b' }}>{w}</span>)}
+                </div>
+                <Link href="/admin/refunds" className="text-sm font-medium" style={{ color: 'var(--color-purple-light)' }}>Open Refunds →</Link>
                 <Button variant="outline" fullWidth onClick={handleCloseDrawer}>Close</Button>
               </div>
             )}

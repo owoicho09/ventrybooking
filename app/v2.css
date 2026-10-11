@@ -263,14 +263,27 @@ html.light .v2[data-theme="dark"] {
 .v-note a { color: var(--purple-lt); border-bottom: 1px solid currentColor; }
 
 /* ═════════════════════════ LANDING ═════════════════════════ */
-.v-hero { padding: 84px 0 66px; position: relative; overflow: hidden; }
+.v-hero { padding: 84px 0 130px; position: relative; overflow: hidden; }
+/* The video is always dark footage, so the hero keeps dark-mode text tokens
+   even when the rest of the site is in light mode. */
+.v-hero { --head: #FFFFFF; --text: #F3F0F8; --muted: #CFC8DD; --dim: #A79FBC; --line: rgba(255,255,255,.22); --h1-shadow: 0 2px 24px rgba(0,0,0,.55); }
+.v-hero-media { position: absolute; inset: 0; z-index: 0; pointer-events: none; background: #09070F url('/hero-poster.jpg') center / cover no-repeat; }
+.v-hero-media video { width: 100%; height: 100%; object-fit: cover; display: block; filter: blur(2px) saturate(1.08); transform: scale(1.04); }
+/* Scrim: darker behind the copy on the left, then the bottom ~35% melts into
+   the page background so there's no hard edge before "On sale now". */
+.v-hero-media::after {
+  content: ''; position: absolute; inset: 0;
+  background:
+    linear-gradient(to bottom, transparent 0%, transparent 66%, color-mix(in srgb, var(--bg) 55%, transparent) 85%, var(--bg) 100%),
+    linear-gradient(90deg, rgba(9,7,15,.82) 0%, rgba(9,7,15,.55) 45%, rgba(9,7,15,.35) 100%);
+}
 .v-hero::before {
-  content: ''; position: absolute; inset: 0; background-image: var(--perf); background-size: 22px 22px; opacity: .35;
+  content: ''; position: absolute; inset: 0; z-index: 1; background-image: var(--perf); background-size: 22px 22px; opacity: .35;
   -webkit-mask-image: radial-gradient(ellipse 48% 56% at 86% 42%, #000, transparent 78%);
   mask-image: radial-gradient(ellipse 48% 56% at 86% 42%, #000, transparent 78%);
   pointer-events: none;
 }
-.v-hero-grid { position: relative; max-width: var(--maxw); margin: 0 auto; padding: 0 24px; display: grid; grid-template-columns: minmax(0,1fr) minmax(0,1.02fr); gap: 56px; align-items: center; }
+.v-hero-grid { position: relative; z-index: 2; max-width: var(--maxw); margin: 0 auto; padding: 0 24px; display: grid; grid-template-columns: minmax(0,1fr) minmax(0,1.02fr); gap: 56px; align-items: center; }
 .v-hero .v-tag { margin-bottom: 22px; }
 .v-hero h1 { font-size: 50px; font-weight: 800; max-width: 9.5ch; margin-bottom: 20px; text-shadow: var(--h1-shadow); line-height: 1.04; }
 .v-hero-sub { font-size: 16.5px; color: var(--muted); max-width: 44ch; margin-bottom: 28px; }
@@ -744,7 +757,7 @@ html.light .v2 .v-ed-topbar.solid .v-icbtn { background: var(--surface); color: 
 @media (max-width: 900px) {
   .v-nav-links { display: none; }
   .v-nav-burger { display: grid; }
-  .v-hero { padding: 48px 0 44px; }
+  .v-hero { padding: 48px 0 96px; }
   .v-hero-grid { grid-template-columns: 1fr; gap: 34px; }
   .v-hero h1 { font-size: 36px; max-width: 12ch; }
   .v-stack-hero { height: 320px; max-width: 520px; width: 100%; margin: 0 auto; --cw: 166px; --ch: 226px; --spread: 128px; --rise: 70px; }
@@ -824,6 +837,7 @@ html.light .v2 .v-ed-topbar.solid .v-icbtn { background: var(--surface); color: 
 @media (prefers-reduced-motion: reduce) {
   .v2 *, .v2 *::before, .v2 *::after { animation: none !important; transition: none !important; }
   /* Deck animation fully off: cards rest in their final dealt positions. */
+  .v-hero-media video { display: none; } /* poster stays as the still background */
   .v-stack-hero { cursor: default; }
   .v-stack-hero.deal .v-card-f, .v-stack-hero.deal .v-cap { animation: none !important; opacity: 1; }
   .v-scard { position: static; margin-bottom: 30px; }

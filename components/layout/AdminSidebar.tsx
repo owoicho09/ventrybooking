@@ -2,7 +2,7 @@
 
 import Link from 'next/link';
 import { usePathname } from 'next/navigation';
-import {
+import { RotateCcw,
   LayoutDashboard,
   UserCheck,
   CalendarCheck,
@@ -26,6 +26,7 @@ const navItems = [
   { href: '/admin/change-requests', label: 'Change Requests', icon: CalendarClock },
   { href: '/admin/buyers', label: 'Buyers', icon: Users },
   { href: '/admin/payouts', label: 'Payouts', icon: Wallet },
+  { href: '/admin/refunds', label: 'Refunds', icon: RotateCcw },
   { href: '/admin/complaints', label: 'Complaints', icon: MessageSquareWarning },
   { href: '/admin/newsletters', label: 'Newsletter Queue', icon: Mail },
   { href: '/admin/reviews', label: 'Reviews', icon: Star },

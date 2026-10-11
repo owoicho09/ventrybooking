@@ -6,10 +6,12 @@ import { isValidAccentColor } from '@/lib/accentColors';
 import { normalizeLineup, type LineupAct } from '@/lib/server/lineup';
 import { normalizeEmailDomains } from '@/lib/server/domainRestriction';
 import { parseRefundPolicy, type RefundPolicyAnswers } from '@/lib/refundPolicy';
-import { revealTimeProblem, eventStart } from '@/lib/addressReveal';
-import { createChangeRefundWindow, countAppliedEventChanges, FREE_ORGANIZER_CHANGE_LIMIT } from '@/lib/server/eventChangeWindow';
-import { notify } from '@/lib/server/notify';
+import { revealTimeProblem, eventStart, addressHiddenNow } from '@/lib/addressReveal';
+import { handleEventChange } from '@/lib/server/refundCases';
 import { PLATFORM_FEE_RATE } from '@/lib/fees';
+
+// A date/venue change emails ticket holders before responding.
+export const maxDuration = 60;
 
 export async function GET(
   _req: NextRequest,
@@ -170,13 +172,14 @@ export async function PATCH(
     //     least 7 days after today;
     //   • a same-day time change is fine, except within 2 days of the event.
     let isPostponement = false;
+    let timeMoved = false;
     if (hasSales) {
       const DAY = 24 * 60 * 60 * 1000;
       const now = Date.now();
       const currentStart = eventStart(String(event.date), event.time).getTime();
       const venueMoved = event.event_mode !== 'online' && ['venue', 'address', 'city'].some(k =>
         k in updates && String(updates[k] ?? '') !== String(event[k as keyof typeof event] ?? ''));
-      const timeMoved = 'time' in updates && String(updates.time) !== String(event.time ?? '');
+      timeMoved = 'time' in updates && String(updates.time) !== String(event.time ?? '');
       isPostponement = dateChanged || venueMoved;
       const support = 'Contact support if the event can\u2019t go ahead as listed: it will be treated as a cancellation.';
 
@@ -203,82 +206,14 @@ export async function PATCH(
       }
     }
 
-    // Only venue/address/city (physical) or date (either mode) are
-    // "qualifying" — the ones that mean the thing the buyer bought a ticket
-    // for has actually changed, and so are subject to the 2-free-changes cap.
     const coreVenueChanged = event.event_mode !== 'online' && ['venue', 'address', 'city'].some((key) => {
       if (!(key in updates)) return false;
       return String(updates[key] ?? '') !== String(event[key as keyof typeof event] ?? '');
     });
-    // With no tickets sold, there's no buyer to protect and no reason to
-    // spend one of the 2 free changes — let it through untracked.
-    const qualifyingChangeRequested = hasSales && (coreVenueChanged || dateChanged);
-
-    let deferredToApproval = false;
-    let changeRequestId: string | null = null;
-
-    if (qualifyingChangeRequested) {
-      const appliedCount = await countAppliedEventChanges(db, id);
-      if (appliedCount >= FREE_ORGANIZER_CHANGE_LIMIT) {
-        deferredToApproval = true;
-
-        const deferredOld: Record<string, unknown> = {};
-        const deferredNew: Record<string, unknown> = {};
-        if (dateChanged) {
-          deferredOld.date = event.date;
-          deferredOld.time = event.time;
-          deferredNew.date = updates.date;
-          deferredNew.time = updates.time ?? event.time;
-          delete updates.date;
-          delete updates.time;
-        }
-        if (coreVenueChanged) {
-          deferredOld.venue = event.venue;
-          deferredOld.address = event.address;
-          deferredOld.city = event.city;
-          deferredNew.venue = updates.venue ?? event.venue;
-          deferredNew.address = updates.address ?? event.address;
-          deferredNew.city = updates.city ?? event.city;
-          delete updates.venue;
-          delete updates.address;
-          delete updates.city;
-        }
-        const changeType = dateChanged && coreVenueChanged ? 'venue_and_date' : dateChanged ? 'date' : 'venue';
-
-        const { data: reqRow, error: reqErr } = await db
-          .from('event_change_requests')
-          .insert({
-            event_id: id,
-            organizer_id: user.sub,
-            change_type: changeType,
-            old_value: deferredOld,
-            new_value: deferredNew,
-          })
-          .select('id')
-          .single();
-        if (reqErr) throw reqErr;
-        changeRequestId = reqRow.id;
-
-        notify(
-          { type: 'admin' },
-          {
-            notifType: 'event_change_request',
-            title: `Change request awaiting approval — ${event.event_name}`,
-            body: `A ${changeType.replace('_', ' ')} change was requested. This event has already had its 2 included organiser changes, so this one needs your approval before it applies or buyers are notified.`,
-            link: '/admin/change-requests',
-          },
-          { emailChannel: 'immediate' },
-        ).catch(console.error);
-      }
-    }
 
     if (Object.keys(updates).length > 0) {
       const { error } = await db.from('events').update(updates).eq('id', id);
       if (error) throw error;
-    }
-
-    if (deferredToApproval) {
-      return NextResponse.json({ success: true, data: { pendingApproval: true, changeRequestId } });
     }
 
     if (isPostponement) {
@@ -287,6 +222,35 @@ export async function PATCH(
         original_date: event.original_date ?? event.date,
         postponed_at: new Date().toISOString(),
       }).eq('id', id);
+    }
+
+    // Tell ticket holders, and open a refund claim window where the
+    // organiser's published policy offers one (Refund Policy §8).
+    if (hasSales && (isPostponement || timeMoved)) {
+      const fmtDate = (d: string) => new Date(`${String(d).slice(0, 10)}T12:00:00Z`).toLocaleDateString('en-GB', { weekday: 'long', day: 'numeric', month: 'long', year: 'numeric', timeZone: 'UTC' });
+      const lines: string[] = [];
+      if (dateChanged) {
+        lines.push(`New date: ${fmtDate(newDate)}, ${newTime}`, `Was: ${fmtDate(String(event.date))}, ${event.time}`);
+      } else if (timeMoved) {
+        lines.push(`New start time: ${newTime} on ${fmtDate(newDate)}`, `Was: ${event.time}`);
+      }
+      if (coreVenueChanged) {
+        const hiddenNow = addressHiddenNow({
+          location_hidden: Boolean(updates.location_hidden ?? event.location_hidden),
+          address_reveal_at: (updates.address_reveal_at as string | null | undefined) ?? event.address_reveal_at,
+          date: newDate, time: newTime,
+        });
+        const area = [updates.lga ?? event.lga, updates.city ?? event.city].filter(Boolean).join(', ');
+        lines.push(hiddenNow
+          ? `New venue area: ${area}. The exact address is emailed to you at the reveal time.`
+          : `New venue: ${[updates.venue ?? event.venue, updates.address ?? event.address, updates.city ?? event.city].filter(Boolean).join(', ')}`);
+      }
+      await handleEventChange(db, {
+        eventId: id,
+        kind: dateChanged ? 'postponement' : coreVenueChanged ? 'venue_change' : 'time_change',
+        changeLines: lines,
+        changedAt: new Date(),
+      }).catch(err => console.error('event change notices error', err));
     }
 
     if (event.event_mode === 'online') {
@@ -306,21 +270,6 @@ export async function PATCH(
         }).catch(err => console.error('meeting link update buyer notification error', err));
       }
 
-      // Meeting-link-only changes don't warrant a refund window — but a date
-      // change does, whether the event is online or physical. Skipped entirely
-      // with zero sales — nothing to notify, and it shouldn't spend a change.
-      if (hasSales && dateChanged) {
-        createChangeRefundWindow(db, {
-          eventId: id,
-          eventSlug: event.slug,
-          eventName: event.event_name,
-          changeType: 'date',
-          oldValue: { date: event.date, time: event.time },
-          newValue: { date: newDate, time: newTime },
-          newEventDate: newDate,
-          newEventTime: newTime,
-        }).catch(err => console.error('date change refund window error', err));
-      }
     } else {
       const locationFields = ['venue', 'address', 'city', 'landmark', 'location_hidden'];
       const locationChanged = locationFields.some((key) => {
@@ -329,23 +278,7 @@ export async function PATCH(
       });
 
       if (hasSales && (coreVenueChanged || dateChanged)) {
-        const nextLocation = {
-          venue: String(updates.venue ?? event.venue ?? ''),
-          address: String(updates.address ?? event.address ?? ''),
-          city: String(updates.city ?? event.city ?? ''),
-        };
-
-        createChangeRefundWindow(db, {
-          eventId: id,
-          eventSlug: event.slug,
-          eventName: event.event_name,
-          changeType: coreVenueChanged && dateChanged ? 'venue_and_date' : coreVenueChanged ? 'venue' : 'date',
-          oldValue: { venue: event.venue, address: event.address, city: event.city, date: event.date, time: event.time },
-          newValue: { ...nextLocation, date: newDate, time: newTime },
-          newEventDate: newDate,
-          newEventTime: newTime,
-          location: nextLocation,
-        }).catch(err => console.error('venue/date change refund window error', err));
+        // Buyers were told above (with any refund option).
       } else if (locationChanged) {
         // Landmark-only or hide/reveal-only change — no refund implication,
         // just let buyers know the listing details moved.
