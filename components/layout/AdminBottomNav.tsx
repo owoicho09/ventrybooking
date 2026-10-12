@@ -8,7 +8,7 @@ import {
   CalendarCheck,
   Users,
   Wallet,
-  ShieldAlert,
+  MailCheck,
 } from 'lucide-react';
 import { NotificationBell } from '@/components/ui/NotificationBell';
 
@@ -18,7 +18,7 @@ const navItems = [
   { href: '/admin/events',     label: 'Events',     icon: CalendarCheck },
   { href: '/admin/buyers',     label: 'Buyers',     icon: Users },
   { href: '/admin/payouts',    label: 'Payouts',    icon: Wallet },
-  { href: '/admin/fraud',      label: 'Fraud',      icon: ShieldAlert },
+  { href: '/admin/newsletters/subscribers', label: 'Subscribers', icon: MailCheck },
 ];
 
 export function AdminBottomNav() {
