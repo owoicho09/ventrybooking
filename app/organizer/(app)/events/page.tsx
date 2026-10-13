@@ -4,6 +4,7 @@ import { useState, useEffect } from 'react';
 import Link from 'next/link';
 import { Plus, Settings2 } from 'lucide-react';
 import { Badge } from '@/components/ui/Badge';
+import { isScheduled, fmtGoLive } from '@/lib/goLive';
 import { Button } from '@/components/ui/Button';
 import { Table, Thead, Tbody, Th, Tr, Td } from '@/components/ui/Table';
 import { formatNGN, formatShortDate } from '@/lib/utils';
@@ -12,10 +13,13 @@ import { PLATFORM_FEE_RATE } from '@/lib/fees';
 interface Tier { id: string; price: number; sold: number; available: number; }
 interface OrgEvent {
   id: string; name: string; date: string; category: string; city: string;
-  status: string; total_sold: number; tiers: Tier[];
+  status: string; total_sold: number; tiers: Tier[]; goes_live_at?: string | null;
 }
 
-const statusBadge = (status: string) => {
+const statusBadge = (status: string, goesLiveAt?: string | null) => {
+  if (status === 'approved' && isScheduled(goesLiveAt)) {
+    return <span title={`Goes live ${fmtGoLive(goesLiveAt as string)}`}><Badge variant="amber">Live {fmtGoLive(goesLiveAt as string)}</Badge></span>;
+  }
   switch (status) {
     case 'approved':    return <Badge variant="green">Approved</Badge>;
     case 'under_review': return <Badge variant="amber">Under Review</Badge>;
@@ -112,7 +116,7 @@ export default function OrganizerEventsPage() {
                     <Td><span style={{ color: 'var(--color-text-muted)' }}>{formatShortDate(event.date)}</span></Td>
                     <Td><span className="font-medium" style={{ color: 'var(--color-text)' }}>{formatNGN(netRevenue)}</span></Td>
                     <Td><TierBar tiers={event.tiers ?? []} /></Td>
-                    <Td>{statusBadge(event.status)}</Td>
+                    <Td>{statusBadge(event.status, event.goes_live_at)}</Td>
                     <Td>
                       <Link href={`/organizer/events/${event.id}`}>
                         <button className="w-7 h-7 rounded-md flex items-center justify-center transition-colors"

@@ -336,6 +336,24 @@ export async function sendEventApprovedEmail(to: string, organizerName: string, 
   });
 }
 
+/** A scheduled event just reached its go-live time. */
+export async function sendEventWentLiveEmail(params: { to: string; organizerName: string; eventName: string; eventSlug: string; liveAt: string }) {
+  const eventUrl = `${APP_URL}/${params.eventSlug}`;
+  await sendEmail({
+    to: params.to,
+    subject: `"${params.eventName}" is now live, tickets are on sale`,
+    purpose: 'event-went-live',
+    html: emailShell(`
+      <h1 style="color:#a855f7;font-size:22px;margin:0 0 12px;">Your event is live</h1>
+      <p style="color:#f1f0ff;">Hi ${esc(params.organizerName)}, <strong>&ldquo;${esc(params.eventName)}&rdquo;</strong> went live on Ventry at ${esc(params.liveAt)} as you scheduled. Tickets are on sale now.</p>
+      <p style="color:#f1f0ff;">Share your link to start selling:</p>
+      <p style="color:#c4b5fd;word-break:break-all;">${eventUrl}</p>
+      <br/>
+      <a href="${eventUrl}" class="btn">View Your Event</a>
+    `),
+  });
+}
+
 export async function sendEventRejectedEmail(to: string, organizerName: string, eventName: string, reason: string) {
   await sendEmail({
     to,

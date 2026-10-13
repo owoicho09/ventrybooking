@@ -1,4 +1,5 @@
 import { getServerSupabase } from '@/lib/supabase/server';
+import { onlyLive } from '@/lib/goLive';
 import { addressHiddenNow } from '@/lib/addressReveal';
 import { ticketUrgency } from '@/lib/ticketUrgency';
 import { normalizeCity, todayWAT, type PublicEvent, type PublicTier } from '@/lib/publicEvents';
@@ -9,7 +10,7 @@ import { normalizeCity, todayWAT, type PublicEvent, type PublicTier } from '@/li
 
 const EVENT_SELECT = `
   id, slug, event_name, category, date, time, event_mode, venue, city, landmark, location_hidden, lga, address_reveal_at,
-  status, total_sold, banner_url, header_banner_url, accent_color, verified,
+  status, total_sold, banner_url, header_banner_url, accent_color, verified, goes_live_at,
   organizer:users!events_organizer_id_fkey(id, name, verified, handle, avatar_url, cover_image_url),
   tiers:ticket_tiers(id, name, price, available, sold)
 `;
@@ -87,7 +88,8 @@ export async function getPublicEvents(): Promise<PublicEvent[]> {
     console.error('getPublicEvents', error);
     return [];
   }
-  const events = (data ?? []).map(shape);
+  // Scheduled events stay hidden until their go-live time.
+  const events = onlyLive(data ?? []).map(shape);
 
   const completed = events.filter(e => e.status === 'completed');
   if (completed.length) {

@@ -1,4 +1,5 @@
 import { NextRequest, NextResponse } from 'next/server';
+import { goLiveProblem, isScheduled } from '@/lib/goLive';
 import { getAuthUser } from '@/lib/server/auth';
 import { getServerSupabase } from '@/lib/supabase/server';
 import { sendLocationUpdatedEmail, sendMeetingLinkUpdatedEmail } from '@/lib/server/email';
@@ -30,7 +31,7 @@ export async function GET(
       .from('events')
       .select(`
         id, slug, event_name, category, description, date, time, event_mode, venue, address, city, landmark,
-        location_hidden, meeting_link, meeting_passcode, status, total_sold, banner_color, banner_url, header_banner_url, accent_color, lineup, allowed_email_domains, organizer_id, created_at, refund_policy, refund_policy_set_at, verified, venue_proof_url, venue_contact_name, venue_contact_phone, lga, address_reveal_at,
+        location_hidden, meeting_link, meeting_passcode, status, total_sold, banner_color, banner_url, header_banner_url, accent_color, lineup, allowed_email_domains, organizer_id, created_at, refund_policy, refund_policy_set_at, verified, venue_proof_url, venue_contact_name, venue_contact_phone, lga, address_reveal_at, goes_live_at,
         tiers:ticket_tiers(id, name, price, available, sold)
       `)
       .eq('id', id)
@@ -64,7 +65,7 @@ export async function PATCH(
 
     const { data: event } = await db
       .from('events')
-      .select('id, slug, organizer_id, status, event_name, date, time, event_mode, venue, address, city, landmark, location_hidden, meeting_link, meeting_passcode, refund_policy, lga, address_reveal_at, postponement_count, original_date')
+      .select('id, slug, organizer_id, status, event_name, date, time, event_mode, venue, address, city, landmark, location_hidden, meeting_link, meeting_passcode, refund_policy, lga, address_reveal_at, postponement_count, original_date, goes_live_at')
       .eq('id', id)
       .single();
 
@@ -133,6 +134,37 @@ export async function PATCH(
           updates[key] = String(body[key] ?? '').trim();
         }
       }
+    }
+
+    // Scheduled go-live: movable as often as the organiser likes while the
+    // event is still waiting. Clearing it (or picking a time already past)
+    // means "go live now". Once an event is live and selling it can't be
+    // pulled back off sale this way.
+    const scheduledNow = isScheduled(event.goes_live_at);
+    if (body.goes_live_at !== undefined) {
+      const raw = String(body.goes_live_at ?? '').trim();
+      const want = raw ? new Date(raw) : null;
+      if (want && Number.isNaN(want.getTime())) {
+        return NextResponse.json({ error: 'That go-live time isn\u2019t valid' }, { status: 400 });
+      }
+      const wantIso = want ? want.toISOString() : null;
+      if (isScheduled(wantIso)) {
+        if (!scheduledNow && hasSales) {
+          return NextResponse.json({ error: 'Tickets have already been sold, so this event can\u2019t be taken off sale.' }, { status: 409 });
+        }
+        if (wantIso !== event.goes_live_at) {
+          updates.goes_live_at = wantIso;
+          updates.live_notified_at = null;
+        }
+      } else if (scheduledNow) {
+        // Go live now; the go-live cron sends the "your event is live" email.
+        updates.goes_live_at = new Date().toISOString();
+      }
+    }
+    const finalGoLive = (updates.goes_live_at as string | null | undefined) ?? event.goes_live_at;
+    if (isScheduled(finalGoLive)) {
+      const problem = goLiveProblem(finalGoLive, String(updates.date ?? event.date), String(updates.time ?? event.time));
+      if (problem) return NextResponse.json({ error: problem }, { status: 400 });
     }
 
     if (Object.keys(updates).length === 0) {

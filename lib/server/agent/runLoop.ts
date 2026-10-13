@@ -1,7 +1,16 @@
 import Anthropic from '@anthropic-ai/sdk';
+import { recordUsage } from '@/lib/server/agent/usage';
 
 const client = new Anthropic();
+// Haiku 4.5 rather than 5.5 to stretch a small prepaid credit: 5.5 spends
+// output tokens on thinking every turn and its tokenizer counts ~25% more
+// tokens for the same prompt. Pricing in usage.ts must match this model.
 const MODEL = 'claude-haiku-4-5';
+// Replies are phone-chat length; this only caps a runaway answer.
+const MAX_TOKENS = 500;
+// A tool result is JSON for the model; cap it so one big row can't bloat
+// every later call in the conversation.
+const MAX_TOOL_RESULT_CHARS = 2000;
 
 export interface AgentTool {
   name: string;
@@ -13,13 +22,16 @@ export interface AgentTool {
 }
 
 export interface RoleConfig {
+  /** Identical for every conversation: prompt-cached together with the tools. */
   systemPrompt: string;
+  /** Per-conversation bits (e.g. who is signed in), sent after the cached part. */
+  systemSuffix?: string;
   tools: AgentTool[];
 }
 
 export type ChatMessage = Anthropic.MessageParam;
 
-const MAX_ITERATIONS = 8;
+const MAX_ITERATIONS = 5;
 
 /**
  * Role-agnostic manual tool-use loop — a manual loop rather than the SDK's
@@ -38,16 +50,26 @@ export async function runAgentLoop(role: RoleConfig, history: ChatMessage[]): Pr
     description: t.description,
     input_schema: t.input_schema,
   }));
+  // Prompt caching: tools + the fixed system prompt (~4.3k tokens, above
+  // Haiku's 4,096-token minimum) are written to the cache once and then read
+  // at a tenth of the price on every later call within 5 minutes, i.e. the
+  // rest of the conversation. The breakpoint on the system block covers the
+  // tools too, since they come first in the prompt.
+  const system: Anthropic.TextBlockParam[] = [
+    { type: 'text', text: role.systemPrompt, cache_control: { type: 'ephemeral' } },
+  ];
+  if (role.systemSuffix) system.push({ type: 'text', text: role.systemSuffix });
   const byName = new Map(role.tools.map(t => [t.name, t]));
 
   for (let i = 0; i < MAX_ITERATIONS; i++) {
     const response = await client.messages.create({
       model: MODEL,
-      max_tokens: 1024,
-      system: role.systemPrompt,
+      max_tokens: MAX_TOKENS,
+      system,
       tools,
       messages,
     });
+    await recordUsage(response.usage);
 
     messages.push({ role: 'assistant', content: response.content });
 
@@ -68,10 +90,11 @@ export async function runAgentLoop(role: RoleConfig, history: ChatMessage[]): Pr
       }
       try {
         const output = await tool.handler(use.input as Record<string, unknown>);
-        results.push({ type: 'tool_result', tool_use_id: use.id, content: JSON.stringify(output) });
+        const json = JSON.stringify(output) ?? 'null';
+        results.push({ type: 'tool_result', tool_use_id: use.id, content: json.length > MAX_TOOL_RESULT_CHARS ? `${json.slice(0, MAX_TOOL_RESULT_CHARS)}…(truncated)` : json });
       } catch (err) {
         console.error(`agent tool ${tool.name} error`, err);
-        results.push({ type: 'tool_result', tool_use_id: use.id, content: 'This tool failed. Tell the buyer you ran into an issue and offer to file a complaint.', is_error: true });
+        results.push({ type: 'tool_result', tool_use_id: use.id, content: 'This tool failed. Tell the customer you ran into an issue and offer to file a complaint.', is_error: true });
       }
     }
 

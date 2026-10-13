@@ -29,6 +29,28 @@ function textOf(content: string | ContentBlock[]): string {
   return content.filter(b => b.type === 'text').map(b => b.text ?? '').join('\n').trim();
 }
 
+// The agent mentions pages like /retrieve or ventrybooking.com/refunds/claim in
+// plain text; turn those into tappable links. Only site paths are linked.
+const LINK_RE = /((?<![@\w.])(?:https?:\/\/)?(?:www\.)?ventrybooking\.com(?:\/[\w\-/]*)?|(?<![\w.])\/(?:retrieve|refunds\/claim|terms(?:\/[\w-]+)?|privacy|account\/login|events|help)\b)/g;
+
+function Linkified({ text, isUser }: { text: string; isUser: boolean }) {
+  const parts = text.replace(/`/g, '').split(LINK_RE);
+  return (
+    <>
+      {parts.map((part, i) => {
+        if (i % 2 === 0) return part;
+        const href = part.startsWith('/') ? part : `https://${part.replace(/^https?:\/\//, '')}`;
+        return (
+          <a key={i} href={href} target={part.startsWith('/') ? undefined : '_blank'} rel="noreferrer"
+            className="underline underline-offset-2" style={{ color: isUser ? '#fff' : 'var(--color-purple-light)' }}>
+            {part}
+          </a>
+        );
+      })}
+    </>
+  );
+}
+
 function VentryMark({ size = 28 }: { size?: number }) {
   return (
     <div
@@ -215,7 +237,7 @@ export function SupportChat() {
                         border: m.isError ? '1px solid #ef444430' : undefined,
                       }}
                     >
-                      {text}
+                      {m.isError ? text : <Linkified text={text} isUser={isUser} />}
                     </div>
                   </div>
                   <div className={`flex items-center gap-2 text-[10px] ${isUser ? 'pr-1' : 'pl-9'}`} style={{ color: 'var(--color-text-dim)' }}>

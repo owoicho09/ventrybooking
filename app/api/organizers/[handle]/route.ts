@@ -1,4 +1,5 @@
 import { NextRequest, NextResponse } from 'next/server';
+import { onlyLive } from '@/lib/goLive';
 import { getServerSupabase } from '@/lib/supabase/server';
 import { addressHiddenNow } from '@/lib/addressReveal';
 import { getEventsHostedCounts } from '@/lib/server/eventsHosted';
@@ -46,7 +47,7 @@ function shapeEvent(row: any, organizer: unknown) {
 
 const EVENT_SELECT = `
   id, slug, event_name, category, description, date, time, event_mode, venue, address, city, landmark, location_hidden, lga, address_reveal_at,
-  status, total_sold, banner_color, banner_url, header_banner_url, verified,
+  status, total_sold, banner_color, banner_url, header_banner_url, verified, goes_live_at,
   tiers:ticket_tiers(id, name, price, available, sold)
 `;
 
@@ -110,8 +111,9 @@ export async function GET(
       .order('date', { ascending: true });
 
     const today = new Date().toISOString().slice(0, 10);
-    const upcoming = (rows ?? []).filter(r => r.date >= today).map(r => shapeEvent(r, organizerSummary));
-    const past = (rows ?? []).filter(r => r.date < today).map(r => shapeEvent(r, organizerSummary)).reverse();
+    const liveRows = onlyLive(rows ?? []);
+    const upcoming = liveRows.filter(r => r.date >= today).map(r => shapeEvent(r, organizerSummary));
+    const past = liveRows.filter(r => r.date < today).map(r => shapeEvent(r, organizerSummary)).reverse();
 
     return NextResponse.json({
       success: true,

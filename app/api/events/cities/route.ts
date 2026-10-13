@@ -1,4 +1,5 @@
 import { NextResponse } from 'next/server';
+import { onlyLive } from '@/lib/goLive';
 import { getServerSupabase } from '@/lib/supabase/server';
 
 // Cities are free text on the organizer's event form, so the filter dropdown can't
@@ -10,13 +11,13 @@ export async function GET() {
     const db = getServerSupabase();
     const { data, error } = await db
       .from('events')
-      .select('city')
+      .select('city, goes_live_at')
       .eq('status', 'approved')
       .eq('event_mode', 'physical');
 
     if (error) throw error;
 
-    const cities = [...new Set((data ?? []).map(row => row.city?.trim()).filter(Boolean))]
+    const cities = [...new Set(onlyLive(data ?? []).map(row => row.city?.trim()).filter(Boolean))]
       .sort((a, b) => a.localeCompare(b));
 
     return NextResponse.json(

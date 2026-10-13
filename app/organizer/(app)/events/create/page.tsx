@@ -15,6 +15,8 @@ import { compressImageFile } from '@/lib/compressImage';
 import { RefundPolicyFields, type RefundPolicyDraft } from '@/components/organizer/RefundPolicyFields';
 import { parseRefundPolicy } from '@/lib/refundPolicy';
 import { EventPreview } from '@/components/events/EventPreview';
+import { GoLiveField } from '@/components/organizer/GoLiveField';
+import { fromLagosInput, isScheduled, fmtGoLive } from '@/lib/goLive';
 import type { DetailEvent } from '@/components/events/EventDetailContent';
 import type { EventCategory } from '@/types';
 
@@ -62,6 +64,8 @@ export default function CreateEventPage() {
   const [locationHidden, setLocationHidden] = useState(false);
   const [lga, setLga] = useState('');
   const [revealAt, setRevealAt] = useState('');
+  const [goLiveScheduled, setGoLiveScheduled] = useState(false);
+  const [goLiveAt, setGoLiveAt] = useState('');
   const [meetingLink, setMeetingLink] = useState('');
   const [meetingPasscode, setMeetingPasscode] = useState('');
   const [banner, setBanner] = useState<File | null>(null);
@@ -185,6 +189,7 @@ export default function CreateEventPage() {
     if (!policyCheck.ok) { toast(policyCheck.error, 'error'); return; }
     if (!policyConfirmed) { toast('Confirm your refund policy before publishing', 'error'); return; }
     if (!accuracyConfirmed) { toast('Confirm your event information is accurate before publishing', 'error'); return; }
+    if (goLiveScheduled && !goLiveAt) { toast('Choose when your tickets go on sale', 'error'); return; }
     setLoading(true);
     try {
       const fd = new FormData();
@@ -213,6 +218,7 @@ export default function CreateEventPage() {
       if (accentColor) fd.append('accentColor', accentColor);
       fd.append('refundPolicy', JSON.stringify(policyCheck.value));
       fd.append('confirmAccurate', 'true');
+      if (goLiveScheduled && goLiveAt) fd.append('goesLiveAt', fromLagosInput(goLiveAt) ?? '');
       const domains = restrictedDomainsInput.split(',').map(d => d.trim()).filter(Boolean);
       if (domains.length) fd.append('allowedEmailDomains', JSON.stringify(domains));
       const validLineup = lineup.filter(a => a.name.trim() || a.liability === 'surprise');
@@ -238,7 +244,7 @@ export default function CreateEventPage() {
       }
 
       const res = await fetch('/api/organizer/events', { method: 'POST', body: fd });
-      let data: { error?: string; data?: { eventId: string } };
+      let data: { error?: string; data?: { eventId: string; goesLiveAt?: string | null } };
       try {
         data = await res.json();
       } catch {
@@ -254,7 +260,13 @@ export default function CreateEventPage() {
         toast(data.error || 'Failed to create event', 'error');
         return;
       }
-      toast('Your event is live! You can start sharing it right away.', 'success');
+      const liveAt = data.data?.goesLiveAt;
+      toast(
+        liveAt && isScheduled(liveAt)
+          ? `Scheduled! Your event goes live ${fmtGoLive(liveAt)}. We'll email you when it's on sale.`
+          : 'Your event is live! You can start sharing it right away.',
+        'success',
+      );
       router.push('/organizer/events');
     } catch {
       toast('Network error. Please try again.', 'error');
@@ -557,10 +569,16 @@ export default function CreateEventPage() {
           <p>Event: {name || '(not set)'}</p>
           <p className="mt-1">Tiers: {tiers.length} tier{tiers.length !== 1 ? 's' : ''} configured</p>
         </div>
+        <div>
+          <p className="text-sm font-medium mb-1.5" style={{ color: 'var(--color-text)' }}>When do tickets go on sale?</p>
+          <GoLiveField scheduled={goLiveScheduled} onScheduledChange={setGoLiveScheduled} value={goLiveAt} onChange={setGoLiveAt} />
+        </div>
         <div className="rounded-lg px-4 py-3 flex items-start gap-3 text-sm" style={{ backgroundColor: '#10b98110', border: '1px solid #10b98130' }}>
           <span className="flex-shrink-0 mt-0.5" style={{ color: 'var(--color-green)' }}>✓</span>
           <p style={{ color: 'var(--color-text-muted)' }}>
-            Your event goes <strong style={{ color: 'var(--color-text)' }}>live immediately</strong> after you submit — no waiting. Our team reviews new events shortly after publishing and may reach out if anything needs your attention.
+            {goLiveScheduled
+              ? <>Your event goes live <strong style={{ color: 'var(--color-text)' }}>at the time you picked</strong>, no waiting on us. Our team reviews new events and may reach out if anything needs your attention.</>
+              : <>Your event goes <strong style={{ color: 'var(--color-text)' }}>live immediately</strong> after you submit — no waiting. Our team reviews new events shortly after publishing and may reach out if anything needs your attention.</>}
           </p>
         </div>
         <label className="flex items-start gap-3 text-sm cursor-pointer" style={{ color: 'var(--color-text)' }}>
@@ -583,7 +601,7 @@ export default function CreateEventPage() {
           <Eye size={16} />Preview event page
         </Button>
         <Button type="submit" size="lg" fullWidth disabled={loading || !policyCheck.ok || !policyConfirmed || !accuracyConfirmed}>
-          {loading ? 'Publishing...' : 'Publish Event'}
+          {loading ? 'Publishing...' : goLiveScheduled ? 'Schedule Event' : 'Publish Event'}
         </Button>
       </section>
       {previewing && <EventPreview event={previewEvent} onClose={() => setPreviewing(false)} />}

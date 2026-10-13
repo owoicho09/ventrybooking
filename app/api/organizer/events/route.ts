@@ -1,4 +1,5 @@
 import { NextRequest, NextResponse } from 'next/server';
+import { goLiveProblem, isScheduled, fmtGoLive } from '@/lib/goLive';
 import { getAuthUser } from '@/lib/server/auth';
 import { getServerSupabase } from '@/lib/supabase/server';
 import { v4 as uuidv4 } from 'uuid';
@@ -28,7 +29,7 @@ export async function GET(req: NextRequest) {
     let qb = db
       .from('events')
       .select(`
-        id, name:event_name, category, date, time, event_mode, venue, city, status, total_sold, banner_color,
+        id, name:event_name, category, date, time, event_mode, venue, city, status, total_sold, banner_color, goes_live_at,
         tiers:ticket_tiers(id, name, price, available, sold)
       `)
       .eq('organizer_id', user.sub)
@@ -139,6 +140,11 @@ export async function POST(req: NextRequest) {
     if (eventMode === 'online' && !meetingLink) {
       return NextResponse.json({ error: 'Meeting link is required for online events' }, { status: 400 });
     }
+    // Scheduled go-live: a time that has already passed just means "live now".
+    const goesLiveRaw = String(formData.get('goesLiveAt') ?? '') || null;
+    const goLiveErr = goLiveProblem(goesLiveRaw, date, time);
+    if (goLiveErr) return NextResponse.json({ error: goLiveErr }, { status: 400 });
+    const goesLiveAt = isScheduled(goesLiveRaw) ? new Date(goesLiveRaw as string).toISOString() : null;
 
     const FILE_LABELS: Record<string, string> = { 'venue-proofs': 'Venue proof', banners: 'Banner image', lineup: 'Lineup photo' };
     async function uploadEventFile(file: File, folder: string, maxMb: number) {
@@ -232,6 +238,10 @@ export async function POST(req: NextRequest) {
       // way, since it already tracks the organiser's own KYC status, not
       // per-event review.
       status: 'approved',
+      goes_live_at: goesLiveAt,
+      // The go-live cron emails the organiser when a scheduled event goes
+      // live; an event that's live straight away has nothing to announce.
+      live_notified_at: goesLiveAt ? null : new Date().toISOString(),
       total_sold: 0,
       banner_url: bannerUrl,
       header_banner_url: headerBannerUrl,
@@ -265,7 +275,9 @@ export async function POST(req: NextRequest) {
 
     notify(
       { type: 'admin' },
-      { notifType: 'event', title: 'New Event Live', body: `"${name}" just went live.`, link: '/admin/events' },
+      goesLiveAt
+        ? { notifType: 'event', title: 'New Event Scheduled', body: `"${name}" was listed and goes live ${fmtGoLive(goesLiveAt)}.`, link: '/admin/events' }
+        : { notifType: 'event', title: 'New Event Live', body: `"${name}" just went live.`, link: '/admin/events' },
       { emailChannel: 'dedicated' }, // sendAdminNewEventEmail below covers this
     ).catch(console.error);
 
@@ -277,7 +289,7 @@ export async function POST(req: NextRequest) {
       eventId,
     }).catch(err => console.error('POST /api/organizer/events: admin email error', err));
 
-    return NextResponse.json({ success: true, data: { eventId } }, { status: 201 });
+    return NextResponse.json({ success: true, data: { eventId, goesLiveAt } }, { status: 201 });
   } catch (err) {
     console.error('POST /api/organizer/events error', err);
     return NextResponse.json({ error: 'Failed to create event' }, { status: 500 });

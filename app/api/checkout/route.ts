@@ -1,4 +1,5 @@
 import { NextRequest, NextResponse } from 'next/server';
+import { isScheduled, fmtGoLive } from '@/lib/goLive';
 import { getServerSupabase } from '@/lib/supabase/server';
 import { initializeTransaction } from '@/lib/server/paystack';
 import { buyerTotalForItems } from '@/lib/server/fees';
@@ -41,7 +42,7 @@ export async function POST(req: NextRequest) {
     // Verify event is approved
     const { data: event, error: eventErr } = await db
       .from('events')
-      .select('id, event_name, status, organizer_id, allowed_email_domains')
+      .select('id, event_name, status, organizer_id, allowed_email_domains, goes_live_at')
       .eq('id', eventId)
       .maybeSingle();
 
@@ -51,6 +52,9 @@ export async function POST(req: NextRequest) {
     }
     if (!event || event.status !== 'approved') {
       return NextResponse.json({ error: 'Event is not available for purchase' }, { status: 400 });
+    }
+    if (isScheduled(event.goes_live_at)) {
+      return NextResponse.json({ error: `Tickets go on sale ${fmtGoLive(event.goes_live_at as string)}` }, { status: 400 });
     }
     if (!isEmailDomainAllowed(buyerEmail, event.allowed_email_domains)) {
       return NextResponse.json(

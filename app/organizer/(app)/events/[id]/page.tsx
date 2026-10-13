@@ -23,6 +23,8 @@ import type { EventCategory } from '@/types';
 import { BannerCropInput } from '@/components/organizer/BannerCropInput';
 import { FlyerUploadInput } from '@/components/organizer/FlyerUploadInput';
 import { EventQRCode } from '@/components/organizer/EventQRCode';
+import { GoLiveField } from '@/components/organizer/GoLiveField';
+import { isScheduled, fmtGoLive, toLagosInput, fromLagosInput } from '@/lib/goLive';
 
 interface Tier { id: string; name: string; price: number; available: number; sold: number; }
 interface Affiliate { id: string; name: string; code: string; link: string; clicks: number; buys: number; }
@@ -49,7 +51,7 @@ interface OrgEvent {
   accent_color: string | null; lineup: LineupAct[]; allowed_email_domains: string[] | null;
   refund_policy: RefundPolicyAnswers | null; refund_policy_set_at: string | null;
   verified: boolean; venue_proof_url: string | null; venue_contact_name: string | null; venue_contact_phone: string | null;
-  lga: string | null; address_reveal_at: string | null;
+  lga: string | null; address_reveal_at: string | null; goes_live_at: string | null;
   organizer_id: string; tiers: Tier[];
 }
 
@@ -154,6 +156,9 @@ export default function OrganizerEventDetailPage() {
   const [meetingLink, setMeetingLink] = useState('');
   const [meetingPasscode, setMeetingPasscode] = useState('');
   const [savingInfo, setSavingInfo] = useState(false);
+  const [goLiveScheduled, setGoLiveScheduled] = useState(false);
+  const [goLiveAt, setGoLiveAt] = useState('');
+  const [savingGoLive, setSavingGoLive] = useState(false);
   const [editingTierId, setEditingTierId] = useState<string | null>(null);
   const [addingTier, setAddingTier] = useState(false);
   const [newTierName, setNewTierName] = useState('');
@@ -221,6 +226,8 @@ export default function OrganizerEventDetailPage() {
           setLga(d.data.lga ?? '');
           setRevealAt(((iso: string | null) => (iso ? new Date(new Date(iso).getTime() + 60 * 60 * 1000).toISOString().slice(0, 16) : ''))(d.data.address_reveal_at ?? null));
           setLocationHidden(Boolean(d.data.location_hidden));
+          setGoLiveScheduled(isScheduled(d.data.goes_live_at));
+          setGoLiveAt(isScheduled(d.data.goes_live_at) ? toLagosInput(d.data.goes_live_at) : '');
           setMeetingLink(d.data.meeting_link ?? '');
           setMeetingPasscode(d.data.meeting_passcode ?? '');
           setAccentColor(d.data.accent_color ?? null);
@@ -277,6 +284,27 @@ export default function OrganizerEventDetailPage() {
       load();
     } finally {
       setSavingInfo(false);
+    }
+  };
+
+  const handleSaveGoLive = async () => {
+    if (goLiveScheduled && !goLiveAt) { toast('Choose when your tickets go on sale', 'error'); return; }
+    setSavingGoLive(true);
+    try {
+      const goesLiveAt = goLiveScheduled ? fromLagosInput(goLiveAt) : null;
+      const res = await fetch(`/api/organizer/events/${id}`, {
+        method: 'PATCH',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ goes_live_at: goesLiveAt }),
+      });
+      const data = await res.json();
+      if (!res.ok) { toast(data.error || 'Update failed', 'error'); return; }
+      toast(goesLiveAt && isScheduled(goesLiveAt)
+        ? `Scheduled: your event goes live ${fmtGoLive(goesLiveAt)}`
+        : 'Your event is live! Tickets are on sale now.', 'success');
+      load();
+    } finally {
+      setSavingGoLive(false);
     }
   };
 
@@ -581,13 +609,38 @@ export default function OrganizerEventDetailPage() {
           <div className="flex items-center gap-2 flex-wrap">
             <Button size="sm" variant="outline" onClick={() => setPreviewing(true)}><Eye size={14} />Preview page</Button>
             {allSoldOut && <Badge variant="gray">Sold Out</Badge>}
-            {event.status === 'approved'    && <Badge variant="green">Live</Badge>}
+            {event.status === 'approved' && (isScheduled(event.goes_live_at)
+              ? <Badge variant="amber">Scheduled</Badge>
+              : <Badge variant="green">Live</Badge>)}
             {event.status === 'under_review' && <Badge variant="amber">Under Review</Badge>}
             {event.status === 'rejected'     && <Badge variant="red">Rejected</Badge>}
             {event.status === 'completed'    && <Badge variant="blue">Completed</Badge>}
           </div>
         </div>
       </div>
+
+      {/* Scheduled go-live: movable until the event is live; an event that's
+          live but hasn't sold anything yet can still be scheduled. */}
+      {event.status === 'approved' && (isScheduled(event.goes_live_at) || !hasSales) && (
+        <div className="rounded-xl border p-5 flex flex-col gap-4"
+          style={{ backgroundColor: 'var(--color-surface)', borderColor: isScheduled(event.goes_live_at) ? '#f59e0b55' : 'var(--color-border)' }}>
+          <div>
+            <h2 className="font-semibold" style={{ color: 'var(--color-text)' }}>When tickets go on sale</h2>
+            <p className="text-xs mt-0.5" style={{ color: 'var(--color-text-muted)' }}>
+              {isScheduled(event.goes_live_at)
+                ? <>Hidden from the public until <strong style={{ color: 'var(--color-text)' }}>{fmtGoLive(event.goes_live_at as string)}</strong>. Move it to any time, or go live now.</>
+                : 'Your event is live. Nothing has sold yet, so you can still take it off sale until a time you choose.'}
+            </p>
+          </div>
+          <GoLiveField scheduled={goLiveScheduled} onScheduledChange={setGoLiveScheduled} value={goLiveAt} onChange={setGoLiveAt}
+            nowLabel={isScheduled(event.goes_live_at) ? 'Put tickets on sale right away' : 'Keep it on sale'} />
+          <div>
+            <Button size="sm" onClick={handleSaveGoLive} disabled={savingGoLive}>
+              {savingGoLive ? 'Saving...' : goLiveScheduled ? 'Save go-live time' : isScheduled(event.goes_live_at) ? 'Go live now' : 'Save'}
+            </Button>
+          </div>
+        </div>
+      )}
 
       {/* Stats */}
       <div className="grid grid-cols-2 sm:grid-cols-3 gap-3">

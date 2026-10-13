@@ -1,4 +1,5 @@
 import { NextRequest, NextResponse } from 'next/server';
+import { onlyLive } from '@/lib/goLive';
 import { getServerSupabase } from '@/lib/supabase/server';
 import { addressHiddenNow } from '@/lib/addressReveal';
 import { getEventsHostedCounts } from '@/lib/server/eventsHosted';
@@ -47,7 +48,7 @@ function shapeEvent(row: any) {
 
 const EVENT_SELECT = `
   id, slug, event_name, category, description, date, time, event_mode, venue, address, city, landmark, location_hidden, lga, address_reveal_at,
-  status, total_sold, banner_color, banner_url, header_banner_url,
+  status, total_sold, banner_color, banner_url, header_banner_url, goes_live_at,
   organizer:users!events_organizer_id_fkey(id, name, tier, verified, member_since, events_hosted, handle),
   tiers:ticket_tiers(id, name, price, available, sold)
 `;
@@ -108,7 +109,8 @@ export async function GET(req: NextRequest) {
     const { data, error } = await qb;
     if (error) throw error;
 
-    const rows = data ?? [];
+    // Scheduled events stay hidden until their go-live time.
+    const rows = onlyLive(data ?? []);
     // eslint-disable-next-line @typescript-eslint/no-explicit-any
     const organizerIds = rows.map((r: any) => r.organizer?.id).filter(Boolean);
     const counts = await getEventsHostedCounts(db, organizerIds);

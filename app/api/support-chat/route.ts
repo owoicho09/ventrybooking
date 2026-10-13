@@ -4,11 +4,14 @@ import { checkRateLimit, getIp } from '@/lib/server/rateLimit';
 import { runAgentLoop, type ChatMessage } from '@/lib/server/agent/runLoop';
 import { buildBuyerRole } from '@/lib/server/agent/roles/buyer';
 
-const MAX_MESSAGES = 40;
+// Counts every message in the history, tool calls included (a turn that
+// uses tools adds 3-5), so this is roughly 8-10 back-and-forths. Long
+// chats get expensive because the whole history is resent each call.
+const MAX_MESSAGES = 30;
 
 export async function POST(req: NextRequest) {
   const ip = getIp(req.headers);
-  if (!checkRateLimit(`support-chat-ip:${ip}`, 20, 10 * 60)) {
+  if (!checkRateLimit(`support-chat-ip:${ip}`, 12, 10 * 60)) {
     return NextResponse.json({ error: 'Too many messages. Please wait a moment.' }, { status: 429 });
   }
 
@@ -20,9 +23,12 @@ export async function POST(req: NextRequest) {
     if (messages.length > MAX_MESSAGES) {
       return NextResponse.json({ error: 'This conversation has gotten long — please start a new chat.' }, { status: 400 });
     }
+    if (typeof messages[messages.length - 1]?.content === 'string' && messages[messages.length - 1].content.length > 1000) {
+      return NextResponse.json({ error: 'That message is a bit long — please keep it under 1,000 characters.' }, { status: 400 });
+    }
 
     const buyer = await getBuyerAuth();
-    if (buyer && !checkRateLimit(`support-chat-email:${buyer.email}`, 20, 10 * 60)) {
+    if (buyer && !checkRateLimit(`support-chat-email:${buyer.email}`, 12, 10 * 60)) {
       return NextResponse.json({ error: 'Too many messages. Please wait a moment.' }, { status: 429 });
     }
 

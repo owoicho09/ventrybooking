@@ -1,4 +1,5 @@
 import type { Metadata } from 'next';
+import { isScheduled } from '@/lib/goLive';
 import { notFound, redirect } from 'next/navigation';
 import { getServerSupabase } from '@/lib/supabase/server';
 import { isUUID } from '@/lib/slug';
@@ -25,7 +26,7 @@ async function getEventBySlug(slug: string) {
   const db = getServerSupabase();
   const { data } = await db
     .from('events')
-    .select('event_name, description, banner_url, status, updated_at')
+    .select('event_name, description, banner_url, status, updated_at, goes_live_at')
     .eq('slug', slug)
     .maybeSingle();
   return data;
@@ -115,6 +116,8 @@ export default async function SlugRoute({ params }: PageProps) {
     // EventDetailContent) — only unpublished ones (pending/rejected/cancelled)
     // should 404.
     if (event.status !== 'approved' && event.status !== 'completed') notFound();
+    // Scheduled events aren't public until their go-live time.
+    if (isScheduled(event.goes_live_at)) notFound();
     return <EventDetailContent identifier={slug} />;
   }
 
