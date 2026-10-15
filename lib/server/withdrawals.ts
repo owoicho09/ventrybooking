@@ -31,6 +31,8 @@ export interface Wallet {
   blockers: string[];
   pendingRequest: WithdrawalRequest | null;
   lastRequest: WithdrawalRequest | null;
+  /** 'bank': settled automatically next working day. 'wallet': held until they withdraw. */
+  payoutMethod: 'bank' | 'wallet';
 }
 
 const fmt = (n: number) => '₦' + Math.round(n).toLocaleString('en-NG');
@@ -71,6 +73,7 @@ export async function loadWallet(db: Db, organizerId: string): Promise<Wallet> {
     blockers: available > 0 ? organizerBlockers(org, available, settledTotals.get(organizerId) ?? 0) : [],
     pendingRequest: requests.find(r => r.status === 'pending') ?? null,
     lastRequest: requests[0] ?? null,
+    payoutMethod: org.payout_method === 'wallet' ? 'wallet' : 'bank',
   };
 }
 
@@ -133,7 +136,7 @@ export async function cancelWithdrawal(db: Db, requestId: string, by: string, no
       {
         notifType: 'payout',
         title: 'Withdrawal request closed',
-        body: note ? `Your withdrawal request was closed: ${note}` : 'Your withdrawal request was closed. Your balance will be paid in the normal next-working-day settlement.',
+        body: note ? `Your withdrawal request was closed: ${note}` : 'Your withdrawal request was closed. Your balance stays available in your wallet.',
         link: '/organizer/payouts',
       },
     ).catch(console.error);

@@ -1,5 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { getBuyerAuth } from '@/lib/server/buyerAuth';
+import { getAuthUser } from '@/lib/server/auth';
+import { getServerSupabase } from '@/lib/supabase/server';
 import { checkRateLimit, getIp } from '@/lib/server/rateLimit';
 import { runAgentLoop, type ChatMessage } from '@/lib/server/agent/runLoop';
 import { buildBuyerRole } from '@/lib/server/agent/roles/buyer';
@@ -16,7 +18,7 @@ export async function POST(req: NextRequest) {
   }
 
   try {
-    const { messages } = await req.json();
+    const { messages, page } = await req.json();
     if (!Array.isArray(messages) || messages.length === 0) {
       return NextResponse.json({ error: 'No messages provided' }, { status: 400 });
     }
@@ -32,8 +34,18 @@ export async function POST(req: NextRequest) {
       return NextResponse.json({ error: 'Too many messages. Please wait a moment.' }, { status: 429 });
     }
 
+    // Organisers and affiliates log in separately from buyers; knowing who's
+    // asking (and from which page) lets the assistant tailor its answers.
+    const user = await getAuthUser();
+    let account: { role: 'organizer' | 'affiliate' | 'admin'; name: string | null } | null = null;
+    if (user && user.role !== 'buyer') {
+      const { data } = await getServerSupabase().from('users').select('name').eq('id', user.sub).maybeSingle();
+      account = { role: user.role, name: data?.name ?? null };
+    }
+    const pagePath = typeof page === 'string' && /^\/[\w\-/]{0,120}$/.test(page) ? page : null;
+
     const history: ChatMessage[] = messages;
-    const role = buildBuyerRole(buyer?.email ?? null, history);
+    const role = buildBuyerRole({ buyerEmail: buyer?.email ?? null, account, page: pagePath }, history);
     const updated = await runAgentLoop(role, history);
 
     return NextResponse.json({ success: true, data: { messages: updated } });

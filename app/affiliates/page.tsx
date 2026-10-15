@@ -18,14 +18,14 @@ const steps = [
   {
     icon: Wallet,
     title: 'Earn on their first 3 events',
-    body: "When someone signs up through your link and runs an event, you earn 30% of Ventry's service fee on their first three events.",
+    body: "When someone signs up through your link and runs an event, you earn 30% of Ventry's platform fee (0.9% of ticket sales) on their first three events.",
   },
 ];
 
 const faqs = [
   {
     q: 'How much do I actually earn?',
-    a: 'You earn 30% of Ventry\'s service fee on every event your referred organiser runs, for their first 2 events only.',
+    a: 'You earn 30% of Ventry\'s 3% platform fee (0.9% of ticket sales) on the first three events each referred organiser runs.',
   },
   {
     q: 'How is a referral tracked?',
@@ -37,7 +37,7 @@ const faqs = [
   },
   {
     q: 'Is there a limit?',
-    a: 'No limit on how many organisers you refer. The 2-event cap applies per organiser, not to you overall.',
+    a: 'No limit on how many organisers you refer. The 3-event cap applies per organiser, not to you overall.',
   },
 ];
 
@@ -56,7 +56,7 @@ export default function AffiliatesLandingPage() {
             Bring in organisers. Earn on every ticket they sell.
           </h1>
           <p className="text-base sm:text-lg max-w-2xl mx-auto mb-10" style={{ color: 'var(--color-text-muted)' }}>
-            Know an event organiser who isn&apos;t on Ventry yet? Refer them, and earn <strong style={{ color: 'var(--color-text)' }}>30% of Ventry&apos;s service fee</strong> — on their first three events. No cap on how many organisers you refer.
+            Know an event organiser who isn&apos;t on Ventry yet? Refer them, and earn <strong style={{ color: 'var(--color-text)' }}>30% of Ventry&apos;s platform fee</strong> — on their first three events. No cap on how many organisers you refer.
           </p>
           <div className="flex flex-col sm:flex-row items-center justify-center gap-3">
             <Link href="/affiliate/register"><Button size="lg">Become an Affiliate</Button></Link>

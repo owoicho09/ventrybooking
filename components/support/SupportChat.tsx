@@ -14,18 +14,39 @@ import { useBuyerAuth } from '@/lib/hooks/useBuyerAuth';
 type ContentBlock = { type: string; text?: string; [key: string]: unknown };
 interface Msg { role: 'user' | 'assistant'; content: string | ContentBlock[]; time: number; isError?: boolean }
 
-const QUICK_ACTIONS = [
+const BUYER_ACTIONS = [
   "I paid but didn't get my ticket",
   'Find my ticket',
-  'Event was changed or cancelled',
-  'Check my complaint status',
+  'How do refunds work?',
+  'How do I sell tickets on Ventry?',
   'Something else',
 ];
 
-const HIDDEN_PREFIXES = ['/organizer', '/admin', '/affiliate', '/checkout'];
+const ORGANIZER_ACTIONS = [
+  'How do I make my event live?',
+  'When and how do I get paid?',
+  'How do I verify my identity?',
+  'How do door staff scan tickets?',
+  'Something else',
+];
+
+const AFFILIATE_ACTIONS = [
+  'How does the affiliate programme work?',
+  'When do I get paid commission?',
+  'Something else',
+];
+
+// Admin has its own tools, checkout shouldn't be interrupted, and the
+// scanner needs the whole screen at the door.
+const HIDDEN_PREFIXES = ['/admin', '/checkout', '/organizer/scan', '/staff-scan', '/scan'];
+// Organiser pages that sit outside the dashboard (no bottom nav there).
+const ORGANIZER_AUTH = ['/organizer/login', '/organizer/register', '/organizer/forgot-password', '/organizer/reset-password', '/organizer/verify'];
 
 function textOf(content: string | ContentBlock[]): string {
   if (typeof content === 'string') return content;
+  // Text written alongside a tool call is interim narration ("let me check…"),
+  // sometimes a guess the final answer corrects; only show the final reply.
+  if (content.some(b => b.type === 'tool_use')) return '';
   return content.filter(b => b.type === 'text').map(b => b.text ?? '').join('\n').trim();
 }
 
@@ -33,8 +54,25 @@ function textOf(content: string | ContentBlock[]): string {
 // plain text; turn those into tappable links. Only site paths are linked.
 const LINK_RE = /((?<![@\w.])(?:https?:\/\/)?(?:www\.)?ventrybooking\.com(?:\/[\w\-/]*)?|(?<![\w.])\/(?:retrieve|refunds\/claim|terms(?:\/[\w-]+)?|privacy|account\/login|events|help)\b)/g;
 
+// The model sometimes writes light markdown despite being asked not to:
+// render **bold**, drop backticks and heading marks, turn "* " bullets into dashes.
+function cleanMarkdown(text: string): string {
+  return text.replace(/`/g, '').replace(/^#{1,6}\s+/gm, '').replace(/^(\s*)\* /gm, '$1- ');
+}
+
+function RichText({ text, isUser }: { text: string; isUser: boolean }) {
+  const parts = cleanMarkdown(text).split(/\*\*(.+?)\*\*/g);
+  return (
+    <>
+      {parts.map((part, i) => (i % 2 === 1
+        ? <strong key={i} className="font-semibold"><Linkified text={part} isUser={isUser} /></strong>
+        : <Linkified key={i} text={part.replace(/(^|[^*\w])\*([^*\n]+)\*(?!\w)/g, '$1$2')} isUser={isUser} />))}
+    </>
+  );
+}
+
 function Linkified({ text, isUser }: { text: string; isUser: boolean }) {
-  const parts = text.replace(/`/g, '').split(LINK_RE);
+  const parts = text.split(LINK_RE);
   return (
     <>
       {parts.map((part, i) => {
@@ -106,6 +144,13 @@ export function SupportChat() {
 
   if (HIDDEN_PREFIXES.some(p => pathname?.startsWith(p))) return null;
 
+  const path = pathname ?? '';
+  const inOrganizer = path.startsWith('/organizer');
+  const inAffiliate = path.startsWith('/affiliate') && !path.startsWith('/affiliates');
+  // The organiser dashboard has a fixed bottom bar on mobile; sit above it.
+  const aboveBottomNav = inOrganizer && !ORGANIZER_AUTH.some(p => path.startsWith(p));
+  const quickActions = inOrganizer ? ORGANIZER_ACTIONS : inAffiliate ? AFFILIATE_ACTIONS : BUYER_ACTIONS;
+
   const send = async (text: string, history: Msg[] = messages) => {
     if (!text.trim() || loading) return;
     const next: Msg[] = [...history, { role: 'user', content: text.trim(), time: Date.now() }];
@@ -116,7 +161,7 @@ export function SupportChat() {
       const res = await fetch('/api/support-chat', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ messages: next.map(({ role, content }) => ({ role, content })) }),
+        body: JSON.stringify({ messages: next.map(({ role, content }) => ({ role, content })), page: pathname }),
       });
       const data = await res.json();
       if (res.ok && data.success) {
@@ -146,7 +191,7 @@ export function SupportChat() {
     send(textOf(lastUser.content), trimmed);
   };
 
-  const greeting = firstName ? `Hi ${firstName}, what can I help with?` : 'Hi! What can I help with?';
+  const greeting = `Hi${firstName ? ` ${firstName}` : ''}! I'm Ventry support. Ask me anything about tickets, events, selling on Ventry or payouts.`;
   const fmtTime = (t: number) => new Date(t).toLocaleTimeString('en-NG', { hour: 'numeric', minute: '2-digit' });
 
   return (
@@ -163,7 +208,7 @@ export function SupportChat() {
             onClick={() => setOpen(false)}
           />
           <div
-            className="fixed z-40 flex flex-col overflow-hidden rounded-2xl border shadow-2xl inset-x-3 bottom-3 sm:inset-auto sm:bottom-24 sm:right-4 sm:w-[380px] transition-all duration-200 ease-out"
+            className={`fixed z-[60] flex flex-col overflow-hidden rounded-2xl border shadow-2xl inset-x-3 ${aboveBottomNav ? 'bottom-20 lg:bottom-24' : 'bottom-3 sm:bottom-24'} sm:inset-auto sm:right-4 sm:w-[380px] transition-all duration-200 ease-out`}
             style={{
               backgroundColor: 'var(--color-surface)',
               borderColor: 'var(--color-border)',
@@ -187,6 +232,18 @@ export function SupportChat() {
                 </p>
               </div>
             </div>
+            <div className="flex items-center gap-1.5">
+            {messages.length > 0 && (
+              <button
+                onClick={() => { if (!loading) { setMessages([]); setInput(''); } }}
+                aria-label="Start a new chat"
+                title="New chat"
+                className="flex-shrink-0 flex items-center justify-center rounded-full transition-colors"
+                style={{ width: 36, height: 36, backgroundColor: 'rgba(255,255,255,0.15)', color: '#fff' }}
+              >
+                <RotateCcw size={16} />
+              </button>
+            )}
             <button
               onClick={() => setOpen(false)}
               aria-label="Close"
@@ -195,6 +252,7 @@ export function SupportChat() {
             >
               <X size={20} />
             </button>
+            </div>
           </div>
 
           <div className="flex-1 overflow-y-auto px-4 py-4 flex flex-col gap-4">
@@ -207,7 +265,7 @@ export function SupportChat() {
                   </div>
                 </div>
                 <div className="flex flex-wrap gap-2 pl-9">
-                  {QUICK_ACTIONS.map(q => (
+                  {quickActions.map(q => (
                     <button
                       key={q}
                       onClick={() => send(q)}
@@ -237,7 +295,7 @@ export function SupportChat() {
                         border: m.isError ? '1px solid #ef444430' : undefined,
                       }}
                     >
-                      {m.isError ? text : <Linkified text={text} isUser={isUser} />}
+                      {m.isError ? text : <RichText text={text} isUser={isUser} />}
                     </div>
                   </div>
                   <div className={`flex items-center gap-2 text-[10px] ${isUser ? 'pr-1' : 'pl-9'}`} style={{ color: 'var(--color-text-dim)' }}>
@@ -292,7 +350,7 @@ export function SupportChat() {
       <button
         onClick={() => setOpen(o => !o)}
         aria-label={open ? 'Close support chat' : 'Support chat'}
-        className={`fixed bottom-4 right-4 z-40 w-14 h-14 rounded-full items-center justify-center shadow-lg transition-transform hover:scale-105 ${open ? 'hidden sm:flex' : 'flex'}`}
+        className={`fixed ${aboveBottomNav ? 'bottom-20 lg:bottom-4' : 'bottom-4'} right-4 z-40 w-14 h-14 rounded-full items-center justify-center shadow-lg transition-transform hover:scale-105 ${open ? 'hidden sm:flex' : 'flex'}`}
         style={{ backgroundColor: 'var(--color-purple)', color: '#fff', boxShadow: '0 4px 20px rgba(124,58,237,0.5)' }}
       >
         {open ? <X size={22} /> : <MessageCircle size={22} />}

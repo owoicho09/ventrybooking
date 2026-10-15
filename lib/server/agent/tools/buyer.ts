@@ -1,5 +1,6 @@
 import { v4 as uuidv4 } from 'uuid';
 import { isScheduled } from '@/lib/goLive';
+import { HELP_ARTICLES, HELP_TOPICS, type HelpTopic } from '@/lib/server/agent/knowledge';
 import { getServerSupabase } from '@/lib/supabase/server';
 import { verifyTransaction } from '@/lib/server/paystack';
 import { resendTicketByReference } from '@/lib/server/ticket';
@@ -38,6 +39,20 @@ export function createBuyerTools(ctx: BuyerToolContext): AgentTool[] {
   const db = getServerSupabase();
 
   return [
+    {
+      name: 'get_help_article',
+      kind: 'read',
+      description: "Get Ventry's help-centre guide on a topic (how things work and step-by-step how-tos for buyers, organisers and affiliates). Call this before answering any how-to or how-does-it-work question. You can call it for more than one topic.",
+      input_schema: {
+        type: 'object',
+        properties: { topic: { type: 'string', enum: Object.keys(HELP_TOPICS) } },
+        required: ['topic'],
+      },
+      handler: async (input) => {
+        const topic = String(input.topic ?? '') as HelpTopic;
+        return HELP_ARTICLES[topic] ? { topic, article: HELP_ARTICLES[topic].trim() } : { error: 'Unknown topic', topics: Object.keys(HELP_TOPICS) };
+      },
+    },
     {
       name: 'lookup_order',
       kind: 'read',

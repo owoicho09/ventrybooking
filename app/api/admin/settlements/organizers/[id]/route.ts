@@ -3,7 +3,7 @@ import { getAuthUser } from '@/lib/server/auth';
 import { getServerSupabase } from '@/lib/supabase/server';
 import {
   eligibilityBlockers, feeRateOf, lagosDate, loadHolidays, loadUnsettled,
-  releaseCutoff, summarizePending, loadSettledTotals, ORGANIZER_COLUMNS, type OrganizerRow,
+  releaseCutoff, summarizePending, loadSettledTotals, walletHoldIds, ORGANIZER_COLUMNS, type OrganizerRow,
 } from '@/lib/server/settlements';
 import { eventPayoutBreakdown } from '@/lib/server/eventPayouts';
 
@@ -45,7 +45,7 @@ export async function GET(_req: NextRequest, { params }: { params: Promise<{ id:
     const u       = unsettled.get(id);
     const pending = summarizePending(u?.days ?? [], u?.owed ?? null, feeRateOf(org), cutoff, holidays, u?.adjustments);
     const blockers = pending.releasable
-      ? eligibilityBlockers({ organizer: org, releasableNet: pending.releasable.net, settledTotal: (await loadSettledTotals(db, [id])).get(id) ?? 0 })
+      ? eligibilityBlockers({ organizer: org, releasableNet: pending.releasable.net, settledTotal: (await loadSettledTotals(db, [id])).get(id) ?? 0, walletHold: (await walletHoldIds(db, [org])).has(id) })
       : [];
 
     return NextResponse.json(
@@ -56,6 +56,7 @@ export async function GET(_req: NextRequest, { params }: { params: Promise<{ id:
             id: org.id, name: org.name, email: org.email,
             bankName: org.bank_name, accountNumber: org.account_number, accountName: org.account_name,
             feeRate: feeRateOf(org),
+            payoutMethod: org.payout_method ?? 'bank',
           },
           pending,
           blockers,

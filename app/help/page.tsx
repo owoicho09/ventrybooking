@@ -9,7 +9,7 @@ import { Footer } from '@/components/layout/Footer';
 const faqItems = [
   {
     q: 'How do I retrieve my ticket?',
-    a: 'Visit ventry.com/retrieve and enter your email address. Your tickets will be sent to your inbox, or you can view them directly on the website.',
+    a: 'Visit ventrybooking.com/retrieve and enter your email address. Your tickets will be sent to your inbox, or you can view them directly on the website.',
   },
   {
     q: 'My QR code is not scanning. What do I do?',
@@ -17,7 +17,7 @@ const faqItems = [
   },
   {
     q: 'I was charged but did not receive a ticket.',
-    a: 'Check your spam/junk folder first. If still not found, visit ventry.com/retrieve with the email used at checkout. If the issue persists, contact support at hello@ventry.com with your payment reference.',
+    a: 'Check your spam/junk folder first. If still not found, visit ventrybooking.com/retrieve with the email used at checkout. If the issue persists, contact support at support@ventrybooking.com with your payment reference.',
   },
   {
     q: 'Will I get a refund if an event is cancelled?',
@@ -29,7 +29,7 @@ const faqItems = [
   },
   {
     q: 'How do I report a suspicious or fraudulent event?',
-    a: 'Email hello@ventry.com with the event name and your concerns. Our team reviews all reports within 24 hours.',
+    a: 'Email support@ventrybooking.com with the event name and your concerns. Our team reviews all reports within 24 hours.',
   },
   {
     q: 'Can I get a refund if I change my mind?',
@@ -70,7 +70,7 @@ export default function HelpPage() {
             </div>
             <div>
               <p className="font-semibold text-sm mb-0.5" style={{ color: 'var(--color-text)' }}>Email Support</p>
-              <p className="text-xs" style={{ color: 'var(--color-text-muted)' }}>hello@ventry.com</p>
+              <p className="text-xs" style={{ color: 'var(--color-text-muted)' }}>support@ventrybooking.com</p>
               <p className="text-xs mt-1" style={{ color: 'var(--color-text-dim)' }}>We respond within 24 hours</p>
             </div>
           </div>
@@ -89,7 +89,7 @@ export default function HelpPage() {
               <p className="font-semibold text-sm mb-0.5" style={{ color: 'var(--color-text)' }}>Ticket Retrieval</p>
               <p className="text-xs" style={{ color: 'var(--color-text-muted)' }}>
                 <a href="/retrieve" className="hover:underline" style={{ color: 'var(--color-purple-light)' }}>
-                  ventry.com/retrieve
+                  ventrybooking.com/retrieve
                 </a>
               </p>
               <p className="text-xs mt-1" style={{ color: 'var(--color-text-dim)' }}>Find your ticket instantly</p>

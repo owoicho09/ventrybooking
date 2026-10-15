@@ -61,10 +61,12 @@ export interface OrganizerRow {
   /** Admin hold on all settlements (Organiser Terms §9, §11), e.g. refunds overdue or no-show claims being verified. */
   settlement_hold?: boolean | null;
   settlement_hold_reason?: string | null;
+  /** 'wallet': keep sales in the Ventry wallet until the organiser withdraws (migration 051). */
+  payout_method?: 'bank' | 'wallet' | null;
 }
 
 /** Every users column the settlement flow reads, in one place. */
-export const ORGANIZER_COLUMNS = 'id, name, email, bank_name, account_number, account_name, platform_fee_rate, identity_status, bank_name_matched, settlement_hold, settlement_hold_reason';
+export const ORGANIZER_COLUMNS = 'id, name, email, bank_name, account_number, account_name, platform_fee_rate, identity_status, bank_name_matched, settlement_hold, settlement_hold_reason, payout_method';
 
 /**
  * Organiser Terms 3.7: an organiser without a provider identity check can be
@@ -136,6 +138,13 @@ export interface EligibilityContext {
   releasableNet: number;
   /** Already settled to this organiser, all time (see loadSettledTotals). */
   settledTotal: number;
+  /**
+   * The organiser keeps payouts in their wallet and hasn't asked to withdraw,
+   * so the daily release leaves them alone. Set only for the routine release
+   * (see walletHoldIds); explicit admin actions on specific money (retry,
+   * manual payment) don't pass it.
+   */
+  walletHold?: boolean;
 }
 
 /**
@@ -148,6 +157,10 @@ export const ELIGIBILITY_CONDITIONS: { id: string; check: (ctx: EligibilityConte
   {
     id: 'has_releasable_funds',
     check: ({ releasableNet }) => (releasableNet > 0 ? null : 'Nothing releasable yet'),
+  },
+  {
+    id: 'wallet_hold',
+    check: ({ walletHold }) => (walletHold ? 'Keeps payouts in their Ventry wallet. Pays out when they tap Withdraw.' : null),
   },
   {
     id: 'bank_details',
@@ -190,6 +203,15 @@ export const ELIGIBILITY_CONDITIONS: { id: string; check: (ctx: EligibilityConte
         : null,
   },
 ];
+
+/** Organisers on wallet payouts with no withdrawal waiting: the daily release skips them. */
+export async function walletHoldIds(db: Db, orgs: Pick<OrganizerRow, 'id' | 'payout_method'>[]): Promise<Set<string>> {
+  const walletIds = orgs.filter(o => o.payout_method === 'wallet').map(o => o.id);
+  if (walletIds.length === 0) return new Set();
+  const { data } = await db.from('withdrawal_requests').select('organizer_id').eq('status', 'pending').in('organizer_id', walletIds);
+  const requested = new Set(((data ?? []) as { organizer_id: string }[]).map(r => r.organizer_id));
+  return new Set(walletIds.filter(id => !requested.has(id)));
+}
 
 export function eligibilityBlockers(ctx: EligibilityContext): string[] {
   return ELIGIBILITY_CONDITIONS.map(c => c.check(ctx)).filter((r): r is string => r !== null);
@@ -588,7 +610,8 @@ export async function releaseForOrganizer(
     return { organizerId, outcome: 'noop', message: 'Nothing to release — already released or not yet eligible' };
   }
   const settledTotal = (await loadSettledTotals(db, [organizerId])).get(organizerId) ?? 0;
-  const blockers = eligibilityBlockers({ organizer: org, releasableNet: summary.releasable.net, settledTotal });
+  const walletHold = (await walletHoldIds(db, [org])).has(organizerId);
+  const blockers = eligibilityBlockers({ organizer: org, releasableNet: summary.releasable.net, settledTotal, walletHold });
   if (blockers.length > 0) return { organizerId, outcome: 'blocked', message: blockers.join('; ') };
 
   const { data, error } = await db.rpc('claim_settlement', {

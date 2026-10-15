@@ -10,7 +10,7 @@ const MODEL = 'claude-haiku-4-5';
 const MAX_TOKENS = 500;
 // A tool result is JSON for the model; cap it so one big row can't bloat
 // every later call in the conversation.
-const MAX_TOOL_RESULT_CHARS = 2000;
+const MAX_TOOL_RESULT_CHARS = 3500; // help articles run up to ~3k
 
 export interface AgentTool {
   name: string;

@@ -27,6 +27,7 @@ interface OrganizerPending {
   refundsOwed: { gross: number; ticketCount: number };
   blockers: string[];
   withdrawalRequested: { amount: number; requested_at: string } | null;
+  payoutMethod?: 'bank' | 'wallet';
 }
 
 interface AttentionRow {
@@ -338,10 +339,27 @@ export default function AdminPayoutsPage() {
                     Withdrawal requested
                   </span>
                 )}
-                {o.blockers.map(b => (
-                  <p key={b} className="text-xs" style={{ color: 'var(--color-red)' }}>{b}</p>
-                ))}
-                {o.releasable && o.blockers.length > 0 && (
+                {(() => {
+                  // Wallet payouts aren't a problem to fix: the money waits until they withdraw.
+                  const inWallet = o.payoutMethod === 'wallet' && !o.withdrawalRequested;
+                  const problems = inWallet ? o.blockers.filter(b => !b.startsWith('Keeps payouts in their Ventry wallet')) : o.blockers;
+                  return (
+                    <>
+                      {inWallet && (
+                        <span className="inline-block text-[10px] font-semibold uppercase tracking-wide px-1.5 py-0.5 rounded mt-0.5" style={{ backgroundColor: 'var(--color-purple-dim)', color: 'var(--color-purple-light)' }}>
+                          Wallet payouts
+                        </span>
+                      )}
+                      {problems.map(b => (
+                        <p key={b} className="text-xs" style={{ color: 'var(--color-red)' }}>{b}</p>
+                      ))}
+                      {o.releasable && inWallet && problems.length === 0 && (
+                        <p className="text-xs" style={{ color: 'var(--color-text-muted)' }}>{formatNGN(o.releasable.net)} in their wallet, paid when they withdraw</p>
+                      )}
+                    </>
+                  );
+                })()}
+                {o.releasable && o.blockers.length > 0 && !(o.payoutMethod === 'wallet' && !o.withdrawalRequested && o.blockers.every(b => b.startsWith('Keeps payouts in their Ventry wallet'))) && (
                   <p className="text-xs" style={{ color: 'var(--color-text-muted)' }}>{formatNGN(o.releasable.net)} releasable once fixed</p>
                 )}
                 {o.accruing.map(a => (

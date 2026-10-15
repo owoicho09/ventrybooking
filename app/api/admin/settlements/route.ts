@@ -3,7 +3,7 @@ import { getAuthUser } from '@/lib/server/auth';
 import { getServerSupabase } from '@/lib/supabase/server';
 import {
   eligibilityBlockers, feeRateOf, lagosDate, loadHolidays, loadUnsettled, nextWorkingDay,
-  releaseCutoff, summarizePending, loadSettledTotals, ORGANIZER_COLUMNS, type OrganizerRow, type SettlementRow,
+  releaseCutoff, summarizePending, loadSettledTotals, walletHoldIds, ORGANIZER_COLUMNS, type OrganizerRow, type SettlementRow,
 } from '@/lib/server/settlements';
 
 /** Payout-section overview: every organiser with unsettled money, plus settlements needing attention. */
@@ -46,6 +46,7 @@ export async function GET() {
     const { data: openRequests } = await db.from('withdrawal_requests').select('organizer_id, amount, requested_at').eq('status', 'pending');
     const requested = new Map(((openRequests ?? []) as { organizer_id: string; amount: number; requested_at: string }[]).map(r => [r.organizer_id, r]));
     const orgs = new Map(orgRows.map(o => [o.id, o]));
+    const walletHeld = await walletHoldIds(db, orgRows);
 
     const organizers = Array.from(unsettled.entries())
       .filter(([id]) => orgs.has(id))
@@ -53,7 +54,7 @@ export async function GET() {
         const org = orgs.get(id)!;
         const summary = summarizePending(u.days, u.owed, feeRateOf(org), cutoff, holidays, u.adjustments);
         const blockers = summary.releasable
-          ? eligibilityBlockers({ organizer: org, releasableNet: summary.releasable.net, settledTotal: settledTotals.get(id) ?? 0 })
+          ? eligibilityBlockers({ organizer: org, releasableNet: summary.releasable.net, settledTotal: settledTotals.get(id) ?? 0, walletHold: walletHeld.has(id) })
           : [];
         return {
           id, name: org.name, email: org.email,
@@ -62,6 +63,7 @@ export async function GET() {
           ...summary,
           blockers,
           withdrawalRequested: requested.get(id) ?? null,
+          payoutMethod: org.payout_method ?? 'bank',
         };
       })
       .sort((a, b) => (b.releasable?.net ?? -Infinity) - (a.releasable?.net ?? -Infinity));
