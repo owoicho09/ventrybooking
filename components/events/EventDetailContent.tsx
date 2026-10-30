@@ -60,6 +60,7 @@ export function EventDetailContent({ identifier, preview }: EventDetailContentPr
   const event = preview?.event ?? fetchedEvent;
   const [loading, setLoading] = useState(!preview);
   const [selectedId, setSelectedId] = useState<string | null>(null);
+  const [openTierDetailsId, setOpenTierDetailsId] = useState<string | null>(null);
   const [qty, setQty] = useState(1);
   const [orgReputation, setOrgReputation] = useState<{ avg: number | null; count: number } | null>(null);
   const [solidBar, setSolidBar] = useState(false);
@@ -299,7 +300,7 @@ export function EventDetailContent({ identifier, preview }: EventDetailContentPr
               aria-checked={isCompleted ? undefined : on}
               className={`v-tier${on ? ' on' : ''}${out || isCompleted ? ' out' : ''}`}
               disabled={out || isCompleted}
-              onClick={() => selectTier(tier)}
+              onClick={() => { setOpenTierDetailsId(null); selectTier(tier); }}
               style={isCompleted && !out ? { opacity: .7 } : undefined}
             >
               <div className="v-tier-top">
@@ -313,6 +314,26 @@ export function EventDetailContent({ identifier, preview }: EventDetailContentPr
                   : tier.price === 0 ? `Max ${FREE_TIER_ORDER_CAP} per order`
                   : 'On sale'}
               </div>
+
+              {tier.description && tier.description.trim().length > 0 && (
+                <div className="v-tier-details">
+                  <button
+                    type="button"
+                    className="v-tier-details-btn"
+                    onClick={(e) => {
+                      e.preventDefault();
+                      e.stopPropagation();
+                      setOpenTierDetailsId(id => (id === tier.id ? null : tier.id));
+                    }}
+                    aria-expanded={openTierDetailsId === tier.id}
+                  >
+                    {openTierDetailsId === tier.id ? 'Hide details' : 'View details'}
+                  </button>
+                  {openTierDetailsId === tier.id && (
+                    <div className="v-tier-details-body">{tier.description}</div>
+                  )}
+                </div>
+              )}
             </button>
           );
         })}

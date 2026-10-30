@@ -25,7 +25,7 @@ export async function POST(
       return NextResponse.json({ error: 'Event not found' }, { status: 404 });
     }
 
-    const { name, price, quantity } = await req.json();
+    const { name, price, quantity, description } = await req.json();
 
     if (!name || price === undefined || !quantity) {
       return NextResponse.json({ error: 'name, price, and quantity are required' }, { status: 400 });
@@ -45,8 +45,9 @@ export async function POST(
         price:     Number(price),
         available: Number(quantity),
         sold:      0,
+        description: typeof description === 'string' && description.trim().length ? description.trim().slice(0, 280) : null,
       })
-      .select('id, name, price, available, sold')
+      .select('id, name, price, description, available, sold')
       .single();
 
     if (error) throw error;

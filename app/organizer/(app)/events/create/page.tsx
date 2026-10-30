@@ -20,7 +20,7 @@ import { fromLagosInput, isScheduled, fmtGoLive } from '@/lib/goLive';
 import type { DetailEvent } from '@/components/events/EventDetailContent';
 import type { EventCategory } from '@/types';
 
-interface Tier { id: string; name: string; price: string; quantity: string; }
+interface Tier { id: string; name: string; price: string; quantity: string; description?: string; }
 type LineupLiability = 'headliner' | 'guest' | 'surprise';
 interface LineupAct { id: string; name: string; role: string; liability: LineupLiability; photoFile?: File | null; photoPreview?: string; }
 
@@ -73,7 +73,7 @@ export default function CreateEventPage() {
   const [venueProof, setVenueProof] = useState<File | null>(null);
   const [venueContactName, setVenueContactName] = useState('');
   const [venueContactPhone, setVenueContactPhone] = useState('');
-  const [tiers, setTiers] = useState<Tier[]>([{ id: '1', name: 'Regular', price: '', quantity: '' }]);
+  const [tiers, setTiers] = useState<Tier[]>([{ id: '1', name: 'Regular', price: '', quantity: '', description: '' }]);
   const [accentColor, setAccentColor] = useState<string | null>(null);
   const [accentAutoDetected, setAccentAutoDetected] = useState(false);
   const [colorManuallySet, setColorManuallySet] = useState(false);
@@ -538,6 +538,8 @@ export default function CreateEventPage() {
                 <Input label="Price (NGN)" type="number" value={tier.price} onChange={e => updateTier(tier.id, 'price', e.target.value)} placeholder="5000" />
                 <Input label="Quantity" type="number" value={tier.quantity} onChange={e => updateTier(tier.id, 'quantity', e.target.value)} placeholder="500" />
               </div>
+                <Textarea label="Tier Description" value={tier.description ?? ''} onChange={e => updateTier(tier.id, 'description', e.target.value)} placeholder="What does this ticket include?" rows={3} className="col-span-3" />
+
             </div>
           ))}
         </div>

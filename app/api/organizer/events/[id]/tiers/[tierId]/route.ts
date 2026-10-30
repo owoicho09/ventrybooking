@@ -39,7 +39,7 @@ export async function PATCH(
     }
 
     const body = await req.json();
-    const updates: Record<string, number> = {};
+    const updates: Record<string, unknown> = {};
 
     if (body.price !== undefined) {
       const price = Number(body.price);
@@ -56,6 +56,12 @@ export async function PATCH(
         );
       }
       updates.available = available;
+    }
+
+    if (body.description !== undefined) {
+      const raw = body.description == null ? '' : String(body.description);
+      const trimmed = raw.trim().slice(0, 280);
+      updates.description = trimmed.length ? trimmed : null;
     }
 
     if (Object.keys(updates).length === 0) {

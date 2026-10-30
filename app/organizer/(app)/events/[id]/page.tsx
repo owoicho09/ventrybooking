@@ -164,6 +164,7 @@ export default function OrganizerEventDetailPage() {
   const [newTierName, setNewTierName] = useState('');
   const [newTierPrice, setNewTierPrice] = useState('');
   const [newTierQty, setNewTierQty]   = useState('');
+  const [newTierDesc, setNewTierDesc] = useState('');
   const [addingLoading, setAddingLoading] = useState(false);
   const [downloadLoading, setDownloadLoading] = useState(false);
   const [affiliates, setAffiliates] = useState<Affiliate[]>([]);
@@ -502,13 +503,15 @@ export default function OrganizerEventDetailPage() {
       const res = await fetch(`/api/organizer/events/${id}/tiers`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ name: newTierName, price: newTierPrice || 0, quantity: newTierQty }),
+        body: JSON.stringify({ name: newTierName, price: newTierPrice || 0, quantity: newTierQty, description: newTierDesc }),
       });
       const data = await res.json();
       if (!res.ok) { toast(data.error || 'Failed to add tier', 'error'); return; }
       toast('Tier added', 'success');
       setAddingTier(false);
       setNewTierName(''); setNewTierPrice(''); setNewTierQty('');
+    setNewTierDesc('');
+        setNewTierDesc('');
       load();
     } finally {
       setAddingLoading(false);
@@ -700,6 +703,7 @@ export default function OrganizerEventDetailPage() {
               <Input label="Name" value={newTierName} onChange={e => setNewTierName(e.target.value)} placeholder="e.g. VIP" />
               <Input label="Price (NGN, 0 = Free)" type="number" value={newTierPrice} onChange={e => setNewTierPrice(e.target.value)} placeholder="5000" min="0" />
               <Input label="Quantity" type="number" value={newTierQty} onChange={e => setNewTierQty(e.target.value)} placeholder="100" min="1" />
+              <Textarea label="Tier description" value={newTierDesc} onChange={e => setNewTierDesc(e.target.value)} placeholder="What does this ticket include?" rows={3} className="col-span-3" />
             </div>
             <div className="flex gap-2">
               <Button size="sm" disabled={addingLoading || !newTierName || !newTierQty} onClick={handleAddTier}>

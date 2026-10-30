@@ -45,6 +45,8 @@ export interface TicketTier {
   id: string;
   name: string;
   price: number;
+  /** Optional organiser-provided description (e.g. what the tier includes). */
+  description?: string | null;
   available: number;
   sold: number;
 }
