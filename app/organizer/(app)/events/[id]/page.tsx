@@ -102,8 +102,9 @@ function EditTierRow({
   const handleSave = async () => {
     setSaving(true);
     await onSave({
-      price:     Number(price),
-      available: Number(available),
+      price:       Number(price),
+      available:   Number(available),
+      description: description.trim().length ? description.trim() : null,
     });
     setSaving(false);
   };
@@ -131,8 +132,10 @@ function EditTierRow({
         value={description}
         onChange={e => setDescription(e.target.value)}
         placeholder="What does this ticket include?"
+        className="col-span-2"
         rows={3}
       />
+      </div>
 
       <div className="flex gap-2">
         <Button size="sm" disabled={saving} onClick={handleSave}><Check size={13} />Save</Button>
