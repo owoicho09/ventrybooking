@@ -6,7 +6,7 @@ import { useRouter, useSearchParams } from 'next/navigation';
 import Link from 'next/link';
 import { ChevronLeft, MapPin, Share2, ShieldCheck, QrCode, Clock3, Info, Video } from 'lucide-react';
 import { formatNGN } from '@/lib/utils';
-import { buyerTotalForItems } from '@/lib/fees';
+import { buyerTotalForItems, ticketPriceWithService } from '@/lib/fees';
 import { ticketUrgency, URGENCY_LABEL } from '@/lib/ticketUrgency';
 import type { Event, TicketTier } from '@/types';
 import { EventReviews } from '@/components/events/EventReviews';
@@ -304,7 +304,7 @@ export function EventDetailContent({ identifier, preview }: EventDetailContentPr
             >
               <div className="v-tier-top">
                 <span className="v-tier-n">{tier.name}</span>
-                <span className={`v-tier-p${tier.price === 0 ? ' free' : ''}`}>{tier.price === 0 ? 'Free' : formatNGN(tier.price)}</span>
+                <span className={`v-tier-p${tier.price === 0 ? ' free' : ''}`}>{tier.price === 0 ? 'Free' : formatNGN(ticketPriceWithService(tier.price))}</span>
               </div>
               <div className="v-tier-s">
                 {out ? URGENCY_LABEL.sold_out
@@ -333,9 +333,8 @@ export function EventDetailContent({ identifier, preview }: EventDetailContentPr
             <div className="v-sum tot"><span>Total</span><span style={{ color: 'var(--green-lt)' }}>Free</span></div>
           ) : (
             <>
-              <div className="v-sum"><span>{quantity} × {selectedTier!.name}</span><span>{formatNGN(totals.subtotal)}</span></div>
-              <div className="v-sum"><span>Service fee</span><span>{formatNGN(totals.serviceFee)}</span></div>
-              <div className="v-sum"><span>Processing fee</span><span>{formatNGN(totals.processingFee)}</span></div>
+              <div className="v-sum"><span>{quantity} × {selectedTier!.name}</span><span>{formatNGN(totals.subtotal + totals.serviceFee)}</span></div>
+<div className="v-sum"><span>Processing fee</span><span>{formatNGN(totals.processingFee)}</span></div>
               <div className="v-sum tot"><span>Total</span><span>{formatNGN(totals.total)}</span></div>
             </>
           ))}
@@ -344,7 +343,7 @@ export function EventDetailContent({ identifier, preview }: EventDetailContentPr
             {!minOnSale ? 'Sold out' : allFree ? 'Get free tickets' : 'Get tickets'}
           </button>
           <p className="v-nb">
-            {allFree ? '' : 'The total above is exactly what leaves your account. Service and processing fees are not refundable. '}
+            {allFree ? '' : 'The total above is exactly what leaves your account. Processing fees are not refundable. '}
             Ventry provides the platform; {orgName} runs the event and handles refunds.
           </p>
           {preview && <p className="v-preview-note">Preview: checkout is switched off until your event is live.</p>}
@@ -599,7 +598,7 @@ export function EventDetailContent({ identifier, preview }: EventDetailContentPr
         ) : (
           <>
             <button type="button" className="p" style={{ background: 'none', border: 0, textAlign: 'left', padding: 0, cursor: 'pointer' }} onClick={() => tiersRef.current?.scrollIntoView({ behavior: 'smooth', block: 'start' })}>
-              {hasSelection ? (allFree ? 'Free' : formatNGN(totals.total)) : minOnSale ? (minOnSale.price === 0 ? 'Free' : `From ${formatNGN(minOnSale.price)}`) : 'Sold out'}
+              {hasSelection ? (allFree ? 'Free' : formatNGN(totals.total)) : minOnSale ? (minOnSale.price === 0 ? 'Free' : `From ${formatNGN(ticketPriceWithService(minOnSale.price))}`) : 'Sold out'}
               <i>{hasSelection ? `${quantity} × ${selectedTier!.name}${allFree ? '' : ', all fees in'} · change` : 'Choose a ticket'}</i>
             </button>
             <button type="button" className="v-btn v-btn-accent" disabled={!hasSelection} onClick={handlePurchase}>
