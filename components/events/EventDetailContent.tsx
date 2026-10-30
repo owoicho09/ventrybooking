@@ -6,7 +6,7 @@ import { useRouter, useSearchParams } from 'next/navigation';
 import Link from 'next/link';
 import { ChevronLeft, MapPin, Share2, ShieldCheck, QrCode, Clock3, Info, Video } from 'lucide-react';
 import { formatNGN } from '@/lib/utils';
-import { buyerTotalForItems } from '@/lib/fees';
+import { buyerTotalForItems, ticketPriceWithService } from '@/lib/fees';
 import { ticketUrgency, URGENCY_LABEL } from '@/lib/ticketUrgency';
 import type { Event, TicketTier } from '@/types';
 import { EventReviews } from '@/components/events/EventReviews';
@@ -60,6 +60,7 @@ export function EventDetailContent({ identifier, preview }: EventDetailContentPr
   const event = preview?.event ?? fetchedEvent;
   const [loading, setLoading] = useState(!preview);
   const [selectedId, setSelectedId] = useState<string | null>(null);
+  const [openTierDetailsId, setOpenTierDetailsId] = useState<string | null>(null);
   const [qty, setQty] = useState(1);
   const [orgReputation, setOrgReputation] = useState<{ avg: number | null; count: number } | null>(null);
   const [solidBar, setSolidBar] = useState(false);
@@ -304,7 +305,7 @@ export function EventDetailContent({ identifier, preview }: EventDetailContentPr
             >
               <div className="v-tier-top">
                 <span className="v-tier-n">{tier.name}</span>
-                <span className={`v-tier-p${tier.price === 0 ? ' free' : ''}`}>{tier.price === 0 ? 'Free' : formatNGN(tier.price)}</span>
+                <span className={`v-tier-p${tier.price === 0 ? ' free' : ''}`}>{tier.price === 0 ? 'Free' : formatNGN(ticketPriceWithService(tier.price))}</span>
               </div>
               <div className="v-tier-s">
                 {out ? URGENCY_LABEL.sold_out

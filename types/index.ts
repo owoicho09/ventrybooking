@@ -45,6 +45,7 @@ export interface TicketTier {
   id: string;
   name: string;
   price: number;
+  description?: string | null;
   available: number;
   sold: number;
 }

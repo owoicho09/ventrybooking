@@ -22,6 +22,17 @@ export function serviceFeePerTicket(ticketPrice: number) {
   return Math.min(Math.round(ticketPrice * SERVICE_FEE_RATE), SERVICE_FEE_FLAT);
 }
 
+
+/**
+ * Buyer-facing per-ticket price shown on the site (service fee included).
+ * This does not include the Paystack processing fee, which is computed on
+ * the final pre-processing amount at checkout.
+ */
+export function ticketPriceWithService(ticketPrice: number): number {
+  if (ticketPrice <= 0) return ticketPrice;
+  return ticketPrice + serviceFeePerTicket(ticketPrice);
+}
+
 /**
  * Processing fee owed on a pre-processing amount (ticket subtotal + service
  * fee): 1.5% of that amount, plus a flat ₦100 above the ₦2,500 threshold,

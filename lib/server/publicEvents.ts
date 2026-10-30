@@ -3,6 +3,7 @@ import { onlyLive } from '@/lib/goLive';
 import { addressHiddenNow } from '@/lib/addressReveal';
 import { ticketUrgency } from '@/lib/ticketUrgency';
 import { normalizeCity, todayWAT, type PublicEvent, type PublicTier } from '@/lib/publicEvents';
+import { ticketPriceWithService } from '@/lib/fees';
 
 // Every figure on the public pages comes from here, straight out of the
 // database. Nothing is rounded up, estimated or defaulted: when a number
@@ -29,7 +30,7 @@ function shape(row: any): PublicEvent {
   const totalAvailable = tiers.reduce((s, t) => s + t.available, 0);
   const totalSold = tiers.reduce((s, t) => s + t.sold, 0);
   const soldOut = tiers.length > 0 && onSale.length === 0;
-  const prices = (onSale.length ? onSale : tiers).map(t => t.price);
+  const prices = (onSale.length ? onSale : tiers).map(t => (t.price === 0 ? 0 : ticketPriceWithService(t.price)));
   const locationHidden = addressHiddenNow({ location_hidden: row.location_hidden, address_reveal_at: row.address_reveal_at, date: String(row.date), time: row.time });
   const org = one(row.organizer) as { id: string; name: string; verified: boolean; handle: string | null; avatar_url: string | null; cover_image_url: string | null } | null;
   const status = row.status === 'completed' ? 'completed' : 'approved';
@@ -62,7 +63,7 @@ function shape(row: any): PublicEvent {
     },
     tiers,
     minPrice: prices.length ? Math.min(...prices) : null,
-    cheapestOnSale: onSale[0] ? { name: onSale[0].name, price: onSale[0].price, remaining: onSale[0].available - onSale[0].sold } : null,
+    cheapestOnSale: onSale[0] ? { name: onSale[0].name, price: (onSale[0].price === 0 ? 0 : ticketPriceWithService(onSale[0].price)), remaining: onSale[0].available - onSale[0].sold } : null,
     totalSold,
     totalAvailable,
     soldOut,

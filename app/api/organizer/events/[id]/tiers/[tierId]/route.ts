@@ -39,7 +39,7 @@ export async function PATCH(
     }
 
     const body = await req.json();
-    const updates: Record<string, number> = {};
+    const updates: Record<string, number | string | null> = {};
 
     if (body.price !== undefined) {
       const price = Number(body.price);
@@ -56,6 +56,14 @@ export async function PATCH(
         );
       }
       updates.available = available;
+    }
+
+    if (body.description !== undefined) {
+      const desc = typeof body.description === 'string' ? body.description.trim() : '';
+      if (desc.length > 280) {
+        return NextResponse.json({ error: 'Description is too long (max 280 characters)' }, { status: 400 });
+      }
+      updates.description = desc || null;
     }
 
     if (Object.keys(updates).length === 0) {

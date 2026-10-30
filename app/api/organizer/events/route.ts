@@ -30,7 +30,7 @@ export async function GET(req: NextRequest) {
       .from('events')
       .select(`
         id, name:event_name, category, date, time, event_mode, venue, city, status, total_sold, banner_color, goes_live_at,
-        tiers:ticket_tiers(id, name, price, available, sold)
+        tiers:ticket_tiers(id, name, price, description, available, sold)
       `)
       .eq('organizer_id', user.sub)
       .order('date', { ascending: false });
@@ -263,10 +263,11 @@ export async function POST(req: NextRequest) {
 
     // Insert ticket tiers
     if (tiers.length > 0) {
-      const tierInserts = tiers.map((t: { name: string; price: string; quantity: string }) => ({
+      const tierInserts = tiers.map((t: { name: string; price: string; quantity: string; description?: string | null }) => ({
         event_id: eventId,
         name: t.name,
         price: Number(t.price),
+        description: (String(t.description ?? '').trim() || null),
         available: Number(t.quantity),
         sold: 0,
       }));

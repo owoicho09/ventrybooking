@@ -4,6 +4,7 @@ import { Calendar, MapPin, CheckCircle } from 'lucide-react';
 import { Badge } from '@/components/ui/Badge';
 import { Button } from '@/components/ui/Button';
 import { formatNGN, formatShortDate } from '@/lib/utils';
+import { ticketPriceWithService } from '@/lib/fees';
 import { URGENCY_LABEL } from '@/lib/ticketUrgency';
 import type { Event } from '@/types';
 
@@ -201,7 +202,7 @@ export function EventCard({ event, variant = 'default' }: EventCardProps) {
           ) : (
             <div>
               <p className="text-[10px] uppercase tracking-wider" style={{ color: 'var(--color-text-dim)' }}>From</p>
-              <p className="text-base font-bold" style={{ color: 'var(--color-text)' }}>{formatNGN(minPrice)}</p>
+              <p className="text-base font-bold" style={{ color: 'var(--color-text)' }}>{formatNGN(ticketPriceWithService(minPrice))}</p>
             </div>
           )}
           <Link href={`/${event.slug || event.id}`} className="relative z-10">

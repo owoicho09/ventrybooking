@@ -1,4 +1,4 @@
-'use client';
+﻿'use client';
 
 import { useState, useEffect } from 'react';
 import Link from 'next/link';
@@ -38,7 +38,7 @@ export default function CheckoutPage() {
   const [error, setError]                     = useState('');
   const [cart, setCart]                       = useState<Cart | null>(null);
   // The signed-in buyer's own email, captured once and never mutated by
-  // editing the email field below — if they change it to buy for a friend,
+  // editing the email field below â€” if they change it to buy for a friend,
   // the ticket goes to the typed email (that email owns it, per platform
   // rule) but the order still needs to be attributable back to this session.
   const [sessionEmail, setSessionEmail]       = useState<string | null>(null);
@@ -63,7 +63,7 @@ export default function CheckoutPage() {
     }
   }, []);
 
-  // Convenience pre-fill for a logged-in buyer session — guest checkout
+  // Convenience pre-fill for a logged-in buyer session â€” guest checkout
   // (no session) is completely unaffected, and this never blocks submission.
   useEffect(() => {
     fetch('/api/buyer/me')
@@ -97,7 +97,7 @@ export default function CheckoutPage() {
   // issued for exactly the email currently in the field.
   const needsVerification = !sessionEmail && !(emailToken && verifiedEmail === normalizedEmail);
 
-  // Returns true once a code is on its way (including "one was just sent" —
+  // Returns true once a code is on its way (including "one was just sent" â€”
   // the server's resend cooldown answers 429 with retryAfter in that case).
   const sendCode = async (): Promise<boolean> => {
     const res = await fetch('/api/checkout/email-otp/request', {
@@ -132,7 +132,7 @@ export default function CheckoutPage() {
         items: cart.items.map(i => ({ tierId: i.tierId, quantity: i.quantity })),
         buyerEmail: normalizedEmail,
         buyerName: buyerName.trim(),
-        // One box consents to both lists — the organiser's Audience and Ventry's own.
+        // One box consents to both lists â€” the organiser's Audience and Ventry's own.
         marketingConsent,
         ventryMarketingConsent: marketingConsent,
         ref: cart.ref,
@@ -278,16 +278,9 @@ export default function CheckoutPage() {
 
             <div className="flex flex-col gap-1.5 text-sm mb-4 pt-3 border-t" style={{ borderColor: 'var(--color-border)' }}>
               <div className="flex justify-between">
-                <span style={{ color: 'var(--color-text-muted)' }}>Subtotal</span>
-                <span style={{ color: 'var(--color-text)' }}>{isFree ? 'Free' : formatNGN(subtotal)}</span>
-              </div>
-              {!isFree && (
-                <div className="flex justify-between">
-                  <span style={{ color: 'var(--color-text-muted)' }}>Ventry service fee</span>
-                  <span style={{ color: 'var(--color-text)' }}>{formatNGN(serviceFee)}</span>
-                </div>
-              )}
-              {!isFree && (
+                <span style={{ color: 'var(--color-text-muted)' }}>Tickets</span>
+                <span style={{ color: 'var(--color-text)' }}>{isFree ? 'Free' : formatNGN(subtotal + serviceFee)}</span>
+              </div>{!isFree && (
                 <div className="flex justify-between">
                   <span style={{ color: 'var(--color-text-muted)' }}>Processing fee</span>
                   <span style={{ color: 'var(--color-text)' }}>{formatNGN(processingFee)}</span>
@@ -306,7 +299,7 @@ export default function CheckoutPage() {
                 <div className="rounded-lg border p-3 mb-4 text-xs leading-relaxed"
                   style={{ borderColor: 'var(--color-border)', backgroundColor: 'var(--color-surface-2)' }}>
                   <p className="font-semibold mb-1" style={{ color: 'var(--color-text)' }}>
-                    Refund policy{cart.organizerName ? ` · set by ${cart.organizerName}` : ''}
+                    Refund policy{cart.organizerName ? ` Â· set by ${cart.organizerName}` : ''}
                   </p>
                   {policy ? (
                     <ul className="flex flex-col gap-1" style={{ color: 'var(--color-text-muted)' }}>
@@ -327,14 +320,14 @@ export default function CheckoutPage() {
 
             {!isFree && (
               <p className="text-[10px] leading-snug mb-4" style={{ color: 'var(--color-text-dim)' }}>
-                The service fee (2%, capped at ₦3,000 per ticket for tickets above ₦150,000) and processing fee are non-refundable under any circumstances.
+                Your ticket price includes Ventry's 2% service fee (capped at NGN 3,000 per ticket for tickets above NGN 150,000). The processing fee is added at checkout. Both are non-refundable.
               </p>
             )}
 
             <div className="flex items-center gap-2 rounded-lg px-3 py-2.5 text-sm"
               style={{ backgroundColor: 'var(--color-purple-dim)', color: 'var(--color-purple-light)' }}>
               <Shield size={15} />
-              {isFree ? 'Free ticket — no payment required' : 'Secure payment — your ticket is issued immediately'}
+              {isFree ? 'Free ticket â€” no payment required' : 'Secure payment â€” your ticket is issued immediately'}
             </div>
           </div>
 
@@ -376,7 +369,7 @@ export default function CheckoutPage() {
                 required
               />
               <Button type="submit" size="lg" fullWidth disabled={loading || otp.length !== codeLength}>
-                {loading ? 'Verifying…' : isFree ? 'Verify & Get Free Ticket' : `Verify & Pay ${formatNGN(total)}`}
+                {loading ? 'Verifyingâ€¦' : isFree ? 'Verify & Get Free Ticket' : `Verify & Pay ${formatNGN(total)}`}
               </Button>
 
               <div className="rounded-lg border px-4 py-3 text-xs leading-relaxed"
@@ -389,7 +382,7 @@ export default function CheckoutPage() {
                 </p>
                 <div className="flex flex-wrap gap-2">
                   <Button type="button" size="sm" variant="outline" onClick={handleResend} disabled={cooldown > 0 || resending || loading}>
-                    {resending ? 'Sending…' : cooldown > 0 ? `Resend code in ${cooldown}s` : 'Resend code'}
+                    {resending ? 'Sendingâ€¦' : cooldown > 0 ? `Resend code in ${cooldown}s` : 'Resend code'}
                   </Button>
                   <Button type="button" size="sm" variant="ghost" onClick={handleChangeEmail} disabled={loading}>
                     Change email
@@ -413,7 +406,7 @@ export default function CheckoutPage() {
                 placeholder="you@example.com"
                 helper={
                   restrictedDomains?.length
-                    ? `Restricted event — only ${restrictedDomains.map(d => `@${d}`).join(' or ')} email addresses can buy.`
+                    ? `Restricted event â€” only ${restrictedDomains.map(d => `@${d}`).join(' or ')} email addresses can buy.`
                     : sessionEmail
                       ? "Your QR ticket will be sent here. You'll also use this to retrieve your ticket."
                       : "Your QR ticket will be sent here. We'll email you a code to confirm it's correct before you continue."
@@ -426,7 +419,7 @@ export default function CheckoutPage() {
                 </p>
               )}
 
-              {/* Optional marketing consent — one unticked box covering both the
+              {/* Optional marketing consent â€” one unticked box covering both the
                   organiser's Audience and Ventry's list. Deliberately boxed off from
                   the terms statement below so it never reads as part of agreeing. */}
               <label className="flex items-start gap-3 cursor-pointer rounded-lg border px-3 py-2.5"
@@ -451,7 +444,7 @@ export default function CheckoutPage() {
 
               <Button type="submit" size="lg" fullWidth disabled={loading || !email || domainBlocked}>
                 {loading
-                  ? (needsVerification ? 'Sending code…' : isFree ? 'Getting your ticket…' : 'Redirecting to payment…')
+                  ? (needsVerification ? 'Sending codeâ€¦' : isFree ? 'Getting your ticketâ€¦' : 'Redirecting to paymentâ€¦')
                   : needsVerification
                     ? 'Verify Email & Continue'
                     : (isFree ? 'Get Free Ticket' : `Pay ${formatNGN(total)}`)}
@@ -478,3 +471,6 @@ export default function CheckoutPage() {
     </div>
   );
 }
+
+
+
