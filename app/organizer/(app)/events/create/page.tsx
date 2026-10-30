@@ -20,7 +20,7 @@ import { fromLagosInput, isScheduled, fmtGoLive } from '@/lib/goLive';
 import type { DetailEvent } from '@/components/events/EventDetailContent';
 import type { EventCategory } from '@/types';
 
-interface Tier { id: string; name: string; price: string; quantity: string; description: string; }
+interface Tier { id: string; name: string; price: string; quantity: string; }
 type LineupLiability = 'headliner' | 'guest' | 'surprise';
 interface LineupAct { id: string; name: string; role: string; liability: LineupLiability; photoFile?: File | null; photoPreview?: string; }
 
@@ -73,7 +73,7 @@ export default function CreateEventPage() {
   const [venueProof, setVenueProof] = useState<File | null>(null);
   const [venueContactName, setVenueContactName] = useState('');
   const [venueContactPhone, setVenueContactPhone] = useState('');
-  const [tiers, setTiers] = useState<Tier[]>([{ id: '1', name: 'Regular', price: '', quantity: '', description: '' }]);
+  const [tiers, setTiers] = useState<Tier[]>([{ id: '1', name: 'Regular', price: '', quantity: '' }]);
   const [accentColor, setAccentColor] = useState<string | null>(null);
   const [accentAutoDetected, setAccentAutoDetected] = useState(false);
   const [colorManuallySet, setColorManuallySet] = useState(false);
@@ -165,7 +165,7 @@ export default function CreateEventPage() {
     },
   };
 
-  const addTier = () => setTiers(p => [...p, { id: Date.now().toString(), name: '', price: '', quantity: '', description: '' }]);
+  const addTier = () => setTiers(p => [...p, { id: Date.now().toString(), name: '', price: '', quantity: '' }]);
   const removeTier = (id: string) => { if (tiers.length > 1) setTiers(p => p.filter(t => t.id !== id)); };
   const updateTier = (id: string, field: keyof Tier, value: string) =>
     setTiers(p => p.map(t => (t.id === id ? { ...t, [field]: value } : t)));
@@ -214,7 +214,7 @@ export default function CreateEventPage() {
         fd.append('meetingLink', meetingLink);
         fd.append('meetingPasscode', meetingPasscode);
       }
-      fd.append('tiers', JSON.stringify(tiers.map(t => ({ name: t.name, price: t.price, quantity: t.quantity, description: t.description }))));
+      fd.append('tiers', JSON.stringify(tiers.map(t => ({ name: t.name, price: t.price, quantity: t.quantity }))));
       if (accentColor) fd.append('accentColor', accentColor);
       fd.append('refundPolicy', JSON.stringify(policyCheck.value));
       fd.append('confirmAccurate', 'true');
@@ -537,7 +537,6 @@ export default function CreateEventPage() {
                 <Input label="Tier Name" value={tier.name} onChange={e => updateTier(tier.id, 'name', e.target.value)} placeholder="e.g. VIP" />
                 <Input label="Price (NGN)" type="number" value={tier.price} onChange={e => updateTier(tier.id, 'price', e.target.value)} placeholder="5000" />
                 <Input label="Quantity" type="number" value={tier.quantity} onChange={e => updateTier(tier.id, 'quantity', e.target.value)} placeholder="500" />
-                <Textarea label="Tier Description" value={tier.description} onChange={e => updateTier(tier.id, 'description', e.target.value)} placeholder="What does this ticket include?" rows={3} className="col-span-3" />
               </div>
             </div>
           ))}

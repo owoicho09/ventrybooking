@@ -32,7 +32,7 @@ export async function GET(
       .select(`
         id, slug, event_name, category, description, date, time, event_mode, venue, address, city, landmark,
         location_hidden, meeting_link, meeting_passcode, status, total_sold, banner_color, banner_url, header_banner_url, accent_color, lineup, allowed_email_domains, organizer_id, created_at, refund_policy, refund_policy_set_at, verified, venue_proof_url, venue_contact_name, venue_contact_phone, lga, address_reveal_at, goes_live_at,
-        tiers:ticket_tiers(id, name, price, description, available, sold)
+        tiers:ticket_tiers(id, name, price, available, sold)
       `)
       .eq('id', id)
       .eq('organizer_id', user.sub)

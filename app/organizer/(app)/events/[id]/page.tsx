@@ -26,7 +26,7 @@ import { EventQRCode } from '@/components/organizer/EventQRCode';
 import { GoLiveField } from '@/components/organizer/GoLiveField';
 import { isScheduled, fmtGoLive, toLagosInput, fromLagosInput } from '@/lib/goLive';
 
-interface Tier { id: string; name: string; price: number; description: string | null; available: number; sold: number; }
+interface Tier { id: string; name: string; price: number; available: number; sold: number; }
 interface Affiliate { id: string; name: string; code: string; link: string; clicks: number; buys: number; }
 type LineupLiability = 'headliner' | 'guest' | 'surprise';
 interface LineupAct { name: string; role: string; liability?: LineupLiability; photoUrl?: string | null; }
@@ -94,7 +94,7 @@ function TierProgress({ tier }: { tier: Tier }) {
 
 function EditTierRow({
   tier, onSave, onCancel,
-}: { tier: Tier; onSave: (updates: { price?: number; available?: number; description?: string | null }) => Promise<void>; onCancel: () => void; }) {
+}: { tier: Tier; onSave: (updates: { price?: number; available?: number }) => Promise<void>; onCancel: () => void; }) {
   const [price, setPrice]         = useState(String(tier.price));
   const [available, setAvailable] = useState(String(tier.available));
   const [saving, setSaving]       = useState(false);
@@ -102,9 +102,8 @@ function EditTierRow({
   const handleSave = async () => {
     setSaving(true);
     await onSave({
-      price:       Number(price),
-      available:   Number(available),
-      description: description.trim().length ? description.trim() : null,
+      price:     Number(price),
+      available: Number(available),
     });
     setSaving(false);
   };
@@ -127,16 +126,7 @@ function EditTierRow({
           onChange={e => setAvailable(e.target.value)}
           min={String(tier.sold)}
         />
-      <Textarea
-        label="Tier description (optional)"
-        value={description}
-        onChange={e => setDescription(e.target.value)}
-        placeholder="What does this ticket include?"
-        className="col-span-2"
-        rows={3}
-      />
       </div>
-
       <div className="flex gap-2">
         <Button size="sm" disabled={saving} onClick={handleSave}><Check size={13} />Save</Button>
         <Button size="sm" variant="outline" disabled={saving} onClick={onCancel}><X size={13} />Cancel</Button>
@@ -174,7 +164,6 @@ export default function OrganizerEventDetailPage() {
   const [newTierName, setNewTierName] = useState('');
   const [newTierPrice, setNewTierPrice] = useState('');
   const [newTierQty, setNewTierQty]   = useState('');
-  const [newTierDesc, setNewTierDesc] = useState('');
   const [addingLoading, setAddingLoading] = useState(false);
   const [downloadLoading, setDownloadLoading] = useState(false);
   const [affiliates, setAffiliates] = useState<Affiliate[]>([]);
@@ -493,7 +482,7 @@ export default function OrganizerEventDetailPage() {
     load();
   };
 
-  const handleSaveTier = async (tierId: string, updates: { price?: number; available?: number; description?: string | null }) => {
+  const handleSaveTier = async (tierId: string, updates: { price?: number; available?: number }) => {
     const res = await fetch(`/api/organizer/events/${id}/tiers/${tierId}`, {
       method: 'PATCH',
       headers: { 'Content-Type': 'application/json' },
@@ -513,13 +502,13 @@ export default function OrganizerEventDetailPage() {
       const res = await fetch(`/api/organizer/events/${id}/tiers`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ name: newTierName, price: newTierPrice || 0, quantity: newTierQty, description: newTierDesc }),
+        body: JSON.stringify({ name: newTierName, price: newTierPrice || 0, quantity: newTierQty }),
       });
       const data = await res.json();
       if (!res.ok) { toast(data.error || 'Failed to add tier', 'error'); return; }
       toast('Tier added', 'success');
       setAddingTier(false);
-      setNewTierName(''); setNewTierPrice(''); setNewTierQty(''); setNewTierDesc('');
+      setNewTierName(''); setNewTierPrice(''); setNewTierQty('');
       load();
     } finally {
       setAddingLoading(false);
@@ -716,7 +705,7 @@ export default function OrganizerEventDetailPage() {
               <Button size="sm" disabled={addingLoading || !newTierName || !newTierQty} onClick={handleAddTier}>
                 <Check size={13} />Add Tier
               </Button>
-              <Button size="sm" variant="outline" disabled={addingLoading} onClick={() => { setAddingTier(false); setNewTierName(''); setNewTierPrice(''); setNewTierQty(''); setNewTierDesc(''); setNewTierDesc(''); }}>
+              <Button size="sm" variant="outline" disabled={addingLoading} onClick={() => { setAddingTier(false); setNewTierName(''); setNewTierPrice(''); setNewTierQty(''); }}>
                 <X size={13} />Cancel
               </Button>
             </div>

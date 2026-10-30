@@ -25,12 +25,7 @@ export async function POST(
       return NextResponse.json({ error: 'Event not found' }, { status: 404 });
     }
 
-    const { name, price, quantity, description } = await req.json();
-
-    const desc = typeof description === 'string' ? description.trim() : '';
-    if (desc.length > 280) {
-      return NextResponse.json({ error: 'Description is too long (max 280 characters)' }, { status: 400 });
-    }
+    const { name, price, quantity } = await req.json();
 
     if (!name || price === undefined || !quantity) {
       return NextResponse.json({ error: 'name, price, and quantity are required' }, { status: 400 });
@@ -50,9 +45,8 @@ export async function POST(
         price:     Number(price),
         available: Number(quantity),
         sold:      0,
-        description: desc || null,
       })
-      .select('id, name, price, description, available, sold')
+      .select('id, name, price, available, sold')
       .single();
 
     if (error) throw error;
