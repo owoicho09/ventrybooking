@@ -1,6 +1,6 @@
-/**
+﻿/**
  * Resizes (never upscales) and re-encodes an uploaded image as WebP. Used for
- * new upload paths that need to stay small over slow mobile connections �
+ * new upload paths that need to stay small over slow mobile connections —
  * existing upload paths that already produce a small fixed-size JPEG via
  * client-side canvas crop are left alone.
  */
