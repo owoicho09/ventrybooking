@@ -36,13 +36,20 @@ export async function POST(
       return NextResponse.json({ error: 'Header banner image must be under 8MB' }, { status: 400 });
     }
 
-    const { compressToWebp } = await import('@/lib/server/imageCompress');
-    const webp = await compressToWebp(await bannerFile.arrayBuffer(), { maxWidth: 2160, maxHeight: 1080 });
     const path = `header-banners/${user.sub}/${uuidv4()}.webp`;
+    let uploadBytes: ArrayBuffer | Buffer;
+    let contentType = 'image/webp';
+    try {
+      const { compressToWebp } = await import('@/lib/server/imageCompress');
+      uploadBytes = await compressToWebp(await bannerFile.arrayBuffer(), { maxWidth: 2160, maxHeight: 1080 });
+    } catch {
+      uploadBytes = await bannerFile.arrayBuffer();
+      contentType = bannerFile.type || 'application/octet-stream';
+    }
 
     const { error: uploadError } = await db.storage
       .from('event-assets')
-      .upload(path, webp, { contentType: 'image/webp' });
+      .upload(path, uploadBytes, { contentType });
 
     if (uploadError) throw uploadError;
 

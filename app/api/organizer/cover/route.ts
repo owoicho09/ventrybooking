@@ -21,13 +21,20 @@ export async function POST(req: NextRequest) {
       return NextResponse.json({ error: 'Cover image must be under 8MB' }, { status: 400 });
     }
 
-    const { compressToWebp } = await import('@/lib/server/imageCompress');
-    const webp = await compressToWebp(await coverFile.arrayBuffer(), { maxWidth: 2160, maxHeight: 1080 });
     const path = `organizer-covers/${user.sub}/${uuidv4()}.webp`;
+    let uploadBytes: ArrayBuffer | Buffer;
+    let contentType = 'image/webp';
+    try {
+      const { compressToWebp } = await import('@/lib/server/imageCompress');
+      uploadBytes = await compressToWebp(await coverFile.arrayBuffer(), { maxWidth: 2160, maxHeight: 1080 });
+    } catch {
+      uploadBytes = await coverFile.arrayBuffer();
+      contentType = coverFile.type || 'application/octet-stream';
+    }
 
     const { error: uploadError } = await db.storage
       .from('event-assets')
-      .upload(path, webp, { contentType: 'image/webp' });
+      .upload(path, uploadBytes, { contentType });
 
     if (uploadError) throw uploadError;
 
