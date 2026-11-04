@@ -148,7 +148,7 @@ export default function CreateEventPage() {
     lineup: lineup
       .filter(a => a.name.trim() || a.liability === 'surprise')
       .map(a => ({ name: a.liability === 'surprise' ? '' : a.name, role: a.role, liability: a.liability, photoUrl: a.photoPreview ?? null })),
-    tiers: tiers.map((t, i) => ({ id: `preview-${i}`, name: t.name.trim() || `Tier ${i + 1}`, price: Number(t.price) || 0, available: Number(t.quantity) || 0, sold: 0 })),
+    tiers: tiers.map((t, i) => ({ id: `preview-${i}`, name: t.name.trim() || `Tier ${i + 1}`, price: Number(t.price) || 0, description: t.description ?? null, available: Number(t.quantity) || 0, sold: 0 })),
     organizer: {
       id: me?.id ?? 'preview',
       name: me?.name ?? displayName,
@@ -214,7 +214,7 @@ export default function CreateEventPage() {
         fd.append('meetingLink', meetingLink);
         fd.append('meetingPasscode', meetingPasscode);
       }
-      fd.append('tiers', JSON.stringify(tiers.map(t => ({ name: t.name, price: t.price, quantity: t.quantity }))));
+      fd.append('tiers', JSON.stringify(tiers.map(t => ({ name: t.name, price: t.price, quantity: t.quantity, description: t.description ?? null }))));
       if (accentColor) fd.append('accentColor', accentColor);
       fd.append('refundPolicy', JSON.stringify(policyCheck.value));
       fd.append('confirmAccurate', 'true');

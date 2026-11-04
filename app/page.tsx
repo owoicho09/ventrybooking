@@ -17,11 +17,6 @@ export const revalidate = 60;
 
 const PHONE_BG = '#0D0A16';
 
-/** Strongest real outcome first: sold out, then door count, then tickets. */
-function outcomeScore(e: PublicEvent) {
-  return (e.soldOut ? 1e9 : 0) + e.checkedIn * 1000 + e.totalSold;
-}
-
 export default async function HomePage() {
   const [events, figures] = await Promise.all([getPublicEvents(), getPlatformFigures()]);
   const today = todayWAT();
@@ -33,12 +28,13 @@ export default async function HomePage() {
     .filter(e => e.status === 'completed')
     .sort((a, b) => b.date.localeCompare(a.date));
 
-  // Hero: real past flyers with real outcomes; topped up with on-sale flyers
-  // only if there aren't three finished events with artwork yet.
+  // Keep the hero current, while reserving a spot for the requested Maestro event.
+  const maestro = events.find(e => e.name.toLowerCase().includes('maestro grandure') && eventImages(e).length);
+  const liveHeroCards = upcoming.filter(e => eventImages(e).length);
   const heroCards = [
-    ...[...past].filter(e => eventImages(e).length).sort((a, b) => outcomeScore(b) - outcomeScore(a)),
-    ...upcoming.filter(e => eventImages(e).length),
-  ].slice(0, 3);
+    ...liveHeroCards.filter(e => e.id !== maestro?.id).slice(0, maestro ? 2 : 3),
+    ...(maestro ? [maestro] : []),
+  ];
 
   const cities = cityCounts(events).slice(0, 5);
   const organisers = organizerSummaries(events);
