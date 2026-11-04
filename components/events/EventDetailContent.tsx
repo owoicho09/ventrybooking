@@ -294,42 +294,53 @@ export function EventDetailContent({ identifier, preview }: EventDetailContentPr
           return (
             <div
               key={tier.id}
-              role={isCompleted ? undefined : 'radio'}
-              aria-checked={isCompleted ? undefined : on}
-              aria-disabled={out || isCompleted || undefined}
-              tabIndex={!out && !isCompleted && on ? 0 : -1}
               className={`v-tier${on ? ' on' : ''}${out || isCompleted ? ' out' : ''}`}
-              onClick={() => selectTier(tier)}
-              onKeyDown={e => {
-                if (e.key === ' ' || e.key === 'Enter') {
-                  e.preventDefault();
-                  selectTier(tier);
-                } else if (['ArrowDown', 'ArrowRight', 'ArrowUp', 'ArrowLeft'].includes(e.key)) {
-                  e.preventDefault();
-                  const options = Array.from(e.currentTarget.parentElement?.querySelectorAll<HTMLElement>('[role="radio"]:not([aria-disabled="true"])') ?? []);
-                  const direction = e.key === 'ArrowDown' || e.key === 'ArrowRight' ? 1 : -1;
-                  const nextIndex = (options.indexOf(e.currentTarget) + direction + options.length) % options.length;
-                  const nextOption = options[nextIndex];
-                  nextOption?.focus();
-                  nextOption?.click();
-                }
-              }}
               style={isCompleted && !out ? { opacity: .7 } : undefined}
             >
-              <div className="v-tier-top">
-                <span className="v-tier-n">{tier.name}</span>
-                <span className={`v-tier-p${tier.price === 0 ? ' free' : ''}`}>{tier.price === 0 ? 'Free' : formatNGN(ticketPriceWithService(tier.price))}</span>
-              </div>
-              <div className="v-tier-s">
-                {out ? URGENCY_LABEL.sold_out
-                  : isCompleted ? 'Sales closed'
-                  : urgency ? <><span className="urg">{URGENCY_LABEL[urgency]}</span><span>{remaining} left</span></>
-                  : tier.price === 0 ? `Max ${FREE_TIER_ORDER_CAP} per order`
-                  : 'On sale'}
+              <div
+                className="v-tier-choice"
+                role={isCompleted ? undefined : 'radio'}
+                aria-checked={isCompleted ? undefined : on}
+                aria-disabled={out || isCompleted || undefined}
+                tabIndex={!out && !isCompleted && on ? 0 : -1}
+                onClick={() => {
+                  if (!out && !isCompleted) selectTier(tier);
+                }}
+                onKeyDown={e => {
+                  if (out || isCompleted) return;
+                  if (e.key === ' ' || e.key === 'Enter') {
+                    e.preventDefault();
+                    selectTier(tier);
+                  } else if (['ArrowDown', 'ArrowRight', 'ArrowUp', 'ArrowLeft'].includes(e.key)) {
+                    e.preventDefault();
+                    const group = e.currentTarget.closest('[role="radiogroup"]');
+                    const options = Array.from(group?.querySelectorAll<HTMLElement>('[role="radio"]:not([aria-disabled="true"])') ?? []);
+                    const direction = e.key === 'ArrowDown' || e.key === 'ArrowRight' ? 1 : -1;
+                    const nextIndex = (options.indexOf(e.currentTarget) + direction + options.length) % options.length;
+                    const nextOption = options[nextIndex];
+                    nextOption?.focus();
+                    nextOption?.click();
+                  }
+                }}
+              >
+                <div className="v-tier-top">
+                  <span className="v-tier-n">{tier.name}</span>
+                  <span className={`v-tier-p${tier.price === 0 ? ' free' : ''}`}>{tier.price === 0 ? 'Free' : formatNGN(ticketPriceWithService(tier.price))}</span>
+                </div>
+                <div className="v-tier-s">
+                  {out ? URGENCY_LABEL.sold_out
+                    : isCompleted ? 'Sales closed'
+                    : urgency ? <><span className="urg">{URGENCY_LABEL[urgency]}</span><span>{remaining} left</span></>
+                    : tier.price === 0 ? `Max ${FREE_TIER_ORDER_CAP} per order`
+                    : 'On sale'}
+                </div>
               </div>
 
               {tier.description && tier.description.trim().length > 0 && (
-                <div className="v-tier-details-body">{tier.description}</div>
+                <details className="v-tier-desc">
+                  <summary className="v-tier-desc-toggle">View description</summary>
+                  <div className="v-tier-desc-body">{tier.description}</div>
+                </details>
               )}
             </div>
           );

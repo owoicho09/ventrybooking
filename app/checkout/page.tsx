@@ -369,7 +369,7 @@ export default function CheckoutPage() {
                 required
               />
               <Button type="submit" size="lg" fullWidth disabled={loading || otp.length !== codeLength}>
-                {loading ? 'Verifyingâ€¦' : isFree ? 'Verify & Get Free Ticket' : `Verify & Pay ${formatNGN(total)}`}
+                {loading ? 'Verifying…' : isFree ? 'Verify & Get Free Ticket' : `Verify & Pay ${formatNGN(total)}`}
               </Button>
 
               <div className="rounded-lg border px-4 py-3 text-xs leading-relaxed"
@@ -382,7 +382,7 @@ export default function CheckoutPage() {
                 </p>
                 <div className="flex flex-wrap gap-2">
                   <Button type="button" size="sm" variant="outline" onClick={handleResend} disabled={cooldown > 0 || resending || loading}>
-                    {resending ? 'Sendingâ€¦' : cooldown > 0 ? `Resend code in ${cooldown}s` : 'Resend code'}
+                    {resending ? 'Sending…' : cooldown > 0 ? `Resend code in ${cooldown}s` : 'Resend code'}
                   </Button>
                   <Button type="button" size="sm" variant="ghost" onClick={handleChangeEmail} disabled={loading}>
                     Change email
@@ -442,9 +442,9 @@ export default function CheckoutPage() {
                 {' '}and this event&apos;s refund policy shown above.
               </p>
 
-              <Button type="submit" size="lg" fullWidth disabled={loading || !email || domainBlocked}>
+              <Button type="submit" size="lg" fullWidth disabled={loading || !email.trim() || domainBlocked}>
                 {loading
-                  ? (needsVerification ? 'Sending codeâ€¦' : isFree ? 'Getting your ticketâ€¦' : 'Redirecting to paymentâ€¦')
+                  ? (needsVerification ? 'Sending code…' : isFree ? 'Getting your ticket…' : 'Redirecting to payment…')
                   : needsVerification
                     ? 'Verify Email & Continue'
                     : (isFree ? 'Get Free Ticket' : `Pay ${formatNGN(total)}`)}
