@@ -705,6 +705,7 @@ html.light .v2 .v-ed-topbar.solid .v-icbtn { background: var(--surface); color: 
 .v-tiers h3 { font-size: 15px; margin-bottom: 14px; }
 .v-tier { display: block; width: 100%; text-align: left; background: none; color: var(--text); border: 1px solid var(--line); border-radius: 12px; padding: 13px 15px; margin-bottom: 9px; cursor: pointer; transition: border-color .16s, background .16s; font: inherit; }
 .v-tier:hover { border-color: var(--line-hi); }
+.v-tier:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
 .v-tier.on { border-color: var(--accent); background: var(--accent-soft); }
 .v-tier-top { display: flex; justify-content: space-between; align-items: baseline; gap: 12px; }
 .v-tier-n { font-family: var(--font-d); font-weight: 700; font-size: 14.5px; color: var(--head); overflow-wrap: anywhere; }
@@ -918,6 +919,4 @@ html.light .v2 .v-ed-topbar.solid .v-icbtn { background: var(--surface); color: 
 
 
 /* Tier descriptions */
-.v-tier-details { margin-top: 8px; }
-.v-tier-details-btn { font: inherit; border: 0; background: none; padding: 0; color: var(--accent); font-weight: 600; font-size: 12px; text-decoration: underline; text-underline-offset: 2px; cursor: pointer; }
 .v-tier-details-body { margin-top: 6px; font-size: 12px; color: var(--muted); line-height: 1.35; white-space: pre-wrap; }

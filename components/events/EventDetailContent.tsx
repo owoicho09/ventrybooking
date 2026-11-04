@@ -60,7 +60,6 @@ export function EventDetailContent({ identifier, preview }: EventDetailContentPr
   const event = preview?.event ?? fetchedEvent;
   const [loading, setLoading] = useState(!preview);
   const [selectedId, setSelectedId] = useState<string | null>(null);
-  const [openTierDetailsId, setOpenTierDetailsId] = useState<string | null>(null);
   const [qty, setQty] = useState(1);
   const [orgReputation, setOrgReputation] = useState<{ avg: number | null; count: number } | null>(null);
   const [solidBar, setSolidBar] = useState(false);
@@ -293,14 +292,28 @@ export function EventDetailContent({ identifier, preview }: EventDetailContentPr
           const on = !isCompleted && tier.id === selectedTier?.id;
           const urgency = ticketUrgency(tier.available, tier.sold);
           return (
-            <button
+            <div
               key={tier.id}
-              type="button"
               role={isCompleted ? undefined : 'radio'}
               aria-checked={isCompleted ? undefined : on}
+              aria-disabled={out || isCompleted || undefined}
+              tabIndex={!out && !isCompleted && on ? 0 : -1}
               className={`v-tier${on ? ' on' : ''}${out || isCompleted ? ' out' : ''}`}
-              disabled={out || isCompleted}
-              onClick={() => { setOpenTierDetailsId(null); selectTier(tier); }}
+              onClick={() => selectTier(tier)}
+              onKeyDown={e => {
+                if (e.key === ' ' || e.key === 'Enter') {
+                  e.preventDefault();
+                  selectTier(tier);
+                } else if (['ArrowDown', 'ArrowRight', 'ArrowUp', 'ArrowLeft'].includes(e.key)) {
+                  e.preventDefault();
+                  const options = Array.from(e.currentTarget.parentElement?.querySelectorAll<HTMLElement>('[role="radio"]:not([aria-disabled="true"])') ?? []);
+                  const direction = e.key === 'ArrowDown' || e.key === 'ArrowRight' ? 1 : -1;
+                  const nextIndex = (options.indexOf(e.currentTarget) + direction + options.length) % options.length;
+                  const nextOption = options[nextIndex];
+                  nextOption?.focus();
+                  nextOption?.click();
+                }
+              }}
               style={isCompleted && !out ? { opacity: .7 } : undefined}
             >
               <div className="v-tier-top">
@@ -316,25 +329,9 @@ export function EventDetailContent({ identifier, preview }: EventDetailContentPr
               </div>
 
               {tier.description && tier.description.trim().length > 0 && (
-                <div className="v-tier-details">
-                  <button
-                    type="button"
-                    className="v-tier-details-btn"
-                    onClick={(e) => {
-                      e.preventDefault();
-                      e.stopPropagation();
-                      setOpenTierDetailsId(id => (id === tier.id ? null : tier.id));
-                    }}
-                    aria-expanded={openTierDetailsId === tier.id}
-                  >
-                    {openTierDetailsId === tier.id ? 'Hide details' : 'View details'}
-                  </button>
-                  {openTierDetailsId === tier.id && (
-                    <div className="v-tier-details-body">{tier.description}</div>
-                  )}
-                </div>
+                <div className="v-tier-details-body">{tier.description}</div>
               )}
-            </button>
+            </div>
           );
         })}
       </div>
