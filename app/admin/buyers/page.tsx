@@ -186,7 +186,7 @@ function AdminBuyersPageInner() {
       <div className="flex flex-col sm:flex-row gap-2 sm:items-center">
         <div className="w-full sm:w-72">
           <Input
-            placeholder="Paystack reference (e.g. VTR-XXXXXXXXXXXX)"
+            placeholder="Payment reference"
             value={regenRef}
             onChange={(e) => setRegenRef(e.target.value)}
           />

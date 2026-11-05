@@ -2,7 +2,7 @@ import { ImageResponse } from 'next/og';
 import { getServerSupabase } from '@/lib/supabase/server';
 import { SiteOGCard, getLogoDataUri } from '@/lib/og/siteImage';
 
-export const runtime = 'edge';
+export const runtime = 'nodejs';
 export const alt = 'Event on Ventry';
 export const size = { width: 1200, height: 630 };
 export const contentType = 'image/png';

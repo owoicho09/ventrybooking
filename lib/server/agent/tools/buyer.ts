@@ -2,7 +2,7 @@ import { v4 as uuidv4 } from 'uuid';
 import { isScheduled } from '@/lib/goLive';
 import { HELP_ARTICLES, HELP_TOPICS, type HelpTopic } from '@/lib/server/agent/knowledge';
 import { getServerSupabase } from '@/lib/supabase/server';
-import { verifyTransaction } from '@/lib/server/paystack';
+import { verifyPaymentTransaction } from '@/lib/server/paymentProvider';
 import { resendTicketByReference } from '@/lib/server/ticket';
 import { resendChangeOptOutEmail } from '@/lib/server/eventChangeWindow';
 import { regenerateTicketForReference } from '@/lib/server/reconcile';
@@ -109,17 +109,17 @@ export function createBuyerTools(ctx: BuyerToolContext): AgentTool[] {
     {
       name: 'verify_payment',
       kind: 'read',
-      description: "Check Paystack's own record of a transaction by its reference — the source of truth for whether a payment actually succeeded.",
+      description: "Check the payment provider's record of a transaction by its reference — the source of truth for whether a payment actually succeeded.",
       input_schema: {
         type: 'object',
-        properties: { reference: { type: 'string', description: 'Paystack transaction reference, from lookup_order.' } },
+        properties: { reference: { type: 'string', description: 'Payment transaction reference, from lookup_order.' } },
         required: ['reference'],
       },
       handler: async (input) => {
         const reference = String(input.reference ?? '').trim();
         if (!reference) return { error: 'Missing reference' };
         try {
-          const tx = await verifyTransaction(reference);
+          const tx = await verifyPaymentTransaction(reference);
           return {
             status: tx?.status,
             amountKobo: tx?.amount,
@@ -127,7 +127,7 @@ export function createBuyerTools(ctx: BuyerToolContext): AgentTool[] {
             gatewayResponse: tx?.gateway_response,
           };
         } catch {
-          return { error: 'Could not reach Paystack right now' };
+          return { error: 'Could not reach the payment provider right now' };
         }
       },
     },
@@ -247,7 +247,7 @@ export function createBuyerTools(ctx: BuyerToolContext): AgentTool[] {
     {
       name: 'find_payment_attempts',
       kind: 'read',
-      description: "List recent checkout attempts (last 30 days) for the buyer's email, with their Paystack references and whether a ticket was issued. Use this when the buyer says they paid but lookup_order finds no ticket, then verify_payment the reference before regenerate_ticket.",
+      description: "List recent checkout attempts (last 30 days) for the buyer's email, with their payment references and whether a ticket was issued. Use this when the buyer says they paid but lookup_order finds no ticket, then verify_payment the reference before regenerate_ticket.",
       input_schema: {
         type: 'object',
         properties: {

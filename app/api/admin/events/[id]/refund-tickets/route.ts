@@ -1,7 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { getAuthUser } from '@/lib/server/auth';
 import { getServerSupabase } from '@/lib/supabase/server';
-import { refundTransaction } from '@/lib/server/paystack';
+import { refundTransaction } from '@/lib/server/paymentProvider';
 import { sendRefundConfirmationEmail } from '@/lib/server/email';
 import { notify } from '@/lib/server/notify';
 import { calculateFees, basePriceFromTotalPaid } from '@/lib/server/fees';
@@ -46,7 +46,7 @@ export async function POST(
 
   if (payout && (payout.status === 'completed' || payout.status === 'otp_pending')) {
     return NextResponse.json(
-      { error: 'Payout for this event has already been released — funds are no longer held by Ventry. Refund manually via the Paystack dashboard.' },
+      { error: 'Payout for this event has already been released — funds are no longer held by Ventry. Refund manually via the original payment provider dashboard.' },
       { status: 400 },
     );
   }
@@ -101,14 +101,14 @@ export async function POST(
     return error;
   };
 
-  // Free tickets (no payment reference) — mark refunded directly, no Paystack call.
+  // Free tickets (no payment reference) — mark refunded directly, no provider call.
   const freeTickets = refundable.filter(t => !t.paystack_reference);
   const paidTickets = refundable.filter(t => t.paystack_reference);
 
   for (const ticket of freeTickets) {
     const refundAmount = ticket.subtotal ?? basePriceFromTotalPaid(ticket.total_paid);
     if (refundAmount > 0) {
-      failures.push({ ticketId: ticket.id, email: ticket.buyer_email, reason: 'No payment reference on file — refund manually via Paystack dashboard' });
+      failures.push({ ticketId: ticket.id, email: ticket.buyer_email, reason: 'No payment reference on file — process the refund manually with the original provider' });
       continue;
     }
     const err = await markRefunded(ticket.id);

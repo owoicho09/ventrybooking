@@ -49,7 +49,7 @@ export async function GET(
       process.env.NEXT_PUBLIC_APP_URL
         ? generateQRDataUrl(`${process.env.NEXT_PUBLIC_APP_URL}/scan/${data.id}`)
         : Promise.resolve(null),
-      // Count how many tickets share this Paystack reference so the page can
+      // Count how many tickets share this payment reference so the page can
       // offer a "view all N tickets" link without a second round-trip.
       db.from('tickets')
         .select('id', { count: 'exact', head: true })

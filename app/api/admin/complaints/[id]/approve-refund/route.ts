@@ -1,7 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { getAuthUser } from '@/lib/server/auth';
 import { getServerSupabase } from '@/lib/supabase/server';
-import { refundTransaction } from '@/lib/server/paystack';
+import { refundTransaction } from '@/lib/server/paymentProvider';
 import { sendRefundConfirmationEmail } from '@/lib/server/email';
 import { notify } from '@/lib/server/notify';
 import { calculateFees, basePriceFromTotalPaid } from '@/lib/server/fees';
@@ -73,9 +73,9 @@ export async function POST(
         amount:      refundAmount * 100, // kobo
       });
     } catch (err) {
-      console.error('approve-refund: Paystack refund error', err);
+      console.error('approve-refund: payment provider refund error', err);
       return NextResponse.json(
-        { error: 'Paystack refund request failed — please retry or process manually via the Paystack dashboard' },
+        { error: 'Refund request failed — please retry or process manually via the original payment provider dashboard' },
         { status: 502 },
       );
     }
@@ -83,7 +83,7 @@ export async function POST(
     const fmt = (n: number) =>
       new Intl.NumberFormat('en-NG', { style: 'currency', currency: 'NGN', minimumFractionDigits: 0 }).format(n);
 
-    // Paystack has now actually refunded the buyer's money. From this point on we must
+    // The payment provider has now actually refunded the buyer's money. From this point on we must
     // NEVER treat a failure as "the refund failed" — retrying would double-refund them.
     // Instead, any DB write failure here has to be surfaced loudly (not just console.error),
     // since the DB is now out of sync with reality until someone fixes it.

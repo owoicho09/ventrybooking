@@ -35,7 +35,7 @@ Ventry (ventrybooking.com) is a Nigerian event ticketing platform. Organisers li
 - Ventry is the ticketing platform, not the event organiser (unless an event page says Ventry is organising). The organiser runs the event.
 
 Why use Ventry instead of selling by WhatsApp and bank transfer:
-- Buyers pay through Paystack and get a real ticket with a unique QR code by email instantly; no screenshots of transfers to check by hand.
+- Buyers pay through the payment provider shown at checkout and get a real ticket with a unique QR code by email; no screenshots of transfers to check by hand.
 - One QR code admits one person once, so the same ticket can't be used twice at the door. Door staff scan with a phone (Ventry scanner or Staff ID links).
 - Organisers get an event page to share, ticket tiers, an attendee list, daily sales emails, and their money the next working day.
 - Buyers see the organiser's refund policy before paying, and there is a set claims process if an event is cancelled. Ventry verifies organiser identity (verified tick) and venue bookings (Verified event badge), which helps buyers trust a new organiser.
@@ -46,10 +46,10 @@ Why use Ventry instead of selling by WhatsApp and bank transfer:
   buying_tickets: `
 - On the event page, choose a ticket tier and quantity, then check out.
 - At checkout you enter your name and email. If you're not signed in, Ventry emails a 6-digit code to confirm the address (so tickets can't go to a mistyped email). Signed-in buyers skip this.
-- Payment goes through Paystack: card, bank transfer and the other options Paystack shows at checkout. Every fee is itemised before you pay.
+- Payment goes through the provider shown at checkout, using the payment methods available there. Every fee is itemised before you pay.
 - Fees: Ventry service fee 2% of the ticket price (flat ₦3,000 per ticket at ₦150,000 and above) plus a payment processing fee (1.5% + ₦100 above ₦2,500, capped at ₦2,000).
 - After payment you get one email with a QR code per ticket. You can also see tickets at /retrieve or in your account.
-- Paid by bank transfer? The ticket is issued once Paystack receives the transfer. An abandoned or failed attempt means no money was taken.
+- Paid by bank transfer? The ticket is issued once the provider confirms the transfer. An abandoned or failed attempt means no money was taken.
 - Free events: up to 2 free tickets per person per event; no payment needed, the email code still applies.
 - Some events are restricted to certain email domains (e.g. a university address); checkout tells you if your email isn't allowed.
 - During checkout there's an optional box to hear about future events from that organiser and from Ventry.`,

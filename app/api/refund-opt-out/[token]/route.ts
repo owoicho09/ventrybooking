@@ -1,7 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { getServerSupabase } from '@/lib/supabase/server';
 import { verifyTicketLink } from '@/lib/server/ticketLinks';
-import { refundTransaction } from '@/lib/server/paystack';
+import { refundTransaction } from '@/lib/server/paymentProvider';
 import { sendRefundConfirmationEmail } from '@/lib/server/email';
 import { notify } from '@/lib/server/notify';
 import { calculateFees, basePriceFromTotalPaid } from '@/lib/server/fees';
@@ -183,7 +183,7 @@ export async function POST(
       {
         notifType: 'refund',
         title: `Self-serve refund failed — ${eventName}`,
-        body: `Ticket ${ticket.id}'s buyer tried to opt out after a venue/date change but Paystack refused: ${reasonMsg}`,
+        body: `Ticket ${ticket.id}'s buyer tried to opt out after a venue/date change but the payment provider refused: ${reasonMsg}`,
         link: `/admin/events/${ticket.event_id}`,
       },
       { emailChannel: 'immediate' },

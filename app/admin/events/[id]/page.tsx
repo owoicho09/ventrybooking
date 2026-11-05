@@ -207,7 +207,7 @@ export default function AdminEventDetailPage() {
           style={{ borderColor: '#f59e0b30', backgroundColor: '#f59e0b10', color: 'var(--color-amber)' }}>
           <AlertTriangle size={15} className="flex-shrink-0 mt-0.5" />
           The payout for this event has already been released to the organiser. Funds are no longer held by
-          Ventry, so refunds can&apos;t be issued here — process any refund manually via the Paystack dashboard.
+          Ventry, so refunds can&apos;t be issued here — process any refund manually via the original payment provider.
         </div>
       )}
 

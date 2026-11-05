@@ -119,7 +119,7 @@ export default function CheckoutPage() {
     return false;
   };
 
-  // Creates the order (free) or the Paystack session (paid). Only ever called
+  // Creates the order (free) or the Flutterwave session (paid). Only ever called
   // once the email is verified; the server re-checks the token regardless.
   const placeOrder = async (token: string | null) => {
     if (!cart) return;

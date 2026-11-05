@@ -79,7 +79,7 @@ export async function POST(req: NextRequest) {
       case 'retry': {
         if (!body.claimId) break;
         const r = await retryHeldRefund(db, body.claimId, user.email);
-        return NextResponse.json(r.ok ? { success: true } : { error: 'Paystack refused the refund again. Check the Paystack dashboard, refund by hand, then mark it refunded.' }, { status: r.ok ? 200 : 400 });
+        return NextResponse.json(r.ok ? { success: true } : { error: 'The payment provider refused the refund again. Check its dashboard, refund by hand, then mark it refunded.' }, { status: r.ok ? 200 : 400 });
       }
       case 'mark_refunded':
         if (!body.claimId) break;

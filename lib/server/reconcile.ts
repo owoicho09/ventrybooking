@@ -1,12 +1,12 @@
 import { getServerSupabase } from '@/lib/supabase/server';
-import { verifyTransaction } from '@/lib/server/paystack';
+import { verifyPaymentTransaction } from '@/lib/server/paymentProvider';
 import { createTicketFromPayment, createTicketFromClaimedPayment, type PaymentData } from '@/lib/server/ticket';
 import { notify } from '@/lib/server/notify';
 
 const STALE_MINUTES = 10;
 // How far back the sweep looks. Abandoned and failed checkouts are never
 // deleted, so without a horizon every run re-verified the whole history
-// against Paystack one by one and blew past cron-job.org's 30s timeout
+// against the payment provider one by one and blew past cron-job.org's 30s timeout
 // (156 such rows on 2026-10-11, all confirmed unpaid). A real payment whose
 // webhook was missed is caught within minutes; two days is generous.
 const HORIZON_HOURS = 48;
@@ -22,17 +22,22 @@ interface PendingOrderRow {
   total: number;
   marketing_consent: boolean;
   ventry_marketing_consent: boolean;
+  created_at: string;
 }
 
-// Re-verifies one stale checkout against Paystack and, if it actually
+// Re-verifies one stale checkout against its payment provider and, if it actually
 // succeeded, creates the ticket. `alreadyClaimed` picks the entry point:
 // a reference with no `purchases` row goes through the normal claim-then-create
 // path, while a "stuck claim" (claimed by a prior attempt that then failed
 // before inserting a ticket) skips straight to ticket creation, since
 // re-claiming would just find its own earlier row and bail out again.
 async function recoverOrder(order: PendingOrderRow, alreadyClaimed: boolean): Promise<string | null> {
-  const result = await verifyTransaction(order.reference);
+  const result = await verifyPaymentTransaction(order.reference, order.created_at);
   if (result?.status !== 'success') return null;
+  if (order.reference.startsWith('VTF-') && (result.currency !== 'NGN' || result.amount < Math.round(Number(order.total) * 100))) {
+    console.error('reconcilePendingOrders: Flutterwave amount or currency mismatch', order.reference);
+    return null;
+  }
 
   const declaredTotal = Number(result.metadata?.total ?? order.total);
   const totalPaidKobo = Number.isFinite(declaredTotal) && declaredTotal > 0
@@ -69,7 +74,7 @@ async function recoverOrder(order: PendingOrderRow, alreadyClaimed: boolean): Pr
  * (delivery failure, signature mismatch), the buyer never lands back on the
  * callback URL (closed tab, in-app browser), or an earlier attempt claimed
  * the reference and then failed partway through (a "stuck claim"). This
- * re-verifies every stale, ticket-less checkout directly against Paystack
+ * re-verifies every stale, ticket-less checkout directly against its provider
  * and creates the ticket if the charge actually succeeded.
  */
 export async function reconcilePendingOrders() {
@@ -128,7 +133,7 @@ export async function reconcilePendingOrders() {
       {
         notifType: 'reconciled',
         title:     `Recovered ${recovered.length} missed ticket${recovered.length > 1 ? 's' : ''}`,
-        body:      `Paystack confirmed payment for ${recovered.length} checkout(s) that never turned into a ticket. References: ${recovered.join(', ')}`,
+        body:      `The payment provider confirmed ${recovered.length} checkout(s) that never turned into a ticket. References: ${recovered.join(', ')}`,
         link:      '/admin/buyers',
       },
     ).catch(err => console.error('reconcilePendingOrders: notify error', err));
@@ -175,7 +180,7 @@ export async function regenerateTicketForReference(
 
   const ticketId = await recoverOrder(order as PendingOrderRow, !!claim);
   if (!ticketId) {
-    return { ok: false, reason: 'Paystack did not confirm a successful payment for this reference, or ticket creation failed again — check server logs.' };
+    return { ok: false, reason: 'The payment provider did not confirm a successful payment for this reference, or ticket creation failed again — check server logs.' };
   }
   return { ok: true, ticketId };
 }

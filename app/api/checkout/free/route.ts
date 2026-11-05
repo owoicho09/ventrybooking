@@ -109,7 +109,7 @@ export async function POST(req: NextRequest) {
     // One checkout box now consents to both lists; separately-sent flags from
     // a page loaded before the change are honoured as-is.
     const ventryConsent = typeof ventryMarketingConsent === 'boolean' ? ventryMarketingConsent : consent;
-    // Pseudo-reference for free orders (no Paystack transaction)
+    // Pseudo-reference for free orders (no payment transaction)
     const reference   = `FREE-${randomBytes(6).toString('hex').toUpperCase()}`;
 
     // Only recorded when a signed-in buyer checks out for a different

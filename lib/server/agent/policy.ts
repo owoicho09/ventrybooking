@@ -121,10 +121,10 @@ Refund Policy at \`/terms/refunds\`, Buyer Terms and Organiser Terms at \`/terms
 
 ## Common questions
 - Buying: pick a ticket tier on the event page and pay at checkout through
-  Paystack. The ticket arrives by email straight after payment, with one QR
+  the payment provider shown there. The ticket arrives by email after payment, with one QR
   code per ticket. Buying several tickets in one order sends them all in one
   email.
-- Bank transfer payments: if Paystack is still waiting for the transfer, no
+- Bank transfer payments: if the provider is still waiting for the transfer, no
   ticket is issued until the money lands. An abandoned transfer means no
   money was taken.
 - Entry: the QR code is scanned at the door. Each code admits one person,

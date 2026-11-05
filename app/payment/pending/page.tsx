@@ -52,8 +52,10 @@ function PendingContent() {
   const handleVerify = () => {
     if (!ref || verifying) return;
     setVerifying(true);
-    // Navigate to callback which calls Paystack verify API directly
-    window.location.href = `/api/paystack/callback?reference=${ref}`;
+    const callback = ref.startsWith('VTF-')
+      ? `/api/flutterwave/callback?ref=${encodeURIComponent(ref)}`
+      : `/api/paystack/callback?reference=${encodeURIComponent(ref)}`;
+    window.location.href = callback;
   };
 
   const showFallback = attempts > 8; // ~16 seconds
@@ -66,7 +68,10 @@ function PendingContent() {
   // handleVerify's setVerifying and just redirects directly.
   useEffect(() => {
     if (showFallback && ref) {
-      window.location.href = `/api/paystack/callback?reference=${ref}`;
+      const callback = ref.startsWith('VTF-')
+        ? `/api/flutterwave/callback?ref=${encodeURIComponent(ref)}`
+        : `/api/paystack/callback?reference=${encodeURIComponent(ref)}`;
+      window.location.href = callback;
     }
   }, [showFallback, ref]);
 

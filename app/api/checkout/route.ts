@@ -1,7 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { isScheduled, fmtGoLive } from '@/lib/goLive';
 import { getServerSupabase } from '@/lib/supabase/server';
-import { initializeTransaction } from '@/lib/server/paystack';
+import { initializeFlutterwaveTransaction } from '@/lib/server/flutterwave';
 import { buyerTotalForItems } from '@/lib/server/fees';
 import { isEmailDomainAllowed } from '@/lib/server/domainRestriction';
 import { isCheckoutEmailVerified, EMAIL_NOT_VERIFIED_CODE } from '@/lib/server/checkoutEmailVerification';
@@ -124,7 +124,7 @@ export async function POST(req: NextRequest) {
       return NextResponse.json({ error: 'Use the free checkout endpoint for free tickets' }, { status: 400 });
     }
 
-    const reference = `VTR-${uuidv4().replace(/-/g, '').toUpperCase().slice(0, 12)}`;
+    const reference = `VTF-${uuidv4().replace(/-/g, '').toUpperCase().slice(0, 12)}`;
     const appUrl = process.env.NEXT_PUBLIC_APP_URL!;
 
     // Only attribute to an affiliate whose code actually belongs to this event.
@@ -140,12 +140,13 @@ export async function POST(req: NextRequest) {
       if (affiliate) refCode = affiliate.code;
     }
 
-    // Initialize Paystack transaction
-    const paystackData = await initializeTransaction({
+    // Initialize the active payment provider transaction.
+    const flutterwaveData = await initializeFlutterwaveTransaction({
       email: buyerEmail,
-      amount: total * 100, // kobo
+      name: buyerName || '',
+      amount: total,
       reference,
-      callback_url: `${appUrl}/api/paystack/callback?ref=${reference}`,
+      callbackUrl: `${appUrl}/api/flutterwave/callback?ref=${reference}`,
       metadata: {
         eventId,
         items: cartItems.map(i => ({ tierId: i.tierId, quantity: i.quantity })),
@@ -193,12 +194,16 @@ export async function POST(req: NextRequest) {
     return NextResponse.json({
       success: true,
       data: {
-        authorizationUrl: paystackData.authorization_url,
+        authorizationUrl: flutterwaveData.link,
         reference,
       },
     });
   } catch (err) {
     console.error('POST /api/checkout error', err);
-    return NextResponse.json({ error: 'Failed to initialize payment' }, { status: 500 });
+    return NextResponse.json({
+      error: process.env.NODE_ENV === 'development' && err instanceof Error
+        ? err.message
+        : 'Failed to initialize payment',
+    }, { status: 500 });
   }
 }

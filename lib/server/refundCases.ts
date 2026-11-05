@@ -1,6 +1,7 @@
 import { createHash, randomInt } from 'crypto';
 import { getServerSupabase } from '@/lib/supabase/server';
-import { refundTransaction, resolveAccountName } from '@/lib/server/paystack';
+import { refundTransaction } from '@/lib/server/paymentProvider';
+import { resolveAccountName } from '@/lib/server/paystack';
 import { basePriceFromTotalPaid } from '@/lib/server/fees';
 import { generateClaimRefundId } from '@/lib/server/ids';
 import { notify } from '@/lib/server/notify';
