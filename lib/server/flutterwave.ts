@@ -48,6 +48,12 @@ export async function initializeFlutterwaveTransaction(params: {
   callbackUrl: string;
   metadata: Record<string, unknown>;
 }): Promise<{ link: string }> {
+  const meta = Object.fromEntries(
+    Object.entries(params.metadata)
+      .map(([key, value]) => [key, typeof value === 'string' ? value : JSON.stringify(value)] as const)
+      .filter((entry): entry is readonly [string, string] => typeof entry[1] === 'string'),
+  );
+
   return flutterwaveRequest('/payments', {
     method: 'POST',
     body: JSON.stringify({
@@ -56,7 +62,7 @@ export async function initializeFlutterwaveTransaction(params: {
       currency: 'NGN',
       redirect_url: params.callbackUrl,
       customer: { email: params.email, name: params.name },
-      meta: params.metadata,
+      meta,
     }),
   });
 }

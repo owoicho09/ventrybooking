@@ -3,6 +3,13 @@ import { createTicketFromPayment, type CartItem } from '@/lib/server/ticket';
 import type { FlutterwaveTransaction } from '@/lib/server/flutterwave';
 
 function parseItems(value: unknown): CartItem[] {
+  if (typeof value === 'string') {
+    try {
+      value = JSON.parse(value);
+    } catch {
+      return [];
+    }
+  }
   if (!Array.isArray(value)) return [];
   return value.flatMap((item) => {
     if (!item || typeof item !== 'object') return [];
@@ -60,8 +67,8 @@ export async function createTicketFromFlutterwavePayment(
     buyerEmail,
     buyerName,
     customerEmail: transaction.customer?.email,
-    marketingConsent: metadata.marketingConsent === true,
-    ventryMarketingConsent: metadata.ventryMarketingConsent === true,
+    marketingConsent: metadata.marketingConsent === true || metadata.marketingConsent === 'true',
+    ventryMarketingConsent: metadata.ventryMarketingConsent === true || metadata.ventryMarketingConsent === 'true',
     refCode: typeof metadata.refCode === 'string' ? metadata.refCode : undefined,
     purchasedByEmail: typeof metadata.purchasedByEmail === 'string' ? metadata.purchasedByEmail : undefined,
     paidAt: transaction.created_at,
