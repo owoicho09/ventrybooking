@@ -30,5 +30,6 @@ export function buildTicket(raw: Record<string, unknown>): Ticket {
     qrData:       (raw.qr_token as string) || (raw.id as string),
     qrDataUrl:    raw.qrDataUrl as string | null,
     purchasedByMe: raw.purchasedByMe as boolean | undefined,
+    visaTicket:   raw.visaTicket === true,
   };
 }

@@ -66,6 +66,7 @@ function TicketContent() {
             refundCode:   raw.refund_code,
             qrData:       raw.qr_token || raw.id,
             qrDataUrl:    raw.qrDataUrl,
+            visaTicket:   raw.visaTicket === true,
           } as Parameters<typeof TicketCard>[0]['ticket']);
         } else {
           setNotFound(true);

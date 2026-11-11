@@ -26,3 +26,6 @@ export async function GET(req: NextRequest) {
     return NextResponse.redirect(new URL(`/payment/pending?ref=${encodeURIComponent(reference)}`, req.url));
   }
 }
+// Ticket creation can render IJGB visa tickets and send the ticket email
+// (with retries) inside this request.
+export const maxDuration = 60;

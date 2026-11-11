@@ -1,3 +1,4 @@
+import { randomUUID } from 'crypto';
 import { Resend } from 'resend';
 import { getOrganizerSenderName } from '@/lib/server/senderIdentity';
 import { getServerSupabase } from '@/lib/supabase/server';
@@ -10,7 +11,8 @@ const APP_URL = process.env.NEXT_PUBLIC_APP_URL!;
 export const esc = (s: string) =>
   s.replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/"/g, '&quot;');
 
-export function emailShell(content: string) {
+/** `afterCard` (optional) renders below the dark card, on the plain email background. An empty `content` omits the dark card entirely. */
+export function emailShell(content: string, afterCard = '') {
   return `<!DOCTYPE html>
 <html lang="en">
 <head><meta charset="UTF-8"><meta name="viewport" content="width=device-width,initial-scale=1">
@@ -29,7 +31,7 @@ export function emailShell(content: string) {
 </style>
 </head>
 <body>
-<div class="wrap"><div class="card">${content}</div></div>
+<div class="wrap">${content ? `<div class="card">${content}</div>` : ''}${afterCard}</div>
 </body>
 </html>`;
 }
@@ -43,15 +45,45 @@ const SUPPORT_EMAIL = 'support@ventrybooking.com';
 // OTP, payouts, etc.) reads as coming from Ventry. reply-to always routes to
 // support so organisers never receive buyer replies (e.g. to a refund email)
 // directly.
-export async function sendEmail(opts: { to: string; subject: string; html: string; fromName?: string; replyTo?: string; purpose?: string }) {
-  const { data, error } = await resend.emails.send({
+// Transient Resend failures worth retrying: rate limiting (a burst of
+// checkouts easily exceeds the per-second send limit), timeouts and 5xx.
+const RETRYABLE_RESEND = new Set([
+  'rate_limit_exceeded', 'concurrent_idempotent_requests', 'application_error', 'internal_server_error',
+]);
+const SEND_ATTEMPTS = 4;
+
+export async function sendEmail(opts: { to: string; subject: string; html: string; fromName?: string; replyTo?: string; purpose?: string; attachments?: { filename: string; content: Buffer }[] }) {
+  const payload = {
     from: `${opts.fromName ?? 'Ventry'} <${FROM}>`,
     to: opts.to,
     subject: opts.subject,
     html: opts.html,
     replyTo: opts.replyTo ?? SUPPORT_EMAIL,
-  });
-  if (error) throw new Error(`Resend error: ${error.message}`);
+    ...(opts.attachments?.length ? { attachments: opts.attachments } : {}),
+  };
+  // One idempotency key per sendEmail call: every retry below re-sends the
+  // identical request under the same key, so Resend delivers it at most
+  // once even if an earlier attempt actually went through before failing.
+  const idempotencyKey = `ventry-${randomUUID()}`;
+
+  let data: { id: string } | null = null;
+  let lastError = '';
+  for (let attempt = 1; attempt <= SEND_ATTEMPTS; attempt++) {
+    try {
+      const res = await resend.emails.send(payload, { idempotencyKey });
+      if (!res.error) { data = res.data; break; }
+      const e = res.error as { name?: string; message: string; statusCode?: number | null };
+      lastError = `${e.name ?? 'error'}: ${e.message}`;
+      const retryable = RETRYABLE_RESEND.has(e.name ?? '') || e.statusCode === 408 || e.statusCode === 429 || (e.statusCode ?? 0) >= 500;
+      if (!retryable) break;
+    } catch (err) {
+      lastError = err instanceof Error ? err.message : String(err); // network failure
+    }
+    if (attempt < SEND_ATTEMPTS) {
+      await new Promise(r => setTimeout(r, 600 * 2 ** (attempt - 1) + Math.random() * 400));
+    }
+  }
+  if (!data) throw new Error(`Resend error: ${lastError}`);
 
   // A successful call here only means Resend accepted the request — actual
   // delivery/bounce/complaint happens asynchronously and is reported later
@@ -67,7 +99,7 @@ export async function sendEmail(opts: { to: string; subject: string; html: strin
   }
 }
 
-export async function sendTicketEmail(params: {
+export interface TicketEmailParams {
   to: string;
   buyerName: string;
   tickets: Array<{ ticketId: string; refundCode: string; tierName: string }>;
@@ -81,7 +113,51 @@ export async function sendTicketEmail(params: {
   processingFee?: number;
   totalPaid: number;
   bannerUrl?: string | null;
-}) {
+  /** Lets per-event custom ticket designs (IJGB visa) attach themselves. */
+  eventId?: string;
+}
+
+export interface TicketEmailVisa {
+  byTicket: Map<string, { previewUrl: string; pdfUrl: string; attached: boolean }>;
+  attachments: { filename: string; content: Buffer }[];
+}
+
+export async function sendTicketEmail(params: TicketEmailParams) {
+  // IJGB Homecoming only: each ticket's personalised visa is shown inline,
+  // linked for download, and attached as a PDF (within a size budget — see
+  // prepareVisaEmail). Any failure here falls back to the standard ticket
+  // email (its QR is identical) rather than blocking delivery.
+  let visa: TicketEmailVisa = { byTicket: new Map(), attachments: [] };
+  if (params.eventId) {
+    try {
+      const { prepareVisaEmail } = await import('@/lib/server/ijgb/visaTicket');
+      visa = await prepareVisaEmail(params.tickets.map(t => t.ticketId));
+    } catch (err) {
+      console.error('sendTicketEmail: IJGB visa failed — sending standard ticket email', err);
+    }
+  }
+
+  const { subject, html } = buildTicketEmail(params, visa);
+  try {
+    await sendEmail({ to: params.to, subject, html, fromName: params.eventName, purpose: 'ticket', attachments: visa.attachments });
+  } catch (err) {
+    // The PDFs are the only heavy part of the email; if it still can't be
+    // sent with them, send it without — every ticket's visa is still shown
+    // inline with a download link, so the buyer always gets their tickets.
+    if (visa.attachments.length === 0) throw err;
+    console.error('sendTicketEmail: send with PDF attachments failed — retrying without attachments', err);
+    await sendEmail({ to: params.to, subject, html, fromName: params.eventName, purpose: 'ticket' });
+  }
+}
+
+/** Pure: the ticket confirmation email's subject + HTML. */
+export function buildTicketEmail(params: TicketEmailParams, visa: TicketEmailVisa): { subject: string; html: string } {
+  // IJGB Homecoming: its own minimal email — the visa ticket is the ticket.
+  // Only when every ticket has its visa, so no ticket can ever be missing.
+  if (params.tickets.length > 0 && params.tickets.every(t => visa.byTicket.has(t.ticketId))) {
+    return buildVisaTicketEmail(params, visa);
+  }
+
   const isOnline = params.eventMode === 'online';
   const fmt = (n: number) =>
     new Intl.NumberFormat('en-NG', { style: 'currency', currency: 'NGN', minimumFractionDigits: 0 }).format(n);
@@ -174,6 +250,7 @@ export async function sendTicketEmail(params: {
       </td></tr>
     </table>
 
+
     ${ticketBlocks}
 
     ${viewAllBtn}
@@ -186,7 +263,46 @@ export async function sendTicketEmail(params: {
     </p>
   `);
 
-  await sendEmail({ to: params.to, subject, html, fromName: params.eventName, purpose: 'ticket' });
+  return { subject, html };
+}
+
+/**
+ * IJGB Homecoming ticket email: header, greeting, and each ticket's visa
+ * card — nothing else. The card links to its PDF, and the PDFs are attached
+ * (within the size budget). Order details, separate QR and buttons are left
+ * out on purpose: the visa carries the QR and the ticket ID.
+ */
+function buildVisaTicketEmail(params: TicketEmailParams, visa: TicketEmailVisa): { subject: string; html: string } {
+  const { tickets } = params;
+  const count = tickets.length;
+  const firstName = (params.buyerName || '').trim().split(/\s+/)[0] || '';
+
+  const cards = tickets.map(({ ticketId, tierName }) => {
+    const v = visa.byTicket.get(ticketId);
+    if (!v) return '';
+    return `<a href="${esc(v.pdfUrl)}" style="display:block;margin:16px 0 0;line-height:0;text-decoration:none;">
+        <img src="${esc(v.previewUrl)}" alt="${esc(tierName)} ticket — ${esc(ticketId)}" width="560"
+             style="display:block;width:100%;max-width:560px;height:auto;border:0;" />
+      </a>`;
+  }).join('');
+
+  const subject = count === 1
+    ? `Your ticket for ${params.eventName} — ${tickets[0].ticketId}`
+    : `Your ${count} tickets for ${params.eventName}`;
+
+  // No dark card at all: the header, greeting and ticket cards sit directly
+  // on the plain email background, the cards exactly as they look in the PDF.
+  const html = emailShell('', `
+    <h1 style="color:#7c3aed;font-size:22px;margin:0 0 6px;font-family:Arial,sans-serif;">
+      ${count === 1 ? 'Your ticket is confirmed ✓' : `Your ${count} tickets are confirmed ✓`}
+    </h1>
+    <p style="color:#4b5563;font-size:14px;margin:0;font-family:Arial,sans-serif;">
+      Hi ${esc(firstName || params.to)}, here ${count === 1 ? 'is your ticket' : 'are your tickets'}.
+    </p>
+    ${cards}
+  `);
+
+  return { subject, html };
 }
 
 /** Code to confirm a change of payout bank account (Organiser Terms 3.8). */

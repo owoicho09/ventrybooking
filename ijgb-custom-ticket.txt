@@ -1,0 +1,397 @@
+# IJGB HOMECOMING — EXACT DIGITAL VISA TICKET IMPLEMENTATION
+
+You are working on Ventry Booking, an existing event ticketing platform.
+
+We need to implement personalised digital tickets for one particular event: IJGB Homecoming.
+
+This is a visual reproduction task. The six reference images supplied in the project folder `ijgb ticket design` are the exact designs approved for this event.
+
+**Your job is to reproduce these designs as accurately as possible, not reinterpret, redesign, simplify or modernise them.**
+
+Every customer who purchases an IJGB ticket must receive their own personalised version of the appropriate design.
+
+---
+
+# 1. FIRST: INSPECT ALL SIX REFERENCE IMAGES
+
+Open and inspect every image inside:
+
+`ijgb ticket design/`
+
+All six images are 1280 × 720 pixels, landscape orientation.
+
+Do not assume they are identical with different text. Their colour treatments and visual appearances differ.
+
+Use the images as the visual source of truth.
+
+## DESIGN 1 — EARLY BIRD
+
+Visual identity:
+- Pale, muted olive-green and antique ivory background.
+- Dark forest-green engraved borders.
+- Vintage banknote/passport aesthetic.
+- Intricate guilloche patterns surrounding the outer edges.
+- Cream-coloured central ticket surface.
+- Dark green text.
+- IJGB Homecoming watermark in the centre.
+- Palm tree and tropical landscape illustrations.
+- Decorative aircraft illustration near the upper middle.
+- Circular engraved security ornament on the right.
+
+Ticket tier displayed under Origin:
+
+EARLY BIRD
+
+This is the light olive-green design.
+
+## DESIGN 2 — STANDARD
+
+Visual identity:
+- Pale sage-green and antique ivory background.
+- Dark green ornamental borders.
+- Fine engraved security patterns.
+- Vintage passport/visa appearance.
+- Central IJGB Homecoming watermark.
+- Palm tree illustrations.
+- Cream-coloured information panels.
+- Dark forest-green typography.
+- Guilloche engraving throughout the background.
+
+Ticket tier displayed under Origin:
+
+STANDARD
+
+This design uses the light green colour family, similar to Early Bird, but must be treated as its own supplied reference asset.
+
+## DESIGN 3 — ELITE
+
+Visual identity:
+- Muted blue-grey and antique ivory colour palette.
+- Dark navy-blue engraved borders.
+- Blue-toned security engraving.
+- Vintage banknote aesthetic.
+- Blue-grey tropical illustrations.
+- Central IJGB Homecoming watermark.
+- Dark navy typography.
+- Intricate decorative frame and circular security ornament.
+
+Ticket tier displayed under Origin:
+
+ELITE
+
+The blue colour treatment must be preserved.
+
+## DESIGN 4 — DISTINGUISHED
+
+Visual identity:
+- Antique cream and burgundy/red-brown palette.
+- Deep wine-coloured ornamental borders.
+- Dark burgundy engraved security patterns.
+- Vintage passport aesthetic.
+- Burgundy-toned palm tree illustrations.
+- Central IJGB Homecoming watermark.
+- Dark reddish typography.
+- Intricate engraved outer frame.
+
+Ticket tier displayed under Origin:
+
+DISTINGUISHED
+
+Do not substitute the burgundy design with the green or blue designs.
+
+## DESIGN 5 — DISTINGUISHED PRO
+
+Visual identity:
+- Deep emerald/forest-green background.
+- Dark green engraved ornamental borders.
+- Antique gold and pale gold typography.
+- Strong gold-on-green contrast.
+- Gold-toned decorative security patterns.
+- Central IJGB Homecoming watermark.
+- Intricate passport-style engraving.
+- Gold decorative frame around the QR code area.
+
+Ticket tier displayed under Origin:
+
+DISTINGUISHED PRO
+
+This is a substantially darker design than the previous four.
+
+Preserve the dark green and gold treatment.
+
+## DESIGN 6 — GRAND PATRON
+
+Visual identity:
+- Near-black and very dark charcoal background.
+- Antique gold typography.
+- Gold engraved ornamental borders.
+- Gold guilloche patterns.
+- Gold-toned security illustrations.
+- Central IJGB Homecoming watermark.
+- High-contrast black-and-gold luxury appearance.
+- Elaborate decorative framing.
+
+Ticket tier displayed under Origin:
+
+GRAND PATRON
+
+This is the darkest and most premium-looking design.
+
+Do not turn it into a generic black ticket. Preserve the intricate engraved appearance.
+
+---
+
+# 2. COMMON LAYOUT — ALL SIX DESIGNS
+
+All six tickets share the same fundamental composition.
+
+Preserve the following layout and relative positioning.
+
+### A. Header
+
+At the top-left:
+
+VISA
+
+Large uppercase serif lettering inside an ornate decorative frame.
+
+Across the upper centre:
+
+REPUBLIC OF YNA
+
+Large uppercase serif lettering.
+
+At the top-right:
+
+The circular CN emblem and its existing decorative branding.
+
+### B. Left section — QR code
+
+A large square QR code positioned on the left side.
+
+It sits inside a white/light-coloured square, surrounded by an ornate rectangular engraved frame.
+
+Below the QR code:
+
+PRESENT AT ENTRY
+
+The QR code must be dynamically generated using Ventry's existing QR generation system.
+
+Do not use the sample QR codes in the reference images.
+
+### C. Middle section — Personal identification
+
+Preserve the exact information hierarchy:
+
+Issuing Post
+ENUGU, NIGERIA
+
+Surname
+[BUYER SURNAME]
+
+Given Name
+[BUYER GIVEN NAME]
+
+IJGB Identification No.
+[UNIQUE IDENTIFICATION NUMBER]
+
+### D. Right section — Ticket information
+
+Control Number
+[UNIQUE CONTROL NUMBER]
+
+Visa Type / Class
+ACCESS CLASS
+
+Sex
+[IF AVAILABLE]
+
+Nationality
+[IF AVAILABLE]
+
+Origin
+[DYNAMIC TICKET TIER]
+
+The Origin field is where the actual ticket category appears.
+
+Examples:
+
+EARLY BIRD
+STANDARD
+ELITE
+DISTINGUISHED
+DISTINGUISHED PRO
+GRAND PATRON
+
+Do not confuse Origin with Visa Type / Class.
+
+### E. Lower information row
+
+Entries
+SINGLE ENTRY
+
+Issue Date
+[ISSUANCE DATE]
+
+Expiration Date
+EVENT CLOSE
+
+### F. Annotation
+
+Annotation
+
+HOMECOMING CLEARANCE
+
+Preserve the original styling and position.
+
+### G. Bottom section — Machine-readable zone
+
+The bottom of the ticket contains two lines of widely spaced uppercase monospaced characters.
+
+This area is part of the original design.
+
+Preserve its visual appearance and alignment.
+
+Where appropriate, populate ticket-specific values dynamically.
+
+Do not leave the sample ticket holder's identification information embedded in the final output.
+
+---
+
+# 3. PERSONALISATION REQUIREMENTS
+
+Every ticket must be unique to its buyer.
+
+Dynamic fields must come from the actual Ventry ticket and customer records.
+
+The generated ticket should contain:
+
+- Buyer's surname.
+- Buyer's given name.
+- Unique ticket identification number.
+- Unique control number where supported by the design.
+- Existing Ventry ticket reference.
+- Existing Ventry QR code.
+- Correct ticket tier.
+- Issue date.
+- Event information.
+
+Do not invent customer information.
+
+If Sex or Nationality are not available in the existing customer records, leave those fields blank as shown in the references. Do not fabricate values.
+
+---
+
+# 4. CRITICAL VISUAL REQUIREMENT
+
+The supplied images already contain sample text and QR codes.
+
+Do not simply place new text on top of the existing text. That would produce overlapping, duplicated or unreadable information.
+
+Determine how to preserve the original artwork while replacing the sample data cleanly.
+
+The intricate backgrounds, engraving, borders, illustrations, watermarks and decorative details should remain intact.
+
+The final output should look like the original reference design with a different person's information.
+
+Do not:
+- Change the typography unnecessarily.
+- Change the proportions.
+- Remove decorative elements.
+- Introduce gradients that aren't present.
+- Add modern UI elements.
+- Add Ventry branding over the IJGB design.
+- Generate a new design using AI.
+- Simplify the ornamental borders.
+- Change the colours between ticket categories.
+
+Visual accuracy takes priority over implementation shortcuts.
+
+---
+
+# 5. EXISTING VENTRY FUNCTIONALITY
+
+Ventry already has:
+- Ticket purchasing.
+- Payment verification.
+- Ticket records.
+- QR code generation.
+- QR code scanning and verification.
+- Email delivery.
+
+Inspect the existing implementation and reuse it.
+
+Do not create a second QR verification system.
+
+Do not duplicate existing ticket records or introduce unnecessary database changes.
+
+The custom ticket should be generated as part of the existing successful ticket-purchase workflow.
+
+---
+
+# 6. EXPECTED CUSTOMER EXPERIENCE
+
+1. Customer selects an IJGB event ticket.
+2. Customer completes payment.
+3. Ventry confirms payment.
+4. Existing ticket generation logic creates the ticket record.
+5. The appropriate one of the six IJGB designs is selected.
+6. Customer information is populated.
+7. Existing QR code is incorporated.
+8. The personalised ticket is rendered.
+9. A PDF version is generated.
+10. The PDF is delivered to the customer's registered email.
+
+Each customer receives their own individual ticket.
+
+The ticket should also be accessible through the appropriate existing Ventry booking/ticket interface.
+
+Ensure repeated requests do not unnecessarily generate different ticket identities or invalidate existing tickets.
+
+---
+
+# 7. IMPLEMENTATION EXPECTATIONS
+
+I want this completed in one focused implementation session.
+
+Start by inspecting the existing codebase and all six reference images.
+
+Understand the current ticket lifecycle before changing anything.
+
+Then implement the feature using the existing architecture.
+
+Do not stop after producing an implementation proposal or a long explanation.
+
+Once you understand the existing system, proceed with the implementation.
+
+Do not ask me to explain functionality that can be established by inspecting the codebase.
+
+If something genuinely cannot be determined from the code, identify the specific uncertainty rather than guessing.
+
+---
+
+# 8. ACCEPTANCE CRITERIA
+
+The implementation is complete only when:
+
+1. All six designs are supported.
+2. Each ticket tier maps to the correct visual design.
+3. The six original colour treatments are preserved.
+4. Customer details are personalised correctly.
+5. Sample placeholder information is completely removed.
+6. Existing Ventry QR codes are used.
+7. QR verification continues working.
+8. Generated tickets are visually faithful to the references.
+9. PDFs render correctly without clipping or text overlap.
+10. Emails deliver the correct customer's ticket.
+11. Existing non-IJGB events continue using their current ticket generation process.
+
+Before finishing, generate test tickets for all six categories using realistic dummy customer records.
+
+Compare each output against its corresponding reference image.
+
+Correct any obvious differences in positioning, typography, colour, borders, text wrapping or QR placement.
+
+Do not declare completion simply because the code executes successfully.
+
+**The final result must look like the six supplied IJGB visa designs, with individually personalised customer information.**

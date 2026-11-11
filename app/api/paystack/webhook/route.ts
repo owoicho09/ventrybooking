@@ -312,3 +312,7 @@ async function handleTransferFailure(data: { reference: string; amount: number }
     { emailChannel: 'immediate' },
   ).catch(err => console.error(`${eventType}: notify error`, err));
 }
+
+// Ticket creation can render IJGB visa tickets and send the ticket email
+// (with retries) inside this request.
+export const maxDuration = 60;

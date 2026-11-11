@@ -105,6 +105,8 @@ export interface Ticket {
   /** True when the signed-in viewer bought this ticket for a different
    * recipient email — set only by /api/buyer/tickets. */
   purchasedByMe?: boolean;
+  /** Event uses the IJGB Homecoming personalised visa ticket design. */
+  visaTicket?: boolean;
 }
 
 export interface Payout {

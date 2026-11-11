@@ -42,3 +42,6 @@ export async function POST(req: NextRequest) {
     return NextResponse.json({ error: 'Webhook processing failed' }, { status: 500 });
   }
 }
+// Ticket creation can render IJGB visa tickets and send the ticket email
+// (with retries) inside this request.
+export const maxDuration = 60;

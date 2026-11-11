@@ -1,6 +1,7 @@
 import { NextResponse } from 'next/server';
 import { getServerSupabase } from '@/lib/supabase/server';
 import { getBuyerAuth } from '@/lib/server/buyerAuth';
+import { isIjgbEvent } from '@/lib/server/ijgb/visaTicket';
 
 // Claiming a buyer account needs no migration or import step: "my tickets"
 // is just every ticket whose buyer_email matches the session email, computed
@@ -37,13 +38,19 @@ export async function GET() {
   type TierRow  = { id: string; name: string; price: number };
   const one = <T,>(v: T[] | T | null | undefined): T | null => (v == null ? null : Array.isArray(v) ? (v[0] ?? null) : v);
 
+  // IJGB visa flag, resolved once per distinct event.
+  const eventIds = Array.from(new Set((data ?? []).map(r => (one(r.event as EventRow[] | EventRow | null)?.id as string) || '').filter(Boolean)));
+  const visaEvents = new Set<string>();
+  await Promise.all(eventIds.map(async id => { if (await isIjgbEvent(id).catch(() => false)) visaEvents.add(id); }));
+
   const tickets = (data ?? []).map(row => {
     const rawEvent  = one(row.event as EventRow[] | EventRow | null);
     const rawTier   = one(row.tier  as TierRow[]  | TierRow  | null);
     const organizer = rawEvent ? one(rawEvent.organizer) : null;
     const event = rawEvent ? { ...rawEvent, organizer } : null;
     const purchasedByMe = row.purchased_by_email?.toLowerCase() === buyer.email.toLowerCase();
-    return { ...row, event, tier: rawTier, purchasedByMe };
+    const visaTicket = visaEvents.has((rawEvent?.id as string) || '');
+    return { ...row, event, tier: rawTier, purchasedByMe, visaTicket };
   });
 
   return NextResponse.json({ success: true, data: tickets });

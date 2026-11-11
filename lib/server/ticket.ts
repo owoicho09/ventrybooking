@@ -311,6 +311,7 @@ export async function createTicketFromClaimedPayment(p: PaymentData): Promise<st
         processingFee: (p.totalPaidKobo / 100) - subtotal - totalServiceFee,
         totalPaid:   p.totalPaidKobo / 100,
         bannerUrl:   eventRow.banner_url,
+        eventId:     p.eventId,
       });
     } catch (err) {
       console.error('createTicketFromPayment: email error (ticket created)', { ticketId: ticketIds[0], email, err });
@@ -379,7 +380,7 @@ export async function resendTicketByReference(
   const { data: anchor, error } = await db
     .from('tickets')
     .select(`
-      id, buyer_name, buyer_email, paystack_reference, total_paid,
+      id, event_id, buyer_name, buyer_email, paystack_reference, total_paid,
       event:events!tickets_event_id_fkey(event_name, date, venue, event_mode, banner_url),
       tier:ticket_tiers!tickets_tier_id_fkey(name)
     `)
@@ -430,6 +431,7 @@ export async function resendTicketByReference(
     eventMode:   ev?.event_mode,
     totalPaid,
     bannerUrl:   ev?.banner_url ?? null,
+    eventId:     anchor.event_id,
   });
 
   return { ok: true };

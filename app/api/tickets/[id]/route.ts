@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { getServerSupabase } from '@/lib/supabase/server';
 import { generateQRDataUrl } from '@/lib/server/qr';
+import { isIjgbEvent } from '@/lib/server/ijgb/visaTicket';
 
 type OrgRow   = { id: string; name: string; tier: string; verified: boolean };
 type EventRow = {
@@ -9,6 +10,11 @@ type EventRow = {
   organizer: OrgRow[] | OrgRow | null;
 };
 type TierRow  = { id: string; name: string; price: number };
+
+function rawEventId(v: unknown): string | null {
+  const e = Array.isArray(v) ? v[0] : v;
+  return (e as { id?: string } | null)?.id ?? null;
+}
 
 function one<T>(v: T[] | T | null | undefined): T | null {
   if (v == null) return null;
@@ -57,6 +63,7 @@ export async function GET(
     ]);
 
     const transactionTicketCount = siblingRes.count ?? 1;
+    const visaTicket = rawEventId(data.event) ? await isIjgbEvent(rawEventId(data.event)!).catch(() => false) : false;
 
     const rawEvent  = one(data.event  as EventRow[] | EventRow | null);
     const rawTier   = one(data.tier   as TierRow[]  | TierRow  | null);
@@ -68,7 +75,7 @@ export async function GET(
 
     return NextResponse.json({
       success: true,
-      data: { ...data, event, tier: rawTier, qrDataUrl, transactionTicketCount },
+      data: { ...data, event, tier: rawTier, qrDataUrl, transactionTicketCount, visaTicket },
     });
   } catch (err) {
     console.error('GET /api/tickets/[id] error:', err);

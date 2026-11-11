@@ -8,7 +8,7 @@ interface TicketCardProps {
 
 export function TicketCard({ ticket }: TicketCardProps) {
   const isOnline = ticket.event.event_mode === 'online';
-  return (
+  const card = (
     <div
       className="rounded-xl border overflow-hidden"
       style={{
@@ -137,6 +137,41 @@ export function TicketCard({ ticket }: TicketCardProps) {
           </div>
         </div>
       </div>
+    </div>
+  );
+
+  // Refunded/cancelled tickets keep the standard card (the visa route 404s).
+  const showVisa = ticket.visaTicket && (ticket.status === 'valid' || ticket.status === 'used');
+  if (!showVisa) return card;
+
+  // IJGB Homecoming: the personalised visa ticket (same QR as below).
+  return (
+    <div className="flex flex-col gap-3">
+      <a
+        href={`/api/tickets/${ticket.id}/visa`}
+        target="_blank"
+        rel="noopener noreferrer"
+        className="block rounded-xl overflow-hidden border"
+        style={{ borderColor: 'var(--color-border)' }}
+      >
+        {/* eslint-disable-next-line @next/next/no-img-element */}
+        <img
+          src={`/api/tickets/${ticket.id}/visa`}
+          alt={`IJGB Homecoming visa ticket ${ticket.id}`}
+          width={1280}
+          height={720}
+          className="block w-full h-auto"
+          style={{ aspectRatio: '16 / 9', backgroundColor: 'var(--color-surface)' }}
+        />
+      </a>
+      <a
+        href={`/api/tickets/${ticket.id}/visa?format=pdf`}
+        className="self-start text-sm font-semibold underline"
+        style={{ color: 'var(--color-purple-light)' }}
+      >
+        Download visa ticket (PDF)
+      </a>
+      {card}
     </div>
   );
 }

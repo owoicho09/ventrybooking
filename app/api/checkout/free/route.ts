@@ -1,4 +1,4 @@
-import { NextRequest, NextResponse } from 'next/server';
+import { NextRequest, NextResponse, after } from 'next/server';
 import { isScheduled, fmtGoLive } from '@/lib/goLive';
 import { getServerSupabase } from '@/lib/supabase/server';
 import { generateTicketId, generateRefundCode } from '@/lib/server/ids';
@@ -213,7 +213,10 @@ export async function POST(req: NextRequest) {
       },
     ).catch(console.error);
 
-    sendTicketEmail({
+    // after(): respond to the buyer immediately but keep the function alive
+    // until the email (and any IJGB visa render) has actually been sent —
+    // a bare un-awaited promise can be frozen mid-send on serverless.
+    after(() => sendTicketEmail({
       to:          email,
       buyerName:   buyerName?.trim() || '',
       tickets:     rows.map((r, i) => ({
@@ -223,12 +226,13 @@ export async function POST(req: NextRequest) {
       })),
       paystackRef: reference,
       eventName:   event.event_name,
+      eventId,
       eventDate:   event.date,
       eventVenue:  event.venue,
       eventMode:   event.event_mode,
       totalPaid:   0,
       bannerUrl:   event.banner_url,
-    }).catch(err => console.error('free checkout: email error', err));
+    }).catch(err => console.error('free checkout: email error', err)));
 
     return NextResponse.json({
       success: true,
@@ -239,3 +243,7 @@ export async function POST(req: NextRequest) {
     return NextResponse.json({ error: 'Failed to process free checkout' }, { status: 500 });
   }
 }
+
+// Ticket creation can render IJGB visa tickets and send the ticket email
+// (with retries) inside this request.
+export const maxDuration = 60;
