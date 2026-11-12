@@ -11,6 +11,7 @@ import { HeroDeck } from '@/components/landing/HeroDeck';
 import { getPublicEvents, getPlatformFigures, cityCounts, organizerSummaries } from '@/lib/server/publicEvents';
 import { eventImages, fmtDay, fmtShortDay, locationLine, naira, outcomeLabel, todayWAT, type PublicEvent } from '@/lib/publicEvents';
 import { accentForBackground, getContrastText } from '@/lib/accentColors';
+import { featuredFirst, isFeaturedEvent } from '@/lib/featuredEvents';
 
 // Fresh enough for live counts, without a database round trip per visitor.
 export const revalidate = 60;
@@ -21,19 +22,21 @@ export default async function HomePage() {
   const [events, figures] = await Promise.all([getPublicEvents(), getPlatformFigures()]);
   const today = todayWAT();
 
-  const upcoming = events
+  // Official partners (lib/featuredEvents.ts) lead the on-sale list, then by date.
+  const upcoming = featuredFirst(events
     .filter(e => e.status === 'approved' && e.date >= today)
-    .sort((a, b) => a.date.localeCompare(b.date));
+    .sort((a, b) => a.date.localeCompare(b.date)));
   const past = events
     .filter(e => e.status === 'completed')
     .sort((a, b) => b.date.localeCompare(a.date));
 
-  // Keep the hero current, while reserving a spot for the requested Maestro event.
-  const maestro = events.find(e => e.name.toLowerCase().includes('maestro grandure') && eventImages(e).length);
+  // Hero deck: three live events with artwork. Featured partners always take a
+  // spot, on top of the deck (the last card renders on top).
   const liveHeroCards = upcoming.filter(e => eventImages(e).length);
+  const heroFeatured = liveHeroCards.filter(e => isFeaturedEvent(e.id)).slice(0, 3);
   const heroCards = [
-    ...liveHeroCards.filter(e => e.id !== maestro?.id).slice(0, maestro ? 2 : 3),
-    ...(maestro ? [maestro] : []),
+    ...liveHeroCards.filter(e => !isFeaturedEvent(e.id)).slice(0, 3 - heroFeatured.length),
+    ...[...heroFeatured].reverse(),
   ];
 
   const cities = cityCounts(events).slice(0, 5);

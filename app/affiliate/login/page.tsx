@@ -53,6 +53,11 @@ export default function AffiliateLoginPage() {
           <form onSubmit={handleSubmit} className="flex flex-col gap-4">
             <Input label="Email" type="email" value={email} onChange={e => setEmail(e.target.value)} placeholder="you@example.com" required />
             <Input label="Password" type="password" value={password} onChange={e => setPassword(e.target.value)} placeholder="Your password" required />
+            <div className="text-right">
+              <Link href="/affiliate/forgot-password" className="text-xs hover:underline" style={{ color: 'var(--color-text-muted)' }}>
+                Forgot password?
+              </Link>
+            </div>
             <Button type="submit" size="lg" fullWidth disabled={loading}>
               {loading ? 'Signing in…' : 'Sign In'}
             </Button>

@@ -11,6 +11,7 @@ import { CategoryPill, EventCardV2, OrgAvatar } from '@/components/v2/EventCardV
 import { CATEGORY_ORDER, ONLINE_META, categoryGradient, categoryMeta, categoryVars, type CategoryKey } from '@/lib/categories';
 import { eventImages, initial, fmtLongDay, locationLine, naira, priceLabel, weekendRange, type PublicEvent } from '@/lib/publicEvents';
 import { buildFeed, type Shelf } from '@/lib/shelves';
+import { featuredFirst } from '@/lib/featuredEvents';
 import type { CityCount, PublicOrganizerSummary } from '@/lib/server/publicEvents';
 
 type When = 'any' | 'tonight' | 'weekend' | 'month';
@@ -122,7 +123,7 @@ export function EventsBrowser({ events, today, cities, organizers }: Props) {
     if (!filtering) return null;
     const hits = inCity.filter(matches);
     return {
-      upcoming: hits.filter(e => e.status === 'approved').sort((a, b) => a.date.localeCompare(b.date)),
+      upcoming: featuredFirst(hits.filter(e => e.status === 'approved').sort((a, b) => a.date.localeCompare(b.date))),
       past: hits.filter(e => e.status === 'completed').sort((a, b) => b.date.localeCompare(a.date)),
     };
     // eslint-disable-next-line react-hooks/exhaustive-deps

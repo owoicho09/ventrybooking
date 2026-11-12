@@ -16,6 +16,8 @@ const ORGANIZER_AUTH_PATHS = [
 const AFFILIATE_AUTH_PATHS = [
   '/affiliate/login',
   '/affiliate/register',
+  '/affiliate/forgot-password',
+  '/affiliate/reset-password',
 ];
 
 const SECRET = new TextEncoder().encode(process.env.JWT_SECRET!);

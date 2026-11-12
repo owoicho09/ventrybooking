@@ -29,10 +29,15 @@ export function verifyQrToken(token: string): QrPayload {
   return jwt.verify(token, SECRET) as QrPayload;
 }
 
-export function signResetToken(email: string): string {
-  return jwt.sign({ email }, SECRET, { expiresIn: '1h' });
+/** Which account table a password reset applies to. */
+export type ResetAccount = 'organizer' | 'affiliate';
+
+export function signResetToken(email: string, account: ResetAccount = 'organizer'): string {
+  return jwt.sign({ email, account }, SECRET, { expiresIn: '1h' });
 }
 
-export function verifyResetToken(token: string): { email: string } {
-  return jwt.verify(token, SECRET) as { email: string };
+/** Tokens issued before `account` existed are organiser resets. */
+export function verifyResetToken(token: string): { email: string; account: ResetAccount } {
+  const p = jwt.verify(token, SECRET) as { email: string; account?: string };
+  return { email: p.email, account: p.account === 'affiliate' ? 'affiliate' : 'organizer' };
 }

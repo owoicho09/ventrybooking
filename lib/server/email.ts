@@ -754,8 +754,8 @@ export async function sendMissingBankDetailsEmail(to: string, organizerName: str
   });
 }
 
-export async function sendPasswordResetEmail(to: string, resetToken: string) {
-  const resetUrl = `${APP_URL}/organizer/reset-password?token=${resetToken}`;
+export async function sendPasswordResetEmail(to: string, resetToken: string, account: 'organizer' | 'affiliate' = 'organizer') {
+  const resetUrl = `${APP_URL}/${account}/reset-password?token=${encodeURIComponent(resetToken)}`;
   await sendEmail({
     to,
     subject: 'Reset your Ventry password',

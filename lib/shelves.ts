@@ -8,6 +8,7 @@
 // (featured counts), and never in two adjacent sections.
 import { CATEGORY_ORDER, categoryMeta } from '@/lib/categories';
 import { addDays, weekendRange, type PublicEvent } from '@/lib/publicEvents';
+import { featuredFirst, isFeaturedEvent } from '@/lib/featuredEvents';
 
 export const DEFAULT_MIN = 3;
 /** Below this many upcoming events the page collapses to the short layout. */
@@ -138,6 +139,9 @@ export interface Feed {
 
 function pickFeatured(upcoming: PublicEvent[]): PublicEvent | null {
   if (!upcoming.length) return null;
+  // An official partner (lib/featuredEvents.ts) with artwork takes the spot first.
+  const partner = featuredFirst(upcoming.filter(e => isFeaturedEvent(e.id) && e.flyerUrl && !e.soldOut))[0];
+  if (partner) return partner;
   // The soonest event that has artwork and is still selling; any event otherwise.
   return [...upcoming].sort(soonest).find(e => e.flyerUrl && !e.soldOut) ?? [...upcoming].sort(soonest)[0];
 }
@@ -146,7 +150,7 @@ export function buildFeed(ctx: ShelfContext, defs: ShelfDef[] = DEFAULT_SHELVES)
   const upcoming = [...ctx.upcoming].sort(soonest);
   const past = [...ctx.past].sort(latest);
   const featured = pickFeatured(upcoming);
-  const grid = upcoming.filter(e => e.id !== featured?.id);
+  const grid = featuredFirst(upcoming.filter(e => e.id !== featured?.id));
   const sorted = [...defs].sort((a, b) => a.priority - b.priority);
   const recentDef = sorted.find(d => d.kind === 'past');
 

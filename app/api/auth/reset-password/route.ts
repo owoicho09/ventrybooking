@@ -1,6 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { getServerSupabase } from '@/lib/supabase/server';
-import { verifyResetToken } from '@/lib/server/jwt';
+import { verifyResetToken, type ResetAccount } from '@/lib/server/jwt';
 import { hashPassword } from '@/lib/server/password';
 
 export async function POST(req: NextRequest) {
@@ -14,8 +14,9 @@ export async function POST(req: NextRequest) {
     }
 
     let email: string;
+    let account: ResetAccount;
     try {
-      email = verifyResetToken(token).email;
+      ({ email, account } = verifyResetToken(token));
     } catch {
       return NextResponse.json({ error: 'Invalid or expired reset link' }, { status: 400 });
     }
@@ -33,7 +34,8 @@ export async function POST(req: NextRequest) {
     }
 
     const passwordHash = hashPassword(password);
-    await db.from('users').update({ password_hash: passwordHash }).eq('email', email);
+    const table = account === 'affiliate' ? 'platform_affiliates' : 'users';
+    await db.from(table).update({ password_hash: passwordHash }).eq('email', email);
     await db.from('reset_tokens').update({ used: true }).eq('id', resetRecord.id);
 
     return NextResponse.json({ success: true, data: { message: 'Password updated successfully' } });
