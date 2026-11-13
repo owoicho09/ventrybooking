@@ -87,7 +87,7 @@ export default async function HomePage() {
                 href: `/${e.slug}`,
                 name: e.name,
                 location: locationLine(e),
-                badge: e.status === 'completed' ? outcomeLabel(e) : 'On sale now',
+                badge: e.status === 'completed' ? (outcomeLabel(e) ?? 'Ended') : 'On sale now',
                 images: eventImages(e),
               }))}
             />

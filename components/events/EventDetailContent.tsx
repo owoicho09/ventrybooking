@@ -6,7 +6,11 @@ import { useRouter, useSearchParams } from 'next/navigation';
 import Link from 'next/link';
 import { ChevronLeft, MapPin, Share2, ShieldCheck, QrCode, Clock3, Info, Video } from 'lucide-react';
 import { formatNGN } from '@/lib/utils';
-import { buyerTotalForItems, ticketPriceWithService } from '@/lib/fees';
+import {
+  buyerTotalForItems, ticketPriceWithService, serviceFeePerTicket,
+  SERVICE_FEE_RATE, SERVICE_FEE_FLAT, SERVICE_FEE_THRESHOLD,
+  PROCESSING_FEE_RATE, PROCESSING_FEE_FLAT, PROCESSING_FEE_THRESHOLD, PROCESSING_FEE_CAP,
+} from '@/lib/fees';
 import { ticketUrgency, URGENCY_LABEL } from '@/lib/ticketUrgency';
 import type { Event, TicketTier } from '@/types';
 import { EventReviews } from '@/components/events/EventReviews';
@@ -61,6 +65,7 @@ export function EventDetailContent({ identifier, preview }: EventDetailContentPr
   const [loading, setLoading] = useState(!preview);
   const [selectedId, setSelectedId] = useState<string | null>(null);
   const [qty, setQty] = useState(1);
+  const [feeOpenId, setFeeOpenId] = useState<string | null>(null);
   const [orgReputation, setOrgReputation] = useState<{ avg: number | null; count: number } | null>(null);
   const [solidBar, setSolidBar] = useState(false);
   const refTracked = useRef(false);
@@ -325,7 +330,21 @@ export function EventDetailContent({ identifier, preview }: EventDetailContentPr
               >
                 <div className="v-tier-top">
                   <span className="v-tier-n">{tier.name}</span>
-                  <span className={`v-tier-p${tier.price === 0 ? ' free' : ''}`}>{tier.price === 0 ? 'Free' : formatNGN(ticketPriceWithService(tier.price))}</span>
+                  <span className="v-tier-pw">
+                    <span className={`v-tier-p${tier.price === 0 ? ' free' : ''}`}>{tier.price === 0 ? 'Free' : formatNGN(ticketPriceWithService(tier.price))}</span>
+                    {tier.price > 0 && (
+                      <button
+                        type="button"
+                        className="v-fee-i"
+                        aria-label={`See price breakdown for ${tier.name}`}
+                        aria-expanded={feeOpenId === tier.id}
+                        onClick={e => { e.stopPropagation(); setFeeOpenId(id => id === tier.id ? null : tier.id); }}
+                        onKeyDown={e => e.stopPropagation()}
+                      >
+                        <Info size={14} aria-hidden="true" />
+                      </button>
+                    )}
+                  </span>
                 </div>
                 <div className="v-tier-s">
                   {out ? URGENCY_LABEL.sold_out
@@ -335,6 +354,24 @@ export function EventDetailContent({ identifier, preview }: EventDetailContentPr
                     : 'On sale'}
                 </div>
               </div>
+
+              {tier.price > 0 && feeOpenId === tier.id && (() => {
+                const fee = serviceFeePerTicket(tier.price);
+                const capped = tier.price > SERVICE_FEE_THRESHOLD;
+                return (
+                  <div className="v-fee-bd">
+                    <div><span>Ticket price</span><span>{formatNGN(tier.price)}</span></div>
+                    <div>
+                      <span>Service fee ({capped ? `flat, capped at ${formatNGN(SERVICE_FEE_FLAT)}` : `${SERVICE_FEE_RATE * 100}%`})</span>
+                      <span>{formatNGN(fee)}</span>
+                    </div>
+                    <div className="t"><span>Price per ticket</span><span>{formatNGN(tier.price + fee)}</span></div>
+                    <p>
+                      A payment processing fee of {PROCESSING_FEE_RATE * 100}% (+ {formatNGN(PROCESSING_FEE_FLAT)} on orders over {formatNGN(PROCESSING_FEE_THRESHOLD)}, max {formatNGN(PROCESSING_FEE_CAP)}) is added once per order and shown before you pay.
+                    </p>
+                  </div>
+                );
+              })()}
 
               {tier.description && tier.description.trim().length > 0 && (
                 <details className="v-tier-desc">

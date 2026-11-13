@@ -151,12 +151,10 @@ export function initial(name: string): string {
   return (name.trim()[0] ?? '?').toUpperCase();
 }
 
-/** "Sold out" / "65 checked in" / "147 tickets" — the strongest real outcome for a past event. */
+/** "Sold out" for a past event that sold out, otherwise nothing. Sales and
+ *  check-in counts aren't shown publicly once an event has passed. */
 export function outcomeLabel(e: PublicEvent): string | null {
-  if (e.soldOut) return 'Sold out';
-  if (e.checkedIn > 0) return `${e.checkedIn.toLocaleString('en-NG')} checked in`;
-  if (e.totalSold > 0) return `${e.totalSold.toLocaleString('en-NG')} tickets`;
-  return null;
+  return e.soldOut ? 'Sold out' : null;
 }
 
 export function priceLabel(e: PublicEvent): { label: string; value: string; free: boolean } | null {

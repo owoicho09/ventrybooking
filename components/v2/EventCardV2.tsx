@@ -1,7 +1,7 @@
 import Link from 'next/link';
 import { EventImage } from './EventImage';
 import { categoryMeta, categoryVars, categoryGradient, ONLINE_META } from '@/lib/categories';
-import { eventImages, fmtDay, fmtShortDay, initial, locationLine, outcomeLabel, priceLabel, type PublicEvent } from '@/lib/publicEvents';
+import { eventImages, fmtDay, fmtShortDay, initial, locationLine, priceLabel, type PublicEvent } from '@/lib/publicEvents';
 import { URGENCY_LABEL } from '@/lib/ticketUrgency';
 
 interface Props {
@@ -50,7 +50,6 @@ export function EventCardV2({ event, cta = 'Get tickets', priority = false, size
   const images = eventImages(event);
   const completed = event.status === 'completed';
   const price = priceLabel(event);
-  const outcome = completed ? outcomeLabel(event) : null;
 
   return (
     <article className="v-ev">
@@ -87,11 +86,11 @@ export function EventCardV2({ event, cta = 'Get tickets', priority = false, size
         <div className="v-ev-foot-in">
           {completed ? (
             <div>
+              {/* Sold out already shows on the image flag; no sales or
+                  check-in counts on past events. */}
               {event.rating
                 ? <Stars avg={event.rating.avg} count={event.rating.count} />
-                : outcome ? <div className="v-price-l" style={{ fontSize: 12 }}>{outcome}</div>
                 : <div className="v-price-l" style={{ fontSize: 12 }}>Ticket sales closed</div>}
-              {event.rating && outcome && <div className="v-price-l" style={{ marginTop: 2 }}>{outcome}</div>}
             </div>
           ) : price ? (
             <div><div className="v-price-l">{price.label}</div><div className={`v-price${price.free ? ' free' : ''}`}>{price.value}</div></div>
