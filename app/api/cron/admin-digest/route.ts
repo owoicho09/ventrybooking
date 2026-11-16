@@ -3,10 +3,12 @@ import { getServerSupabase } from '@/lib/supabase/server';
 import { sendAdminDigestEmail } from '@/lib/server/email';
 import { runAddressReveals } from '@/lib/server/addressRevealJob';
 import { runRefundJobs } from '@/lib/server/refundCases';
+import { runScheduledAdminReports } from '@/lib/server/adminReportJob';
 
 // Hourly. Also releases hidden event addresses whose reveal time has passed,
-// and runs refund claim windows (notices, claim lists, overdue flags). A
-// failure in either never blocks the digest.
+// runs refund claim windows (notices, claim lists, overdue flags), and sends
+// the owner's daily report (from 07:00 Lagos) and Monday weekly report. A
+// failure in any of them never blocks the digest.
 export const maxDuration = 60;
 
 export async function GET(req: NextRequest) {
@@ -26,6 +28,10 @@ export async function GET(req: NextRequest) {
       .catch(err => console.error('address reveal job error', err));
 
     const db = getServerSupabase();
+
+    await runScheduledAdminReports(db)
+      .then(r => { const sent = r.filter(x => x.sent); if (sent.length) console.log('admin reports sent', sent); })
+      .catch(err => console.error('admin report job error', err));
 
     const { data: rows, error } = await db
       .from('notifications')

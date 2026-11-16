@@ -30,13 +30,27 @@ interface NotifOptions {
 }
 
 /**
+ * Admin alerts that email immediately: a buyer paid but has no ticket, a
+ * settlement/transfer/refund failed or reversed, a possible double payment,
+ * or a ticket email that could not be sent.
+ */
+const CRITICAL_ADMIN_ALERT = /(creation failed|ticket email failed|settlement failed|settlement reversed|transfer failed|transfer reversed|double payment|refund failed|db update failed|retry needed|action required)/i;
+export function isCriticalAdminAlert(title: string): boolean {
+  return CRITICAL_ADMIN_ALERT.test(title);
+}
+
+/**
  * Insert a notification row. Fire-and-forget safe — call with .catch() at
  * the caller site so a notification failure never blocks the main response.
  */
 export async function notify(recipient: Recipient, payload: NotifPayload, options?: NotifOptions): Promise<void> {
   const db = getServerSupabase();
   const isAdmin = recipient.type === 'admin';
-  const channel = options?.emailChannel ?? 'digest';
+  // Money or tickets going wrong can't wait for the hourly digest: those
+  // admin alerts are emailed the moment they happen, whatever the caller asked.
+  const channel = isAdmin && (options?.emailChannel ?? 'digest') === 'digest' && isCriticalAdminAlert(payload.title)
+    ? 'immediate'
+    : options?.emailChannel ?? 'digest';
   // 'dedicated' and 'immediate' both mean "already handled" from the
   // digest's point of view — only a bare 'digest' row should still be
   // picked up by the next digest run.

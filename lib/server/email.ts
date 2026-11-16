@@ -1,4 +1,5 @@
 import { randomUUID } from 'crypto';
+import { adminRecipients } from '@/lib/server/adminRecipients';
 import { Resend } from 'resend';
 import { getOrganizerSenderName } from '@/lib/server/senderIdentity';
 import { getServerSupabase } from '@/lib/supabase/server';
@@ -97,6 +98,35 @@ export async function sendEmail(opts: { to: string; subject: string; html: strin
       .insert({ id: data.id, to_email: opts.to, subject: opts.subject, purpose: opts.purpose ?? null });
     if (insertError) console.error('sendEmail: email_deliveries insert error', insertError.message);
   }
+}
+
+/**
+ * Sends one admin email to every admin recipient (ADMIN_NOTIFY_EMAILS, else
+ * ADMIN_EMAIL), one send each: a suppressed or bouncing inbox fails alone and
+ * never stops the others. `only` narrows it (e.g. to warn the OTHER admins
+ * that one of their inboxes is failing). Throws only if every send failed.
+ */
+export async function sendToAdmins(opts: { subject: string; html: string; purpose?: string; only?: string[] }) {
+  const to = opts.only ?? adminRecipients();
+  if (to.length === 0) return;
+  const results = await Promise.allSettled(to.map(addr => sendEmail({ to: addr, subject: opts.subject, html: opts.html, purpose: opts.purpose })));
+  const failed = results.filter(r => r.status === 'rejected') as PromiseRejectedResult[];
+  for (const f of failed) console.error('sendToAdmins: a send failed', f.reason);
+  if (failed.length === to.length) throw new Error(`All ${to.length} admin email(s) failed: ${String(failed[0].reason)}`);
+}
+
+/** Body of the warning sent to the other admins when one admin inbox stops receiving. */
+export function adminInboxFailingHtml(inbox: string, status: string, reason: string | null): string {
+  const what = status === 'suppressed' ? 'is on Resend’s suppression list, so Resend is refusing to send to it'
+    : status === 'complained' ? 'marked a Ventry email as spam, so Resend will stop sending to it'
+    : status === 'failed' ? 'could not be sent to'
+    : 'bounced a Ventry email, so Resend will stop sending to it';
+  return emailShell(`
+    <h1 style="color:#f59e0b;font-size:20px;margin:0 0 12px;">An admin inbox isn&rsquo;t receiving Ventry email</h1>
+    <p style="color:#f1f0ff;"><strong>${esc(inbox)}</strong> ${what}.${reason ? ` Reason given: ${esc(reason)}.` : ''}</p>
+    <p style="color:#f1f0ff;">Until it&rsquo;s fixed, admin alerts, digests and reports reach only the other admin addresses.</p>
+    <p style="color:#9ca3af;font-size:13px;">To fix: make sure the mailbox exists and accepts outside mail (in Google Admin, if it&rsquo;s a group, allow external senders), then remove it from Suppressions in the Resend dashboard.</p>
+  `);
 }
 
 export interface TicketEmailParams {
@@ -1011,10 +1041,7 @@ export async function sendAdminNewEventEmail(params: {
   eventId: string;
   resubmitted?: boolean;
 }) {
-  const adminEmail = process.env.ADMIN_EMAIL;
-  if (!adminEmail) return;
-  await sendEmail({
-    to: adminEmail,
+  await sendToAdmins({
     subject: `${params.resubmitted ? 'Resubmitted' : 'New event'} to review: ${params.eventName}`,
     html: emailShell(`
       <h1 style="color:#a855f7;font-size:22px;margin:0 0 12px;">${params.resubmitted ? 'Event Resubmitted' : 'New Event to Review'}</h1>
@@ -1032,10 +1059,7 @@ export async function sendAdminNewEventEmail(params: {
 }
 
 export async function sendAdminAlertEmail(params: { title: string; body: string; link?: string }) {
-  const adminEmail = process.env.ADMIN_EMAIL;
-  if (!adminEmail) return;
-  await sendEmail({
-    to: adminEmail,
+  await sendToAdmins({
     subject: params.title,
     html: emailShell(`
       <h1 style="color:#f59e0b;font-size:20px;margin:0 0 12px;">${esc(params.title)}</h1>
@@ -1173,8 +1197,7 @@ export async function sendDailySalesEmail(params: {
 }
 
 export async function sendAdminDigestEmail(items: { title: string; body: string; link: string | null }[]) {
-  const adminEmail = process.env.ADMIN_EMAIL;
-  if (!adminEmail || items.length === 0) return;
+  if (items.length === 0) return;
   const rows = items.map(i => `
     <div style="padding:12px 0;border-bottom:1px solid #2d2d3d;">
       <p style="margin:0 0 4px;color:#f1f0ff;font-size:14px;font-weight:700;">${esc(i.title)}</p>
@@ -1182,8 +1205,8 @@ export async function sendAdminDigestEmail(items: { title: string; body: string;
       ${i.link ? `<a href="${APP_URL}${i.link}" style="color:#a855f7;font-size:12px;">View &rarr;</a>` : ''}
     </div>
   `).join('');
-  await sendEmail({
-    to: adminEmail,
+  await sendToAdmins({
+    purpose: 'admin_digest',
     subject: `Admin digest — ${items.length} item${items.length !== 1 ? 's' : ''} pending`,
     html: emailShell(`
       <h1 style="color:#a855f7;font-size:20px;margin:0 0 16px;">Admin Digest</h1>

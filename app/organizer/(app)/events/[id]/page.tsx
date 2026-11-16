@@ -838,6 +838,9 @@ export default function OrganizerEventDetailPage() {
         )}
       </div>
 
+      {/* Sponsor monitor links (056): high up, next to the sales figures they share. */}
+      <MonitorLinksPanel eventId={event.id} />
+
       {/* Event info editing */}
       <div className="rounded-xl border p-5 flex flex-col gap-4"
         style={{ backgroundColor: 'var(--color-surface)', borderColor: 'var(--color-border)' }}>
@@ -1167,9 +1170,6 @@ export default function OrganizerEventDetailPage() {
           </Button>
         )}
       </div>
-
-      {/* Sponsor monitor links (056) */}
-      <MonitorLinksPanel eventId={event.id} />
 
       {/* QR code */}
       <div className="rounded-xl border p-5 flex flex-col gap-3"

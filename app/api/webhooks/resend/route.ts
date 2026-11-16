@@ -1,4 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server';
+import { adminRecipients, isAdminRecipient } from '@/lib/server/adminRecipients';
+import { sendToAdmins, adminInboxFailingHtml } from '@/lib/server/email';
 import crypto from 'crypto';
 import { getServerSupabase } from '@/lib/supabase/server';
 import { notify } from '@/lib/server/notify';
@@ -56,11 +58,14 @@ export async function POST(req: NextRequest) {
 
   const db = getServerSupabase();
 
-  const STATUS_BY_TYPE: Record<string, 'delivered' | 'delayed' | 'bounced' | 'complained'> = {
+  const STATUS_BY_TYPE: Record<string, 'delivered' | 'delayed' | 'bounced' | 'complained' | 'suppressed' | 'failed'> = {
     'email.delivered':        'delivered',
     'email.delivery_delayed': 'delayed',
     'email.bounced':          'bounced',
     'email.complained':       'complained',
+    // Resend refused to send: the address is on its suppression list (058).
+    'email.suppressed':       'suppressed',
+    'email.failed':           'failed',
   };
   const status = STATUS_BY_TYPE[event.type];
   if (!status) return NextResponse.json({ received: true }); // sent/opened/clicked — not tracked
@@ -74,15 +79,33 @@ export async function POST(req: NextRequest) {
     .select('to_email, subject, purpose')
     .maybeSingle();
 
-  if ((status === 'bounced' || status === 'complained') ) {
-    const to = updated?.to_email ?? event.data.to?.[0] ?? 'unknown recipient';
+  const to = updated?.to_email ?? event.data.to?.[0] ?? 'unknown recipient';
+
+  // One of the admin inboxes stopped receiving. The usual admin alert would
+  // go to that same broken inbox too, so warn the OTHER admin addresses
+  // directly, at most once per inbox per day.
+  if ((status === 'bounced' || status === 'complained' || status === 'suppressed' || status === 'failed') && isAdminRecipient(to)) {
+    const others = adminRecipients().filter(a => a !== to.trim().toLowerCase());
+    const purpose = `admin_inbox_failing:${to.trim().toLowerCase()}:${new Date().toISOString().slice(0, 10)}`;
+    const { count: already } = await db.from('email_deliveries').select('id', { count: 'exact', head: true }).eq('purpose', purpose);
+    if (others.length && !already) {
+      sendToAdmins({
+        only: others,
+        purpose,
+        subject: `Admin inbox not receiving Ventry email: ${to}`,
+        html: adminInboxFailingHtml(to, status, bounceReason),
+      }).catch(err => console.error('resend webhook: admin-inbox warning failed', err));
+    }
+  }
+
+  if (status === 'bounced' || status === 'complained' || status === 'suppressed') {
     const subject = updated?.subject ?? event.data.subject ?? '';
     notify(
       { type: 'admin' },
       {
         notifType: 'email_bounced',
-        title: status === 'bounced' ? `Email bounced — ${to}` : `Recipient marked email as spam — ${to}`,
-        body: `"${subject}"${updated?.purpose ? ` (${updated.purpose})` : ''} ${status === 'bounced' ? 'bounced' : 'was reported as spam'} and will not be delivered. ${bounceReason ? `Reason: ${bounceReason}. ` : ''}Resend auto-suppresses this address until manually cleared in the Resend dashboard.`,
+        title: status === 'bounced' ? `Email bounced — ${to}` : status === 'suppressed' ? `Email suppressed — ${to}` : `Recipient marked email as spam — ${to}`,
+        body: `"${subject}"${updated?.purpose ? ` (${updated.purpose})` : ''} ${status === 'bounced' ? 'bounced' : status === 'suppressed' ? 'was not sent: Resend has this address on its suppression list' : 'was reported as spam'} and will not be delivered. ${bounceReason ? `Reason: ${bounceReason}. ` : ''}Resend auto-suppresses this address until manually cleared in the Resend dashboard.`,
         link: `/admin/buyers?search=${encodeURIComponent(to)}`,
       },
       { emailChannel: 'immediate' },

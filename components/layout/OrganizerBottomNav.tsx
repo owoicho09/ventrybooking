@@ -14,6 +14,7 @@ import { RotateCcw,
   Share2,
   Users,
   MoreHorizontal,
+  Presentation,
 } from 'lucide-react';
 import { NotificationBell } from '@/components/ui/NotificationBell';
 import { Drawer } from '@/components/ui/Drawer';
@@ -29,6 +30,7 @@ const navItems = [
 const moreItems = [
   { href: '/organizer/audience', label: 'Audience',  icon: Users },
   { href: '/organizer/staff',    label: 'Staff IDs', icon: KeyRound },
+  { href: '/organizer/sponsors', label: 'Sponsor links', icon: Presentation },
   { href: '/organizer/payouts',  label: 'Payouts',   icon: Wallet },
   { href: '/organizer/refunds',  label: 'Refunds',   icon: RotateCcw },
   { href: '/organizer/affiliates', label: 'Affiliates', icon: Share2 },

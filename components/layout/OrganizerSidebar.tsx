@@ -13,6 +13,7 @@ import { RotateCcw,
   KeyRound,
   Share2,
   Users,
+  Presentation,
 } from 'lucide-react';
 import { ThemeToggle } from './ThemeToggle';
 import { NotificationBell } from '@/components/ui/NotificationBell';
@@ -25,6 +26,7 @@ const navItems = [
   { href: '/organizer/events/create',  label: 'Create Event',icon: PlusCircle },
   { href: '/organizer/scan',           label: 'Scanner',     icon: ScanLine },
   { href: '/organizer/staff',          label: 'Staff IDs',   icon: KeyRound },
+  { href: '/organizer/sponsors',       label: 'Sponsor links', icon: Presentation },
   { href: '/organizer/payouts',        label: 'Payouts',     icon: Wallet },
   { href: '/organizer/refunds',        label: 'Refunds',     icon: RotateCcw },
   { href: '/organizer/settings',       label: 'Settings',    icon: Settings },
