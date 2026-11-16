@@ -16,7 +16,7 @@ interface PendingOrderRow {
   event_id: string;
   tier_id: string;
   quantity: number;
-  items: { tier_id: string; quantity: number }[] | null;
+  items: { tier_id: string; quantity: number; access_code_id?: string | null }[] | null;
   buyer_email: string;
   buyer_name: string;
   total: number;
@@ -47,7 +47,7 @@ async function recoverOrder(order: PendingOrderRow, alreadyClaimed: boolean): Pr
   // `items` covers multi-tier orders; older rows written before that
   // column existed fall back to their single tier_id/quantity pair.
   const items = Array.isArray(order.items) && order.items.length > 0
-    ? order.items.map(i => ({ tierId: i.tier_id, quantity: i.quantity }))
+    ? order.items.map(i => ({ tierId: i.tier_id, quantity: i.quantity, accessCodeId: i.access_code_id ?? null }))
     : [{ tierId: order.tier_id, quantity: order.quantity }];
 
   const paymentData: PaymentData = {

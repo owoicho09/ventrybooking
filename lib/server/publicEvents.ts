@@ -13,7 +13,7 @@ const EVENT_SELECT = `
   id, slug, event_name, category, date, time, event_mode, venue, city, landmark, location_hidden, lga, address_reveal_at,
   status, total_sold, banner_url, header_banner_url, accent_color, verified, goes_live_at,
   organizer:users!events_organizer_id_fkey(id, name, verified, handle, avatar_url, cover_image_url),
-  tiers:ticket_tiers(id, name, price, available, sold)
+  tiers:ticket_tiers(id, name, price, available, sold, requires_code, allowed_email_domains)
 `;
 
 function one<T>(v: T | T[] | null | undefined): T | null {
@@ -23,10 +23,16 @@ function one<T>(v: T | T[] | null | undefined): T | null {
 
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
 function shape(row: any): PublicEvent {
-  const tiers: PublicTier[] = (Array.isArray(row.tiers) ? row.tiers : []).map((t: PublicTier) => ({
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  const tiers: PublicTier[] = (Array.isArray(row.tiers) ? row.tiers : []).map((t: any) => ({
     id: t.id, name: t.name, price: Number(t.price), available: t.available, sold: t.sold,
+    gated: t.requires_code === true || (Array.isArray(t.allowed_email_domains) && t.allowed_email_domains.length > 0),
   }));
-  const onSale = tiers.filter(t => t.available - t.sold > 0).sort((a, b) => a.price - b.price);
+  // A cheap code-only VIP tier shouldn't become the advertised "from" price:
+  // prices come from open tiers whenever any open tier is on sale.
+  const allOnSale = tiers.filter(t => t.available - t.sold > 0).sort((a, b) => a.price - b.price);
+  const openOnSale = allOnSale.filter(t => !t.gated);
+  const onSale = openOnSale.length ? openOnSale : allOnSale;
   const totalAvailable = tiers.reduce((s, t) => s + t.available, 0);
   const totalSold = tiers.reduce((s, t) => s + t.sold, 0);
   const soldOut = tiers.length > 0 && onSale.length === 0;

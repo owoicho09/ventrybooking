@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { getAuthUser } from '@/lib/server/auth';
 import { getServerSupabase } from '@/lib/supabase/server';
+import { requireChangeGrant } from '@/lib/server/settingsChange';
 import { v4 as uuidv4 } from 'uuid';
 
 export async function POST(req: NextRequest) {
@@ -11,6 +12,9 @@ export async function POST(req: NextRequest) {
 
   try {
     const db = getServerSupabase();
+    // Every settings change needs a fresh emailed-code grant (055).
+    const denied = await requireChangeGrant(db, user.sub, req);
+    if (denied) return denied;
     const formData = await req.formData();
     const coverFile = formData.get('cover') as File | null;
 

@@ -8,6 +8,8 @@ export interface PublicTier {
   price: number;
   available: number;
   sold: number;
+  /** Gated (promo code or tier email domain): left out of "from" prices when an open tier exists. */
+  gated?: boolean;
 }
 
 export interface PublicOrganizer {

@@ -15,6 +15,10 @@ interface CartLine {
   tierName: string;
   tierPrice: number;
   quantity: number;
+  /** Promo code that unlocked a code-gated tier on the event page (054). */
+  accessCode?: string;
+  /** Tier-level email gate (054), on top of the event-wide one. */
+  allowedEmailDomains?: string[] | null;
 }
 
 interface Cart {
@@ -36,6 +40,9 @@ export default function CheckoutPage() {
   const [marketingConsent, setMarketingConsent] = useState(false);
   const [loading, setLoading]                 = useState(false);
   const [error, setError]                     = useState('');
+  // Set when checkout says the promo code no longer works (e.g. the organiser
+  // switched it off after the buyer unlocked the ticket): send them back to re-enter one.
+  const [codeRejected, setCodeRejected]       = useState(false);
   const [cart, setCart]                       = useState<Cart | null>(null);
   // The signed-in buyer's own email, captured once and never mutated by
   // editing the email field below; if they change it to buy for a friend,
@@ -90,7 +97,16 @@ export default function CheckoutPage() {
 
   const restrictedDomains = cart?.allowedEmailDomains ?? null;
   const emailDomain = email.trim().toLowerCase().split('@')[1];
-  const domainBlocked = !!restrictedDomains?.length && !!email && !restrictedDomains.includes(emailDomain || '');
+  const eventDomainBlocked = !!restrictedDomains?.length && !!email && !restrictedDomains.includes(emailDomain || '');
+  // The ticket's own email gate, if any (the event-wide one above still applies too).
+  const tierGate = cart?.items.find(i => i.allowedEmailDomains?.length && !i.allowedEmailDomains.includes(emailDomain || '')) ?? null;
+  const tierDomainBlocked = !!email && !!tierGate;
+  const domainBlocked = eventDomainBlocked || tierDomainBlocked;
+  const domainMessage = eventDomainBlocked
+    ? `This event is restricted to ${restrictedDomains!.map(d => `@${d}`).join(' or ')} email addresses.`
+    : tierGate
+      ? `${tierGate.tierName} is only for ${tierGate.allowedEmailDomains!.map(d => `@${d}`).join(' or ')} email addresses.`
+      : '';
 
   const normalizedEmail = email.trim().toLowerCase();
   // A signed-in buyer is already verified server-side; guests need a token
@@ -129,7 +145,7 @@ export default function CheckoutPage() {
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({
         eventId: cart.eventId,
-        items: cart.items.map(i => ({ tierId: i.tierId, quantity: i.quantity })),
+        items: cart.items.map(i => ({ tierId: i.tierId, quantity: i.quantity, accessCode: i.accessCode })),
         buyerEmail: normalizedEmail,
         buyerName: buyerName.trim(),
         // One box consents to both lists: the organiser's Audience and Ventry's own.
@@ -147,6 +163,19 @@ export default function CheckoutPage() {
         setEmailToken(null);
         setVerifiedEmail(null);
       }
+      if (data.code === 'ACCESS_CODE_INVALID' || data.code === 'ACCESS_CODE_REQUIRED') {
+        // Forget the stale code, both in this cart and on the event page, so
+        // the ticket shows as locked again and asks for a fresh code.
+        try {
+          const key = `ventry_codes_${cart.eventId}`;
+          const saved = JSON.parse(sessionStorage.getItem(key) || '{}') as Record<string, string>;
+          for (const i of cart.items) delete saved[i.tierId];
+          sessionStorage.setItem(key, JSON.stringify(saved));
+          const stripped = { ...cart, items: cart.items.map(i => ({ ...i, accessCode: undefined })) };
+          sessionStorage.setItem('ventry_cart', JSON.stringify(stripped));
+        } catch { /* storage unavailable */ }
+        setCodeRejected(true);
+      }
       setStep('details');
       setError(data.error || (isFree ? 'Failed to get your free ticket' : 'Failed to initialize payment'));
       return;
@@ -163,9 +192,10 @@ export default function CheckoutPage() {
     e.preventDefault();
     if (!cart) return;
     setError('');
+    setCodeRejected(false);
     setNotice('');
     if (domainBlocked) {
-      setError(`This event is restricted to ${restrictedDomains!.map(d => `@${d}`).join(' or ')} email addresses.`);
+      setError(domainMessage);
       return;
     }
     setLoading(true);
@@ -342,6 +372,13 @@ export default function CheckoutPage() {
               <div className="mb-4 rounded-lg px-4 py-3 text-sm border"
                 style={{ backgroundColor: '#ef444415', borderColor: '#ef444430', color: 'var(--color-red)' }}>
                 {error}
+                {codeRejected && (
+                  <div className="mt-2">
+                    <a href={cart.eventSlug ? `/${cart.eventSlug}#tickets` : `/events/${cart.eventId}`} className="font-semibold underline">
+                      Go back and enter your code again
+                    </a>
+                  </div>
+                )}
               </div>
             )}
             {notice && (
@@ -407,6 +444,8 @@ export default function CheckoutPage() {
                 helper={
                   restrictedDomains?.length
                     ? `Restricted event - only ${restrictedDomains.map(d => `@${d}`).join(' or ')} email addresses can buy.`
+                    : cart.items.some(i => i.allowedEmailDomains?.length)
+                      ? `${cart.items.find(i => i.allowedEmailDomains?.length)!.tierName} is only for ${cart.items.find(i => i.allowedEmailDomains?.length)!.allowedEmailDomains!.map(d => `@${d}`).join(' or ')} email addresses. The ticket is sent here.`
                     : sessionEmail
                       ? "Your QR ticket will be sent here. You'll also use this to retrieve your ticket."
                       : "Your QR ticket will be sent here. We'll email you a code to confirm it's correct before you continue."
@@ -415,7 +454,7 @@ export default function CheckoutPage() {
               />
               {domainBlocked && (
                 <p className="text-xs -mt-3" style={{ color: 'var(--color-red)' }}>
-                  This email doesn&apos;t match an allowed domain for this event.
+                  {domainMessage}
                 </p>
               )}
 

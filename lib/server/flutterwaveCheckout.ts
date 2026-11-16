@@ -15,8 +15,9 @@ function parseItems(value: unknown): CartItem[] {
     if (!item || typeof item !== 'object') return [];
     const row = item as Record<string, unknown>;
     const tierId = typeof row.tierId === 'string' ? row.tierId : row.tier_id;
+    const codeId = typeof row.accessCodeId === 'string' ? row.accessCodeId : typeof row.access_code_id === 'string' ? row.access_code_id : null;
     return typeof tierId === 'string' && typeof row.quantity === 'number' && row.quantity > 0
-      ? [{ tierId, quantity: row.quantity }]
+      ? [{ tierId, quantity: row.quantity, accessCodeId: codeId }]
       : [];
   });
 }

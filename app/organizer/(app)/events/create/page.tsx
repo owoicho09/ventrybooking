@@ -16,11 +16,12 @@ import { RefundPolicyFields, type RefundPolicyDraft } from '@/components/organiz
 import { parseRefundPolicy } from '@/lib/refundPolicy';
 import { EventPreview } from '@/components/events/EventPreview';
 import { GoLiveField } from '@/components/organizer/GoLiveField';
-import { fromLagosInput, isScheduled, fmtGoLive } from '@/lib/goLive';
+import { fromLagosInput } from '@/lib/goLive';
+import { TierGateFields, EMPTY_GATES, gatesPayload, gatesDraftProblem, type TierGateDraft } from '@/components/organizer/TierGateFields';
 import type { DetailEvent } from '@/components/events/EventDetailContent';
 import type { EventCategory } from '@/types';
 
-interface Tier { id: string; name: string; price: string; quantity: string; description?: string; }
+interface Tier { id: string; name: string; price: string; quantity: string; description?: string; gates: TierGateDraft; }
 type LineupLiability = 'headliner' | 'guest' | 'surprise';
 interface LineupAct { id: string; name: string; role: string; liability: LineupLiability; photoFile?: File | null; photoPreview?: string; }
 
@@ -73,7 +74,7 @@ export default function CreateEventPage() {
   const [venueProof, setVenueProof] = useState<File | null>(null);
   const [venueContactName, setVenueContactName] = useState('');
   const [venueContactPhone, setVenueContactPhone] = useState('');
-  const [tiers, setTiers] = useState<Tier[]>([{ id: '1', name: 'Regular', price: '', quantity: '', description: '' }]);
+  const [tiers, setTiers] = useState<Tier[]>([{ id: '1', name: 'Regular', price: '', quantity: '', description: '', gates: EMPTY_GATES }]);
   const [accentColor, setAccentColor] = useState<string | null>(null);
   const [accentAutoDetected, setAccentAutoDetected] = useState(false);
   const [colorManuallySet, setColorManuallySet] = useState(false);
@@ -148,7 +149,7 @@ export default function CreateEventPage() {
     lineup: lineup
       .filter(a => a.name.trim() || a.liability === 'surprise')
       .map(a => ({ name: a.liability === 'surprise' ? '' : a.name, role: a.role, liability: a.liability, photoUrl: a.photoPreview ?? null })),
-    tiers: tiers.map((t, i) => ({ id: `preview-${i}`, name: t.name.trim() || `Tier ${i + 1}`, price: Number(t.price) || 0, description: t.description ?? null, available: Number(t.quantity) || 0, sold: 0 })),
+    tiers: tiers.map((t, i) => { const g = gatesPayload(t.gates); return { id: `preview-${i}`, name: t.name.trim() || `Tier ${i + 1}`, price: Number(t.price) || 0, description: t.description ?? null, available: Number(t.quantity) || 0, sold: 0, requiresCode: g.requiresCode, allowedEmailDomains: g.allowedEmailDomains.length ? g.allowedEmailDomains : null }; }),
     organizer: {
       id: me?.id ?? 'preview',
       name: me?.name ?? displayName,
@@ -165,9 +166,11 @@ export default function CreateEventPage() {
     },
   };
 
-  const addTier = () => setTiers(p => [...p, { id: Date.now().toString(), name: '', price: '', quantity: '' }]);
+  const addTier = () => setTiers(p => [...p, { id: Date.now().toString(), name: '', price: '', quantity: '', gates: EMPTY_GATES }]);
+  const updateTierGates = (id: string, gates: TierGateDraft) =>
+    setTiers(p => p.map(t => (t.id === id ? { ...t, gates } : t)));
   const removeTier = (id: string) => { if (tiers.length > 1) setTiers(p => p.filter(t => t.id !== id)); };
-  const updateTier = (id: string, field: keyof Tier, value: string) =>
+  const updateTier = (id: string, field: Exclude<keyof Tier, 'gates'>, value: string) =>
     setTiers(p => p.map(t => (t.id === id ? { ...t, [field]: value } : t)));
 
   const addAct = () => setLineup(p => [...p, { id: Date.now().toString(), name: '', role: '', liability: 'guest' }]);
@@ -187,9 +190,13 @@ export default function CreateEventPage() {
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     if (!policyCheck.ok) { toast(policyCheck.error, 'error'); return; }
-    if (!policyConfirmed) { toast('Confirm your refund policy before publishing', 'error'); return; }
-    if (!accuracyConfirmed) { toast('Confirm your event information is accurate before publishing', 'error'); return; }
+    if (!policyConfirmed) { toast('Confirm your refund policy before submitting', 'error'); return; }
+    if (!accuracyConfirmed) { toast('Confirm your event information is accurate before submitting', 'error'); return; }
     if (goLiveScheduled && !goLiveAt) { toast('Choose when your tickets go on sale', 'error'); return; }
+    for (const t of tiers) {
+      const gateProblem = gatesDraftProblem(t.gates, t.name.trim());
+      if (gateProblem) { toast(gateProblem, 'error'); return; }
+    }
     setLoading(true);
     try {
       const fd = new FormData();
@@ -214,7 +221,7 @@ export default function CreateEventPage() {
         fd.append('meetingLink', meetingLink);
         fd.append('meetingPasscode', meetingPasscode);
       }
-      fd.append('tiers', JSON.stringify(tiers.map(t => ({ name: t.name, price: t.price, quantity: t.quantity, description: t.description ?? null }))));
+      fd.append('tiers', JSON.stringify(tiers.map(t => ({ name: t.name, price: t.price, quantity: t.quantity, description: t.description ?? null, ...gatesPayload(t.gates) }))));
       if (accentColor) fd.append('accentColor', accentColor);
       fd.append('refundPolicy', JSON.stringify(policyCheck.value));
       fd.append('confirmAccurate', 'true');
@@ -260,14 +267,9 @@ export default function CreateEventPage() {
         toast(data.error || 'Failed to create event', 'error');
         return;
       }
-      const liveAt = data.data?.goesLiveAt;
-      toast(
-        liveAt && isScheduled(liveAt)
-          ? `Scheduled! Your event goes live ${fmtGoLive(liveAt)}. We'll email you when it's on sale.`
-          : 'Your event is live! You can start sharing it right away.',
-        'success',
-      );
-      router.push('/organizer/events');
+      toast('Submitted for review! We’ll email you as soon as your event is approved, usually within 24 hours.', 'success');
+      const newId = data.data?.eventId;
+      router.push(newId ? `/organizer/events/${newId}` : '/organizer/events');
     } catch {
       toast('Network error. Please try again.', 'error');
     } finally {
@@ -539,6 +541,10 @@ export default function CreateEventPage() {
                 <Input label="Quantity" type="number" value={tier.quantity} onChange={e => updateTier(tier.id, 'quantity', e.target.value)} placeholder="500" />
               </div>
                 <Textarea label="Tier Description" value={tier.description ?? ''} onChange={e => updateTier(tier.id, 'description', e.target.value)} placeholder="What does this ticket include?" rows={3} className="col-span-3" />
+                <div className="col-span-3">
+                  <TierGateFields value={tier.gates} onChange={g => updateTierGates(tier.id, g)}
+                    eventDomains={restrictedDomainsInput.split(',').map(d => d.trim()).filter(Boolean)} />
+                </div>
 
             </div>
           ))}
@@ -573,14 +579,17 @@ export default function CreateEventPage() {
         </div>
         <div>
           <p className="text-sm font-medium mb-1.5" style={{ color: 'var(--color-text)' }}>When do tickets go on sale?</p>
-          <GoLiveField scheduled={goLiveScheduled} onScheduledChange={setGoLiveScheduled} value={goLiveAt} onChange={setGoLiveAt} />
+          <GoLiveField scheduled={goLiveScheduled} onScheduledChange={setGoLiveScheduled} value={goLiveAt} onChange={setGoLiveAt}
+            nowLabel="As soon as it's approved" />
         </div>
-        <div className="rounded-lg px-4 py-3 flex items-start gap-3 text-sm" style={{ backgroundColor: '#10b98110', border: '1px solid #10b98130' }}>
-          <span className="flex-shrink-0 mt-0.5" style={{ color: 'var(--color-green)' }}>✓</span>
+        <div className="rounded-lg px-4 py-3 flex items-start gap-3 text-sm" style={{ backgroundColor: '#f59e0b10', border: '1px solid #f59e0b30' }}>
+          <span className="flex-shrink-0 mt-0.5" style={{ color: '#f59e0b' }}>ⓘ</span>
           <p style={{ color: 'var(--color-text-muted)' }}>
+            Every event is <strong style={{ color: 'var(--color-text)' }}>reviewed by our team</strong> before it goes public, usually within 24 hours.
             {goLiveScheduled
-              ? <>Your event goes live <strong style={{ color: 'var(--color-text)' }}>at the time you picked</strong>, no waiting on us. Our team reviews new events and may reach out if anything needs your attention.</>
-              : <>Your event goes <strong style={{ color: 'var(--color-text)' }}>live immediately</strong> after you submit — no waiting. Our team reviews new events shortly after publishing and may reach out if anything needs your attention.</>}
+              ? <> Once approved, tickets go on sale at the time you picked (or at approval, if that comes later).</>
+              : <> Tickets go on sale the moment it&apos;s approved.</>}
+            {' '}A venue proof helps us approve physical events faster.
           </p>
         </div>
         <label className="flex items-start gap-3 text-sm cursor-pointer" style={{ color: 'var(--color-text)' }}>
@@ -603,7 +612,7 @@ export default function CreateEventPage() {
           <Eye size={16} />Preview event page
         </Button>
         <Button type="submit" size="lg" fullWidth disabled={loading || !policyCheck.ok || !policyConfirmed || !accuracyConfirmed}>
-          {loading ? 'Publishing...' : goLiveScheduled ? 'Schedule Event' : 'Publish Event'}
+          {loading ? 'Submitting...' : 'Submit for Review'}
         </Button>
       </section>
       {previewing && <EventPreview event={previewEvent} onClose={() => setPreviewing(false)} />}

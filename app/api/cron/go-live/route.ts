@@ -3,8 +3,13 @@ import { getServerSupabase } from '@/lib/supabase/server';
 import { sendEventWentLiveEmail } from '@/lib/server/email';
 import { notify } from '@/lib/server/notify';
 import { fmtGoLive } from '@/lib/goLive';
+import { sendSubscriberTeasers } from '@/lib/server/eventTeasers';
 
-// Scheduled go-live: tells organisers their event just went on sale.
+// Scheduled go-live: tells organisers their event just went on sale, and
+// sends the Notify Me teaser to their subscribers (it can't go out at
+// approval for a scheduled event: the page is still hidden then).
+// Only approved events count: one still under review stays hidden past its
+// go-live time, and approval announces it instead.
 //
 // The event itself goes public on its own the moment goes_live_at passes
 // (every public query checks it), so this job is only the announcement.
@@ -27,7 +32,7 @@ export async function GET(req: NextRequest) {
 
   const { data: due, error } = await db
     .from('events')
-    .select('id, event_name, slug, goes_live_at, organizer:users!events_organizer_id_fkey(id, name, email)')
+    .select('id, event_name, slug, date, goes_live_at, organizer:users!events_organizer_id_fkey(id, name, email, handle)')
     .eq('status', 'approved')
     .not('goes_live_at', 'is', null)
     .lte('goes_live_at', now)
@@ -52,7 +57,7 @@ export async function GET(req: NextRequest) {
       .select('id');
     if (!claimed?.length) continue;
 
-    const org = (Array.isArray(e.organizer) ? e.organizer[0] : e.organizer) as { id: string; name: string; email: string } | null;
+    const org = (Array.isArray(e.organizer) ? e.organizer[0] : e.organizer) as { id: string; name: string; email: string; handle: string | null } | null;
     const liveAt = fmtGoLive(e.goes_live_at as string);
     if (org?.email && e.slug) {
       try {
@@ -68,6 +73,8 @@ export async function GET(req: NextRequest) {
         { notifType: 'event', title: 'Your event is live', body: `"${e.event_name}" is now on sale.`, link: '/organizer/events' },
       ).catch(err => console.error('cron go-live notify error', err));
     }
+    await sendSubscriberTeasers(db, org, { event_name: e.event_name, slug: e.slug, date: String(e.date) })
+      .catch(err => console.error('cron go-live teaser error', { eventId: e.id, err }));
   }
 
   return NextResponse.json({ success: true, due: due?.length ?? 0, sent });

@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from 'next/server';
 import { getServerSupabase } from '@/lib/supabase/server';
 import { hashPassword } from '@/lib/server/password';
 import { signAuthToken } from '@/lib/server/jwt';
+import { trustDevice } from '@/lib/server/trustedDevice';
 import { cookieOptions } from '@/lib/server/auth';
 import { createHash, randomInt } from 'crypto';
 import { sendOTPEmail } from '@/lib/server/email';
@@ -115,6 +116,8 @@ export async function POST(req: NextRequest) {
     const token = signAuthToken({ sub: user.id, role: 'organizer', email: user.email });
     const res = NextResponse.json({ success: true, data: { id: user.id, name: user.name, email: user.email } });
     res.cookies.set({ ...cookieOptions(7 * 24 * 60 * 60), value: token });
+    // The browser that created the account is trusted from the start (057).
+    await trustDevice(db, user.id, req, res);
     return res;
   } catch (err) {
     console.error('register error', err);

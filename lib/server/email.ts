@@ -322,6 +322,90 @@ export async function sendBankChangeOTPEmail(to: string, name: string, otp: stri
   });
 }
 
+/**
+ * Code that confirms an organiser settings change (055). `kind`:
+ *  - 'settings': sent to the account email before any settings change.
+ *  - 'new_email': sent to the address they want to switch to, proving they own it.
+ */
+export async function sendSettingsChangeCodeEmail(to: string, name: string, code: string, kind: 'settings' | 'new_email') {
+  await sendEmail({
+    to,
+    purpose: kind === 'settings' ? 'settings_change_code' : 'email_change_code',
+    subject: kind === 'settings' ? `Your Ventry code to change your settings: ${code}` : `Confirm your new Ventry email: ${code}`,
+    html: emailShell(`
+      <h1 style="color:#a855f7;font-size:22px;margin:0 0 12px;">${kind === 'settings' ? 'Confirm it&rsquo;s you' : 'Confirm your new email'}</h1>
+      <p style="color:#f1f0ff;margin:0 0 24px;">Hi ${esc(name)}, ${kind === 'settings'
+        ? 'enter this code to make changes to your Ventry organiser account settings:'
+        : 'enter this code to make this the email address for your Ventry organiser account:'}</p>
+      <div style="text-align:center;background:#12121a;border:1px solid #2d2d3d;border-radius:12px;padding:28px;margin-bottom:24px;">
+        <span style="font-size:40px;font-weight:700;letter-spacing:0.25em;color:#a855f7;font-family:monospace;">${code}</span>
+      </div>
+      <p style="color:#9ca3af;font-size:13px;margin:0;">Expires in <strong style="color:#f1f0ff;">10 minutes</strong>. If you didn&rsquo;t ask for this, don&rsquo;t share the code with anyone${kind === 'settings' ? ', change your password, and reply to this email straight away' : ''}.</p>
+    `),
+  });
+}
+
+/** Sign-in code for an organiser signing in on a device we don't know yet (057). */
+export async function sendLoginCodeEmail(to: string, name: string, code: string, device: string) {
+  await sendEmail({
+    to,
+    purpose: 'login_device_code',
+    subject: `Your Ventry sign-in code: ${code}`,
+    html: emailShell(`
+      <h1 style="color:#a855f7;font-size:22px;margin:0 0 12px;">Confirm it&rsquo;s you signing in</h1>
+      <p style="color:#f1f0ff;margin:0 0 24px;">Hi ${esc(name)}, someone with your password is signing in to your Ventry organiser account from a new device (<strong>${esc(device)}</strong>). If that&rsquo;s you, enter this code:</p>
+      <div style="text-align:center;background:#12121a;border:1px solid #2d2d3d;border-radius:12px;padding:28px;margin-bottom:24px;">
+        <span style="font-size:40px;font-weight:700;letter-spacing:0.25em;color:#a855f7;font-family:monospace;">${code}</span>
+      </div>
+      <p style="color:#9ca3af;font-size:13px;margin:0;">Expires in <strong style="color:#f1f0ff;">10 minutes</strong>. <strong style="color:#f1f0ff;">If this wasn&rsquo;t you</strong>, don&rsquo;t share the code: someone knows your password. Reset it from the sign-in page straight away.</p>
+    `),
+  });
+}
+
+/** Alert after a new device was confirmed and signed in (057). */
+export async function sendNewSignInAlertEmail(to: string, name: string, device: string, when: string) {
+  await sendEmail({
+    to,
+    purpose: 'login_new_device_alert',
+    subject: 'New sign-in to your Ventry account',
+    html: emailShell(`
+      <h1 style="color:#f59e0b;font-size:22px;margin:0 0 12px;">New sign-in</h1>
+      <p style="color:#f1f0ff;">Hi ${esc(name)}, your Ventry organiser account was just signed in on <strong>${esc(device)}</strong> (${esc(when)}).</p>
+      <p style="color:#f1f0ff;">If this was you, there&rsquo;s nothing to do. If it wasn&rsquo;t, reset your password now, remove the device under Settings &rarr; Signed-in devices, and reply to this email.</p>
+      <br/>
+      <a href="${APP_URL}/organizer/settings" class="btn">Review devices</a>
+    `),
+  });
+}
+
+/** Security notice to the OLD address after the account email changed. */
+export async function sendEmailChangedAlertEmail(oldEmail: string, name: string, newEmail: string) {
+  await sendEmail({
+    to: oldEmail,
+    purpose: 'email_changed_alert',
+    subject: 'Your Ventry account email was changed',
+    html: emailShell(`
+      <h1 style="color:#f59e0b;font-size:22px;margin:0 0 12px;">Your account email changed</h1>
+      <p style="color:#f1f0ff;">Hi ${esc(name)}, the email address on your Ventry organiser account was changed to <strong>${esc(newEmail)}</strong>. From now on, sign in and receive codes there.</p>
+      <p style="color:#f1f0ff;">If this wasn&rsquo;t you, reply to this email straight away so we can lock the account.</p>
+    `),
+  });
+}
+
+/** Security notice after the organiser's password changed. */
+export async function sendPasswordChangedEmail(to: string, name: string) {
+  await sendEmail({
+    to,
+    purpose: 'password_changed_alert',
+    subject: 'Your Ventry password was changed',
+    html: emailShell(`
+      <h1 style="color:#f59e0b;font-size:22px;margin:0 0 12px;">Password changed</h1>
+      <p style="color:#f1f0ff;">Hi ${esc(name)}, the password for your Ventry organiser account was just changed.</p>
+      <p style="color:#f1f0ff;">If this wasn&rsquo;t you, reset your password from the sign-in page and reply to this email straight away.</p>
+    `),
+  });
+}
+
 /** Security notice after the payout bank account changed. */
 export async function sendBankChangedEmail(to: string, name: string, bankName: string, last4: string) {
   await sendEmail({
@@ -439,15 +523,47 @@ export async function sendKYCRejectedEmail(to: string, name: string, reason: str
   });
 }
 
-export async function sendEventApprovedEmail(to: string, organizerName: string, eventName: string, eventSlug: string) {
+/**
+ * An admin approved the event. `scheduledLiveAt` (already formatted) is set
+ * when it was approved ahead of its scheduled go-live time: it stays hidden
+ * until then, and the go-live cron sends the "your event is live" email.
+ */
+export async function sendEventApprovedEmail(to: string, organizerName: string, eventName: string, eventSlug: string, scheduledLiveAt?: string | null) {
+  const eventUrl = `${APP_URL}/${eventSlug}`;
   await sendEmail({
     to,
-    subject: `Your event "${eventName}" is now live`,
-    html: emailShell(`
+    subject: scheduledLiveAt ? `"${eventName}" is approved` : `Your event "${eventName}" is now live`,
+    purpose: 'event-approved',
+    html: emailShell(scheduledLiveAt ? `
       <h1 style="color:#a855f7;font-size:22px;margin:0 0 12px;">Event Approved ✓</h1>
-      <p style="color:#f1f0ff;">Hi ${esc(organizerName)}, great news! <strong>&ldquo;${esc(eventName)}&rdquo;</strong> has been approved and is now live on Ventry.</p>
+      <p style="color:#f1f0ff;">Hi ${esc(organizerName)}, <strong>&ldquo;${esc(eventName)}&rdquo;</strong> has been approved.</p>
+      <p style="color:#f1f0ff;">Tickets go on sale <strong>${esc(scheduledLiveAt)}</strong>, as you scheduled. We&rsquo;ll email you the moment it&rsquo;s live.</p>
       <br/>
-      <a href="${APP_URL}/${eventSlug}" class="btn">View Your Event</a>
+      <a href="${APP_URL}/organizer/events" class="btn">Open Your Dashboard</a>
+    ` : `
+      <h1 style="color:#a855f7;font-size:22px;margin:0 0 12px;">Event Approved ✓</h1>
+      <p style="color:#f1f0ff;">Hi ${esc(organizerName)}, great news! <strong>&ldquo;${esc(eventName)}&rdquo;</strong> has been approved and is now live on Ventry. Tickets are on sale.</p>
+      <p style="color:#f1f0ff;">Share your link to start selling:</p>
+      <p style="color:#c4b5fd;word-break:break-all;">${eventUrl}</p>
+      <br/>
+      <a href="${eventUrl}" class="btn">View Your Event</a>
+    `),
+  });
+}
+
+/** Confirmation to the organiser that their event is waiting for review. */
+export async function sendEventSubmittedEmail(params: { to: string; organizerName: string; eventName: string; eventId: string; resubmitted?: boolean }) {
+  await sendEmail({
+    to: params.to,
+    subject: params.resubmitted ? `"${params.eventName}" was resubmitted for review` : `We're reviewing "${params.eventName}"`,
+    purpose: 'event-submitted',
+    html: emailShell(`
+      <h1 style="color:#a855f7;font-size:22px;margin:0 0 12px;">${params.resubmitted ? 'Resubmitted for review' : 'Your event is under review'}</h1>
+      <p style="color:#f1f0ff;">Hi ${esc(params.organizerName)}, thanks for listing <strong>&ldquo;${esc(params.eventName)}&rdquo;</strong> on Ventry.</p>
+      <p style="color:#f1f0ff;">Our team checks every event before it goes public. This usually takes less than 24 hours. We&rsquo;ll email you as soon as it&rsquo;s approved.</p>
+      <p style="color:#9ca3af;font-size:13px;">You can keep editing your event, add ticket tiers and set up staff IDs while you wait.</p>
+      <br/>
+      <a href="${APP_URL}/organizer/events/${params.eventId}" class="btn">View Your Event</a>
     `),
   });
 }
@@ -470,15 +586,18 @@ export async function sendEventWentLiveEmail(params: { to: string; organizerName
   });
 }
 
-export async function sendEventRejectedEmail(to: string, organizerName: string, eventName: string, reason: string) {
+export async function sendEventRejectedEmail(to: string, organizerName: string, eventName: string, reason: string, eventId?: string) {
   await sendEmail({
     to,
     subject: `Event Review: ${eventName}`,
+    purpose: 'event-rejected',
     html: emailShell(`
       <h1 style="color:#f87171;font-size:22px;margin:0 0 12px;">Event Review</h1>
       <p style="color:#f1f0ff;">Hi ${esc(organizerName)}, we could not approve <strong>&ldquo;${esc(eventName)}&rdquo;</strong> at this time.</p>
       <p style="color:#f1f0ff;"><strong>Reason:</strong> ${esc(reason)}</p>
-      <p style="color:#9ca3af;font-size:13px;">You may edit and resubmit the event from your dashboard.</p>
+      <p style="color:#9ca3af;font-size:13px;">Fix what&rsquo;s mentioned above, then tap &ldquo;Resubmit for review&rdquo; on your event page.</p>
+      <br/>
+      <a href="${APP_URL}/organizer/events${eventId ? `/${eventId}` : ''}" class="btn">Edit Your Event</a>
     `),
   });
 }
@@ -890,15 +1009,16 @@ export async function sendAdminNewEventEmail(params: {
   eventDate: string;
   city: string;
   eventId: string;
+  resubmitted?: boolean;
 }) {
   const adminEmail = process.env.ADMIN_EMAIL;
   if (!adminEmail) return;
   await sendEmail({
     to: adminEmail,
-    subject: `New event live: ${params.eventName}`,
+    subject: `${params.resubmitted ? 'Resubmitted' : 'New event'} to review: ${params.eventName}`,
     html: emailShell(`
-      <h1 style="color:#a855f7;font-size:22px;margin:0 0 12px;">New Event Live</h1>
-      <p style="color:#f1f0ff;margin:0 0 20px;"><strong>${esc(params.organizerName)}</strong> just published a new event — it's live and selling now.</p>
+      <h1 style="color:#a855f7;font-size:22px;margin:0 0 12px;">${params.resubmitted ? 'Event Resubmitted' : 'New Event to Review'}</h1>
+      <p style="color:#f1f0ff;margin:0 0 20px;"><strong>${esc(params.organizerName)}</strong> ${params.resubmitted ? 'fixed and resubmitted an event' : 'just listed a new event'}. It stays hidden until you approve it.</p>
       <table width="100%" cellpadding="0" cellspacing="0"
         style="background:#12121a;border:1px solid #2d2d3d;border-radius:8px;margin-bottom:24px;">
         <tr><td style="padding:20px;">

@@ -5,11 +5,14 @@ import { generateTicketId, generateRefundCode } from '@/lib/server/ids';
 import { sendTicketEmail } from '@/lib/server/email';
 import { notify } from '@/lib/server/notify';
 import { isEmailDomainAllowed } from '@/lib/server/domainRestriction';
+import { checkCartAccess } from '@/lib/server/tierAccess';
+import { getIp } from '@/lib/server/rateLimit';
 import { isCheckoutEmailVerified, EMAIL_NOT_VERIFIED_CODE } from '@/lib/server/checkoutEmailVerification';
 import { randomBytes } from 'crypto';
 import { recordCheckoutConsent } from '@/lib/server/marketingConsent';
 
-interface CartItem { tierId: string; quantity: number }
+// accessCode: the promo code for a code-gated tier (054), checked server-side.
+interface CartItem { tierId: string; quantity: number; accessCode?: string }
 
 export async function POST(req: NextRequest) {
   try {
@@ -84,7 +87,7 @@ export async function POST(req: NextRequest) {
 
     const { data: tiers } = await db
       .from('ticket_tiers')
-      .select('id, name, price, available, sold')
+      .select('id, name, price, available, sold, requires_code, allowed_email_domains')
       .in('id', cartItems.map(i => i.tierId))
       .eq('event_id', eventId)
       .eq('hidden', false);
@@ -103,6 +106,10 @@ export async function POST(req: NextRequest) {
         return NextResponse.json({ error: `Only ${remaining} of "${tier.name}" remaining` }, { status: 400 });
       }
     }
+
+    // Tier gates (promo code / tier email domains).
+    const access = await checkCartAccess(db, { eventId, email, ip: getIp(req.headers), items: cartItems, tierById });
+    if (!access.ok) return NextResponse.json({ error: access.error, code: access.code }, { status: access.status });
 
     const purchasedAt  = new Date().toISOString();
     const consent      = marketingConsent === true;
@@ -133,6 +140,7 @@ export async function POST(req: NextRequest) {
           id,
           event_id:           eventId,
           tier_id:            item.tierId,
+          access_code_id:     access.codeIdByTier.get(item.tierId) ?? null,
           organizer_id:       event.organizer_id,
           buyer_name:         buyerName?.trim() || email,
           buyer_email:        email,

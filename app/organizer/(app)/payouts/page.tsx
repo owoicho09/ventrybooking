@@ -12,6 +12,7 @@ import { EventPayoutList } from '@/components/payouts/EventPayoutList';
 import { WalletCard } from '@/components/payouts/WalletCard';
 import type { EventPayoutSummary } from '@/lib/server/eventPayouts';
 import type { Wallet as WalletData } from '@/lib/server/withdrawals';
+import { useSecureChange } from '@/components/organizer/SecureChange';
 
 interface Settlement {
   id: string; kind: 'daily' | 'legacy_escrow'; period_start: string; period_end: string;
@@ -86,6 +87,7 @@ export default function PayoutsPage() {
     }).catch(console.error);
   }, []);
 
+  const { secure, secureModal } = useSecureChange();
   const changingAccount = !!savedAccount?.accountNumber
     && (bank.accountNumber !== savedAccount.accountNumber || bank.bankName !== savedAccount.bankName);
 
@@ -101,7 +103,11 @@ export default function PayoutsPage() {
   const saveBank = async (e: React.FormEvent) => {
     e.preventDefault();
     setSaving(true); setBankMsg('');
-    const res = await fetch('/api/organizer/bank', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ ...bank, otp: changingAccount ? otp : undefined }) });
+    // Changing an existing account: password + bank code above (Terms 3.8).
+    // Adding the first one: the emailed settings code (055).
+    const doSave = (h: Record<string, string>) => fetch('/api/organizer/bank', { method: 'POST', headers: { ...h, 'Content-Type': 'application/json' }, body: JSON.stringify({ ...bank, otp: changingAccount ? otp : undefined }) });
+    const res = changingAccount ? await doSave({}) : await secure(doSave);
+    if (!res) { setSaving(false); return; }
     const d = await res.json();
     setBankMsg(d.success ? (d.data?.message ?? 'Bank details saved.') : (d.error ?? 'Failed to save bank details'));
     setSaving(false);
@@ -264,6 +270,7 @@ export default function PayoutsPage() {
           </form>
         )}
       </div>
+      {secureModal}
     </div>
   );
 }

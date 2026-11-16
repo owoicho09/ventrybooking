@@ -6,8 +6,9 @@ import { isUUID } from '@/lib/slug';
 import { ticketUrgency } from '@/lib/ticketUrgency';
 import { redactSurpriseNames } from '@/lib/server/lineup';
 import { readRefundPolicy } from '@/lib/refundPolicy';
+import { publicTierGates } from '@/lib/server/tierAccess';
 
-type RawTier = { id: string; name: string; price: number; available: number; sold: number ; description?: string | null };
+type RawTier = { id: string; name: string; price: number; available: number; sold: number ; description?: string | null; requires_code?: boolean | null; allowed_email_domains?: string[] | null };
 
 function computeBadge(tiers: RawTier[]) {
   if (!tiers?.length) return undefined;
@@ -39,7 +40,7 @@ export async function GET(
         id, slug, event_name, category, description, date, time, event_mode, venue, address, city, landmark, location_hidden, lga, address_reveal_at,
         status, total_sold, banner_color, banner_url, header_banner_url, accent_color, lineup, allowed_email_domains, verified, refund_policy,
         organizer:users!events_organizer_id_fkey(id, name, tier, verified, member_since, events_hosted, handle, socials, avatar_url, cover_image_url),
-        tiers:ticket_tiers(id, name, price, description, available, sold)
+        tiers:ticket_tiers(id, name, price, description, available, sold, requires_code, allowed_email_domains)
       `)
       // Tiers the organiser has withdrawn from sale are left off the page.
       .eq('tiers.hidden', false);
@@ -98,7 +99,8 @@ export async function GET(
       totalSold: data.total_sold,
       badge: computeBadge(tiers),
       organizer,
-      tiers,
+      // Gates only (requiresCode / allowedEmailDomains); codes never leave the server.
+      tiers: tiers.map(({ requires_code, allowed_email_domains, ...t }) => ({ ...t, ...publicTierGates({ requires_code, allowed_email_domains }) })),
     };
 
     return NextResponse.json(

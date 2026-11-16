@@ -1,11 +1,12 @@
 import { NextRequest, NextResponse } from 'next/server';
+import { publicTierGates } from '@/lib/server/tierAccess';
 import { onlyLive } from '@/lib/goLive';
 import { getServerSupabase } from '@/lib/supabase/server';
 import { addressHiddenNow } from '@/lib/addressReveal';
 import { getEventsHostedCounts } from '@/lib/server/eventsHosted';
 import { ticketUrgency } from '@/lib/ticketUrgency';
 
-type RawTier = { id: string; name: string; price: number; available: number; sold: number };
+type RawTier = { id: string; name: string; price: number; available: number; sold: number; requires_code?: boolean | null; allowed_email_domains?: string[] | null };
 
 function computeBadge(tiers: RawTier[], status: string) {
   // Sales urgency (few left / sold out) is meaningless once the event is
@@ -42,7 +43,7 @@ function shapeEvent(row: any) {
     totalSold: row.total_sold,
     badge: computeBadge(row.tiers ?? [], row.status),
     organizer: row.organizer,
-    tiers: row.tiers ?? [],
+    tiers: ((row.tiers ?? []) as RawTier[]).map(({ requires_code, allowed_email_domains, ...t }) => ({ ...t, ...publicTierGates({ requires_code, allowed_email_domains }) })),
   };
 }
 
@@ -50,7 +51,7 @@ const EVENT_SELECT = `
   id, slug, event_name, category, description, date, time, event_mode, venue, address, city, landmark, location_hidden, lga, address_reveal_at,
   status, total_sold, banner_color, banner_url, header_banner_url, goes_live_at,
   organizer:users!events_organizer_id_fkey(id, name, tier, verified, member_since, events_hosted, handle),
-  tiers:ticket_tiers(id, name, price, available, sold)
+  tiers:ticket_tiers(id, name, price, available, sold, requires_code, allowed_email_domains)
 `;
 
 export async function GET(req: NextRequest) {

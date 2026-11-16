@@ -1,8 +1,10 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { getAuthUser } from '@/lib/server/auth';
 import { getServerSupabase } from '@/lib/supabase/server';
-import { sendEventApprovedEmail, sendNewEventTeaserEmail } from '@/lib/server/email';
+import { sendEventApprovedEmail } from '@/lib/server/email';
 import { notify } from '@/lib/server/notify';
+import { sendSubscriberTeasers } from '@/lib/server/eventTeasers';
+import { isScheduled, fmtGoLive } from '@/lib/goLive';
 
 export async function POST(
   _req: NextRequest,
@@ -19,49 +21,60 @@ export async function POST(
 
     const { data: event } = await db
       .from('events')
-      .select('event_name, slug, date, organizer:users!events_organizer_id_fkey(id, name, email, handle)')
+      .select('event_name, slug, date, status, goes_live_at, organizer:users!events_organizer_id_fkey(id, name, email, handle)')
       .eq('id', id)
       .single();
 
     if (!event) return NextResponse.json({ error: 'Event not found' }, { status: 404 });
+    if (event.status !== 'under_review' && event.status !== 'rejected') {
+      return NextResponse.json({ error: 'Only events waiting for review (or rejected) can be approved' }, { status: 400 });
+    }
 
-    await db.from('events').update({ status: 'approved' }).eq('id', id);
+    // A scheduled event stays hidden until its go-live time; the go-live cron
+    // announces it then (live_notified_at null). Otherwise it is public now,
+    // so mark it announced here and the cron leaves it alone.
+    const scheduled = isScheduled(event.goes_live_at);
+    const now = new Date().toISOString();
+
+    // Conditional on the status we just read, so a double-click (or two
+    // admins at once) can't approve it twice and email everyone twice.
+    const { data: claimed, error: updErr } = await db
+      .from('events')
+      .update({
+        status: 'approved',
+        reviewed_at: now,
+        reviewed_by: user.email ?? null,
+        rejection_reason: null,
+        live_notified_at: scheduled ? null : now,
+      })
+      .eq('id', id)
+      .eq('status', event.status)
+      .select('id');
+    if (updErr) throw updErr;
+    if (!claimed?.length) return NextResponse.json({ error: 'This event was already reviewed' }, { status: 409 });
 
     const organizerRaw = Array.isArray(event.organizer) ? event.organizer[0] : event.organizer;
     const organizer = organizerRaw as { id: string; name: string; email: string; handle: string | null } | null;
-    if (organizer?.email) {
-      await sendEventApprovedEmail(organizer.email, organizer.name, event.event_name, event.slug).catch(console.error);
+    const liveAt = scheduled ? fmtGoLive(event.goes_live_at as string) : null;
+
+    if (organizer?.email && event.slug) {
+      await sendEventApprovedEmail(organizer.email, organizer.name, event.event_name, event.slug, liveAt).catch(console.error);
     }
     if (organizer?.id) {
       notify(
         { type: 'organizer', id: organizer.id },
-        { notifType: 'event', title: 'Event Approved', body: `"${event.event_name}" is now live and accepting ticket sales.`, link: `/organizer/events` },
+        {
+          notifType: 'event',
+          title: 'Event Approved',
+          body: liveAt
+            ? `"${event.event_name}" was approved and goes on sale ${liveAt}.`
+            : `"${event.event_name}" is now live and accepting ticket sales.`,
+          link: `/organizer/events/${id}`,
+        },
       ).catch(console.error);
     }
 
-    // Teaser to this organiser's Notify Me subscribers. Only meaningful once
-    // they have a handle (the storefront/subscribe flow requires one) — an
-    // organiser with no handle simply has no subscribers to notify.
-    if (organizer?.id && organizer.handle && event.slug) {
-      const { data: subscribers } = await db
-        .from('organizer_subscribers')
-        .select('email, unsubscribe_token')
-        .eq('organizer_id', organizer.id)
-        .is('unsubscribed_at', null);
-
-      const appUrl = process.env.NEXT_PUBLIC_APP_URL!;
-      for (const sub of subscribers ?? []) {
-        sendNewEventTeaserEmail({
-          to: sub.email,
-          organizerName: organizer.name,
-          organizerHandle: organizer.handle,
-          eventName: event.event_name,
-          eventDate: event.date,
-          eventUrl: `${appUrl}/${event.slug}`,
-          unsubscribeUrl: `${appUrl}/api/subscribers/unsubscribe?token=${sub.unsubscribe_token}`,
-        }).catch(err => console.error('sendNewEventTeaserEmail error', { to: sub.email, err }));
-      }
-    }
+    if (!scheduled) await sendSubscriberTeasers(db, organizer, event);
 
     return NextResponse.json({ success: true });
   } catch (err) {

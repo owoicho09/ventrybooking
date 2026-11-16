@@ -11,12 +11,13 @@ import { Table, Thead, Tbody, Th, Tr, Td } from '@/components/ui/Table';
 import { useToast } from '@/components/ui/Toast';
 import { formatShortDate, formatNGN } from '@/lib/utils';
 
-type Filter = 'all' | 'under_review' | 'approved' | 'cancelled';
+type Filter = 'all' | 'under_review' | 'approved' | 'rejected' | 'cancelled';
 
 const filters: { value: Filter; label: string }[] = [
   { value: 'all',          label: 'All' },
   { value: 'under_review', label: 'Under Review' },
   { value: 'approved',     label: 'Approved' },
+  { value: 'rejected',     label: 'Not Approved' },
   { value: 'cancelled',    label: 'Cancelled' },
 ];
 
@@ -26,6 +27,7 @@ const statusBadge = (status: string) => {
     case 'under_review': return <Badge variant="amber">Under Review</Badge>;
     case 'completed':    return <Badge variant="blue">Completed</Badge>;
     case 'cancelled':    return <Badge variant="red">Cancelled</Badge>;
+    case 'rejected':     return <Badge variant="red">Not Approved</Badge>;
     default:             return <Badge variant="gray">{status}</Badge>;
   }
 };
@@ -39,7 +41,11 @@ interface EventData {
   venue_contact_name?: string | null; venue_contact_phone?: string | null;
   meeting_link?: string | null; meeting_passcode?: string | null;
   description: string; status: string;
-  organizer: { name: string; tier?: string };
+  banner_url?: string | null;
+  submitted_at?: string | null; reviewed_at?: string | null; reviewed_by?: string | null;
+  rejection_reason?: string | null; goes_live_at?: string | null;
+  tiers?: { id: string; name: string; price: number; available: number }[];
+  organizer: { name: string; tier?: string; verified?: boolean };
 }
 
 interface CancelPreview {
@@ -59,7 +65,8 @@ type CancelStep = 'loading' | 'confirm' | 'processing' | 'result' | null;
 
 export default function AdminEventsPage() {
   const { toast } = useToast();
-  const [activeFilter, setActiveFilter] = useState<Filter>('all');
+  // Opens on the review queue: that's the job this page exists for.
+  const [activeFilter, setActiveFilter] = useState<Filter>('under_review');
   const [events, setEvents]             = useState<EventData[]>([]);
   const [loading, setLoading]           = useState(true);
   const [selectedEvent, setSelectedEvent] = useState<EventData | null>(null);
@@ -121,8 +128,11 @@ export default function AdminEventsPage() {
 
   const handleApprove = async (id: string) => {
     setActing(true);
-    await fetch(`/api/admin/events/${id}/approve`, { method: 'POST' });
+    const res = await fetch(`/api/admin/events/${id}/approve`, { method: 'POST' });
+    const data = await res.json().catch(() => ({}));
     setActing(false);
+    if (!res.ok) { toast(data.error || 'Failed to approve event', 'error'); return; }
+    toast('Event approved. The organiser has been emailed.', 'success');
     handleCloseDrawer();
     load();
   };
@@ -262,6 +272,38 @@ export default function AdminEventsPage() {
         {selectedEvent && (
           <div className="flex flex-col gap-5">
 
+            {/* Review context: how long it has waited, and what was asked for last time. */}
+            {(selectedEvent.status === 'under_review' || selectedEvent.status === 'rejected') && (
+              <div className="rounded-lg border p-3 text-sm flex flex-col gap-1"
+                style={{ backgroundColor: selectedEvent.status === 'rejected' ? '#ef444410' : '#f59e0b10', borderColor: selectedEvent.status === 'rejected' ? '#ef444440' : '#f59e0b40' }}>
+                {selectedEvent.submitted_at && (
+                  <span style={{ color: 'var(--color-text-muted)' }}>
+                    Submitted {new Date(selectedEvent.submitted_at).toLocaleString('en-NG', { timeZone: 'Africa/Lagos', dateStyle: 'medium', timeStyle: 'short' })}
+                  </span>
+                )}
+                {selectedEvent.goes_live_at && (
+                  <span style={{ color: 'var(--color-text-muted)' }}>
+                    Organiser scheduled sales for {new Date(selectedEvent.goes_live_at).toLocaleString('en-NG', { timeZone: 'Africa/Lagos', dateStyle: 'medium', timeStyle: 'short' })}
+                  </span>
+                )}
+                {selectedEvent.rejection_reason && (
+                  <span style={{ color: 'var(--color-text)' }}>
+                    <strong>{selectedEvent.status === 'rejected' ? 'Rejected:' : 'Last rejected for:'}</strong> {selectedEvent.rejection_reason}
+                    {selectedEvent.reviewed_by && <span style={{ color: 'var(--color-text-dim)' }}> ({selectedEvent.reviewed_by})</span>}
+                  </span>
+                )}
+                {selectedEvent.organizer.verified === false && (
+                  <span style={{ color: 'var(--color-text-muted)' }}>Organiser&apos;s identity is not verified yet.</span>
+                )}
+              </div>
+            )}
+
+            {selectedEvent.banner_url && (
+              // eslint-disable-next-line @next/next/no-img-element
+              <img src={selectedEvent.banner_url} alt="" className="w-full max-h-64 object-contain rounded-lg"
+                style={{ backgroundColor: 'var(--color-surface-2)' }} />
+            )}
+
             {/* Event detail fields */}
             <div className="flex flex-col gap-3 text-sm">
               {(selectedEvent.event_mode === 'online'
@@ -289,10 +331,22 @@ export default function AdminEventsPage() {
               ))}
             </div>
 
-            <div className="rounded-lg p-4 text-sm"
+            <div className="rounded-lg p-4 text-sm whitespace-pre-wrap"
               style={{ backgroundColor: 'var(--color-surface-2)', color: 'var(--color-text-muted)' }}>
               {selectedEvent.description}
             </div>
+
+            {selectedEvent.tiers && selectedEvent.tiers.length > 0 && (
+              <div className="flex flex-col gap-1.5 text-sm">
+                <p className="font-semibold" style={{ color: 'var(--color-text)' }}>Ticket tiers</p>
+                {selectedEvent.tiers.map(t => (
+                  <div key={t.id} className="flex justify-between gap-3">
+                    <span style={{ color: 'var(--color-text-muted)' }}>{t.name} &middot; {t.available.toLocaleString()} available</span>
+                    <span style={{ color: 'var(--color-text)' }}>{t.price === 0 ? 'Free' : formatNGN(t.price)}</span>
+                  </div>
+                ))}
+              </div>
+            )}
 
             {selectedEvent.event_mode === 'online' ? (
               <div className="rounded-lg border p-4"
@@ -457,14 +511,20 @@ export default function AdminEventsPage() {
             {/* ── Normal approve / reject / cancel actions ── */}
             {!rejecting && !cancelStep && (
               <div className="flex flex-col gap-3">
-                <div className="flex flex-col sm:flex-row gap-3">
-                  <Button variant="success" fullWidth disabled={acting} onClick={() => handleApprove(selectedEvent.id)}>
-                    <CheckCircle size={15} />Approve
-                  </Button>
-                  <Button variant="danger" fullWidth onClick={() => setRejecting(true)}>
-                    <XCircle size={15} />Reject
-                  </Button>
-                </div>
+                {(selectedEvent.status === 'under_review' || selectedEvent.status === 'rejected' || selectedEvent.status === 'approved') && (
+                  <div className="flex flex-col sm:flex-row gap-3">
+                    {(selectedEvent.status === 'under_review' || selectedEvent.status === 'rejected') && (
+                      <Button variant="success" fullWidth disabled={acting} onClick={() => handleApprove(selectedEvent.id)}>
+                        <CheckCircle size={15} />{selectedEvent.status === 'rejected' ? 'Approve anyway' : 'Approve'}
+                      </Button>
+                    )}
+                    {(selectedEvent.status === 'under_review' || selectedEvent.status === 'approved') && (
+                      <Button variant="danger" fullWidth onClick={() => setRejecting(true)}>
+                        <XCircle size={15} />{selectedEvent.status === 'approved' ? 'Unlist (no sales yet)' : 'Reject'}
+                      </Button>
+                    )}
+                  </div>
+                )}
 
                 {selectedEvent.status === 'approved' && (
                   <div className="pt-3 border-t" style={{ borderColor: 'var(--color-border)' }}>
@@ -482,7 +542,7 @@ export default function AdminEventsPage() {
             {rejecting && (
               <div className="flex flex-col gap-3">
                 <Textarea label="Rejection Reason" value={reason} onChange={(e) => setReason(e.target.value)}
-                  placeholder="Explain why this event is being rejected…" rows={3} />
+                  placeholder="Tell the organiser what to fix. They'll see this on their event page and can resubmit." rows={3} />
                 <div className="flex gap-3">
                   <Button variant="outline" fullWidth onClick={() => setRejecting(false)}>Cancel</Button>
                   <Button variant="danger" fullWidth disabled={!reason.trim() || acting}

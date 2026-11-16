@@ -4,6 +4,15 @@ import { getServerSupabase } from '@/lib/supabase/server';
 import { sendEventRejectedEmail } from '@/lib/server/email';
 import { notify } from '@/lib/server/notify';
 
+/**
+ * Rejects an event: it becomes 'rejected' (hidden, not on sale) with the
+ * reason kept on the row, so the organiser can fix it and resubmit from
+ * their event page. Nothing is deleted.
+ *
+ * Works on an event waiting for review, or on a live event that has not sold
+ * anything. A live event with tickets sold must go through "Cancel Event &
+ * Refund All Buyers" so buyers actually get their money back.
+ */
 export async function POST(
   req: NextRequest,
   { params }: { params: Promise<{ id: string }> }
@@ -15,24 +24,23 @@ export async function POST(
 
   try {
     const { id } = await params;
-    const { reason } = await req.json();
+    const body = await req.json().catch(() => ({})) as { reason?: string };
+    const reason = String(body.reason ?? '').trim().slice(0, 1000);
     if (!reason) return NextResponse.json({ error: 'Rejection reason required' }, { status: 400 });
 
     const db = getServerSupabase();
 
     const { data: event } = await db
       .from('events')
-      .select('event_name, organizer:users!events_organizer_id_fkey(id, name, email)')
+      .select('event_name, status, organizer:users!events_organizer_id_fkey(id, name, email)')
       .eq('id', id)
       .single();
 
     if (!event) return NextResponse.json({ error: 'Event not found' }, { status: 404 });
+    if (event.status !== 'under_review' && event.status !== 'approved') {
+      return NextResponse.json({ error: `A ${event.status.replace('_', ' ')} event can't be rejected` }, { status: 400 });
+    }
 
-    // Events now go live the instant they're created, so "reject" can no
-    // longer assume zero tickets exist the way it could when every event
-    // waited under_review first. Hard-deleting an event with real paid
-    // tickets would silently destroy them with no refund — use the Cancel
-    // Event flow for that instead, which refunds every buyer properly.
     const { count: soldCount } = await db
       .from('tickets')
       .select('id', { count: 'exact', head: true })
@@ -44,20 +52,30 @@ export async function POST(
       );
     }
 
-    // Delete the event — ticket_tiers cascade automatically. Safe now that
-    // we've confirmed no tickets exist for it.
-    const { error: deleteErr } = await db.from('events').delete().eq('id', id);
-    if (deleteErr) return NextResponse.json({ error: 'Failed to reject event' }, { status: 500 });
+    const { data: claimed, error: updErr } = await db
+      .from('events')
+      .update({
+        status: 'rejected',
+        rejection_reason: reason,
+        reviewed_at: new Date().toISOString(),
+        reviewed_by: user.email ?? null,
+      })
+      .eq('id', id)
+      .eq('status', event.status)
+      .select('id');
+    if (updErr) throw updErr;
+    if (!claimed?.length) return NextResponse.json({ error: 'This event was already reviewed' }, { status: 409 });
 
     const organizerRaw = Array.isArray(event.organizer) ? event.organizer[0] : event.organizer;
     const organizer = organizerRaw as { id: string; name: string; email: string } | null;
     if (organizer?.email) {
-      await sendEventRejectedEmail(organizer.email, organizer.name, event.event_name, reason).catch(console.error);
+      await sendEventRejectedEmail(organizer.email, organizer.name, event.event_name, reason, id).catch(console.error);
     }
     if (organizer?.id) {
       notify(
         { type: 'organizer', id: organizer.id },
-        { notifType: 'event', title: 'Event Not Approved', body: `"${event.event_name}" was not approved: ${reason}`, link: '/organizer/events' },
+        { notifType: 'event', title: 'Event Not Approved', body: `"${event.event_name}" was not approved: ${reason}`, link: `/organizer/events/${id}` },
+        { emailChannel: 'dedicated' },
       ).catch(console.error);
     }
 

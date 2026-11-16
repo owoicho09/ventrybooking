@@ -4,7 +4,7 @@ import '@/app/v2.css';
 import { useState, useEffect, useRef } from 'react';
 import { useRouter, useSearchParams } from 'next/navigation';
 import Link from 'next/link';
-import { ChevronLeft, MapPin, Share2, ShieldCheck, QrCode, Clock3, Info, Video } from 'lucide-react';
+import { ChevronLeft, MapPin, Share2, ShieldCheck, QrCode, Clock3, Info, Video, Lock, Mail, Check } from 'lucide-react';
 import { formatNGN } from '@/lib/utils';
 import {
   buyerTotalForItems, ticketPriceWithService, serviceFeePerTicket,
@@ -29,6 +29,9 @@ import { describeRefundPolicy, MINIMUM_STANDARDS } from '@/lib/refundPolicy';
 const BG_DARK  = '#09070F';
 const BG_LIGHT = '#F8F7FF';
 const VENTRY_PURPLE = '#7c3aed';
+
+/** Promo-code or tier-email-domain tier (054). */
+const isGated = (t: TicketTier) => !!t.requiresCode || !!t.allowedEmailDomains?.length;
 
 // Free tickets are capped at 2 per order to curb bulk claiming — paid tiers
 // keep the normal 10-per-tier cap.
@@ -66,6 +69,12 @@ export function EventDetailContent({ identifier, preview }: EventDetailContentPr
   const [selectedId, setSelectedId] = useState<string | null>(null);
   const [qty, setQty] = useState(1);
   const [feeOpenId, setFeeOpenId] = useState<string | null>(null);
+  // Gated tiers (054). unlocked: tierId -> the promo code that unlocked it.
+  const [unlocked, setUnlocked] = useState<Record<string, string>>({});
+  const [gateInfoId, setGateInfoId] = useState<string | null>(null);
+  const [codeDraft, setCodeDraft] = useState('');
+  const [codeErr, setCodeErr] = useState('');
+  const [unlocking, setUnlocking] = useState(false);
   const [orgReputation, setOrgReputation] = useState<{ avg: number | null; count: number } | null>(null);
   const [solidBar, setSolidBar] = useState(false);
   const refTracked = useRef(false);
@@ -79,10 +88,16 @@ export function EventDetailContent({ identifier, preview }: EventDetailContentPr
         if (!d.success) return;
         const ev = d.data as DetailEvent;
         setEvent(ev);
-        // Preselect the cheapest tier still on sale, one ticket.
-        const firstOnSale = [...ev.tiers].sort((a, b) => a.price - b.price).find(t => t.available - t.sold > 0);
+        // Preselect the cheapest open tier still on sale, one ticket. Gated
+        // tiers (promo code / email domain) are never preselected.
+        const firstOnSale = [...ev.tiers].sort((a, b) => a.price - b.price).find(t => t.available - t.sold > 0 && !isGated(t));
         setSelectedId(firstOnSale?.id ?? null);
         setQty(1);
+        // Codes this buyer already unlocked in this tab survive a reload / back.
+        try {
+          const saved = JSON.parse(sessionStorage.getItem(`ventry_codes_${ev.id}`) || '{}');
+          if (saved && typeof saved === 'object') setUnlocked(saved);
+        } catch { /* storage unavailable */ }
       })
       .catch(console.error)
       .finally(() => setLoading(false));
@@ -126,19 +141,46 @@ export function EventDetailContent({ identifier, preview }: EventDetailContentPr
     Math.max(0, Math.min(tier.price === 0 ? FREE_TIER_ORDER_CAP : PAID_TIER_ORDER_CAP, tier.available - tier.sold));
 
   // In preview the event arrives as a prop, so fall back to the cheapest tier on sale.
-  const defaultTierId = event ? [...event.tiers].sort((a, b) => a.price - b.price).find(t => t.available - t.sold > 0)?.id ?? null : null;
+  const defaultTierId = event ? [...event.tiers].sort((a, b) => a.price - b.price).find(t => t.available - t.sold > 0 && !isGated(t))?.id ?? null : null;
   const selectedTier = event?.tiers.find(t => t.id === (selectedId ?? (preview ? defaultTierId : null))) ?? null;
   const maxQty = selectedTier ? maxQtyForTier(selectedTier) : 0;
   const quantity = selectedTier ? Math.min(qty, maxQty) : 0;
-  const hasSelection = !!selectedTier && quantity > 0;
+  // A code tier can be selected (so the code box shows) but not bought until unlocked.
+  const needsCode = !!selectedTier?.requiresCode && !unlocked[selectedTier.id];
+  const hasSelection = !!selectedTier && quantity > 0 && !needsCode;
   // The exact helper checkout charges with — the total shown is the total debited.
   const totals = buyerTotalForItems(hasSelection ? [{ price: selectedTier!.price, quantity }] : []);
   const allFree = hasSelection && selectedTier!.price === 0;
 
   const selectTier = (tier: TicketTier) => {
     if (tier.available - tier.sold <= 0) return;
+    if (tier.id !== selectedId) { setCodeDraft(''); setCodeErr(''); }
     setSelectedId(tier.id);
     setQty(q => Math.max(1, Math.min(q, maxQtyForTier(tier))));
+  };
+
+  const unlockTier = async (tier: TicketTier) => {
+    const code = codeDraft.replace(/\s+/g, '').toUpperCase();
+    if (!code) { setCodeErr('Enter your code'); return; }
+    if (preview) { toast('Preview: buyers type their code here to unlock this ticket.', 'success'); return; }
+    if (!event) return;
+    setUnlocking(true); setCodeErr('');
+    try {
+      const res = await fetch(`/api/events/${event.id}/tiers/${tier.id}/unlock`, {
+        method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ code }),
+      });
+      const d = await res.json().catch(() => ({}));
+      if (!res.ok) { setCodeErr(d.error || 'That code didn\u2019t work'); return; }
+      const next = { ...unlocked, [tier.id]: d.data?.code || code };
+      setUnlocked(next);
+      try { sessionStorage.setItem(`ventry_codes_${event.id}`, JSON.stringify(next)); } catch { /* ignore */ }
+      setCodeDraft('');
+      toast(`Unlocked: ${tier.name}`, 'success');
+    } catch {
+      setCodeErr('Network error. Try again.');
+    } finally {
+      setUnlocking(false);
+    }
   };
 
   const handlePurchase = () => {
@@ -154,6 +196,8 @@ export function EventDetailContent({ identifier, preview }: EventDetailContentPr
         tierName:  selectedTier!.name,
         tierPrice: selectedTier!.price,
         quantity,
+        accessCode: unlocked[selectedTier!.id] || undefined,
+        allowedEmailDomains: selectedTier!.allowedEmailDomains ?? null,
       }],
       ref,
       allowedEmailDomains: event.allowedEmailDomains ?? null,
@@ -252,7 +296,8 @@ export function EventDetailContent({ identifier, preview }: EventDetailContentPr
   const banner = event.headerBannerUrl || null;
   // No flyer? Fall back to any other picture the organiser has given us.
   const flyer = event.banner_url || event.organizer?.cover_image_url || null;
-  const minOnSale = sortedTiers.find(t => t.available - t.sold > 0);
+  // Cheapest on-sale price to advertise: open tiers first, so a code-only tier doesn't set "From ₦X".
+  const minOnSale = sortedTiers.find(t => t.available - t.sold > 0 && !isGated(t)) ?? sortedTiers.find(t => t.available - t.sold > 0);
 
   const mapQuery = !isOnline
     ? locationHidden
@@ -299,7 +344,7 @@ export function EventDetailContent({ identifier, preview }: EventDetailContentPr
           return (
             <div
               key={tier.id}
-              className={`v-tier${on ? ' on' : ''}${out || isCompleted ? ' out' : ''}`}
+              className={`v-tier${on ? ' on' : ''}${out || isCompleted ? ' out' : ''}${isGated(tier) && !isCompleted ? ' gated' : ''}`}
               style={isCompleted && !out ? { opacity: .7 } : undefined}
             >
               <div
@@ -353,7 +398,46 @@ export function EventDetailContent({ identifier, preview }: EventDetailContentPr
                     : tier.price === 0 ? `Max ${FREE_TIER_ORDER_CAP} per order`
                     : 'On sale'}
                 </div>
+                {isGated(tier) && !isCompleted && (
+                  <div className="v-gate-row">
+                    {tier.requiresCode && (unlocked[tier.id]
+                      ? <span className="v-gate ok"><Check size={11} aria-hidden="true" />Unlocked</span>
+                      : <span className="v-gate"><Lock size={11} aria-hidden="true" />Promo code</span>)}
+                    {!!tier.allowedEmailDomains?.length && (
+                      <span className="v-gate"><Mail size={11} aria-hidden="true" />{tier.allowedEmailDomains.length === 1 ? `@${tier.allowedEmailDomains[0]} only` : 'Selected emails only'}</span>
+                    )}
+                    <button type="button" className="v-gate-i" aria-label={`Who can buy ${tier.name}?`} aria-expanded={gateInfoId === tier.id}
+                      onClick={e => { e.stopPropagation(); setGateInfoId(id => id === tier.id ? null : tier.id); }}
+                      onKeyDown={e => e.stopPropagation()}>
+                      <Info size={14} aria-hidden="true" />
+                    </button>
+                  </div>
+                )}
               </div>
+
+              {isGated(tier) && !isCompleted && gateInfoId === tier.id && (
+                <div className="v-gate-info">
+                  {tier.requiresCode && <p>You need a <b>promo code</b> from {orgName} to buy this ticket. Enter it below to unlock it.</p>}
+                  {!!tier.allowedEmailDomains?.length && (
+                    <p style={{ marginTop: tier.requiresCode ? 6 : 0 }}>
+                      Only for buyers with a {tier.allowedEmailDomains.map((d, i, arr) => <span key={d}><b>@{d}</b>{i < arr.length - 1 ? (i === arr.length - 2 ? ' or ' : ', ') : ''}</span>)} email address. You&apos;ll confirm your email at checkout.
+                    </p>
+                  )}
+                </div>
+              )}
+
+              {on && !out && tier.requiresCode && !unlocked[tier.id] && (
+                <div onClick={e => e.stopPropagation()}>
+                  <form className="v-code" onSubmit={e => { e.preventDefault(); unlockTier(tier); }}>
+                    <input value={codeDraft} maxLength={8} autoComplete="off" autoCapitalize="characters" spellCheck={false}
+                      placeholder="Enter promo code" aria-label={`Promo code for ${tier.name}`}
+                      onChange={e => { setCodeDraft(e.target.value.replace(/\s+/g, '').toUpperCase()); setCodeErr(''); }}
+                      onKeyDown={e => e.stopPropagation()} />
+                    <button type="submit" disabled={unlocking || !codeDraft}>{unlocking ? 'Checking...' : 'Unlock'}</button>
+                  </form>
+                  {codeErr && <p className="v-code-err" role="alert">{codeErr}</p>}
+                </div>
+              )}
 
               {tier.price > 0 && feeOpenId === tier.id && (() => {
                 const fee = serviceFeePerTicket(tier.price);
@@ -406,7 +490,7 @@ export function EventDetailContent({ identifier, preview }: EventDetailContentPr
           ))}
 
           <button type="button" className="v-btn v-btn-accent v-btn-block" style={{ marginTop: 14 }} disabled={!hasSelection} onClick={handlePurchase}>
-            {!minOnSale ? 'Sold out' : allFree ? 'Get free tickets' : 'Get tickets'}
+            {!minOnSale ? 'Sold out' : needsCode ? 'Enter your code to continue' : allFree ? 'Get free tickets' : 'Get tickets'}
           </button>
           <p className="v-nb">
             {allFree ? '' : 'The total above is exactly what leaves your account. Processing fees are not refundable. '}

@@ -730,6 +730,23 @@ html.light .v2 .v-ed-topbar.solid .v-icbtn { background: var(--surface); color: 
 .v-tier.out { opacity: .45; cursor: not-allowed; }
 .v-tier.out .v-tier-s { color: #F87171; }
 .v-tier.out:hover { border-color: var(--line); }
+/* Gated tiers (054): highlighted card with a side tab and a lock badge. */
+.v-tier.gated { position: relative; border-color: color-mix(in srgb, var(--accent) 55%, var(--line)); background: linear-gradient(90deg, color-mix(in srgb, var(--accent) 10%, transparent), transparent 60%); padding-left: 19px; overflow: hidden; }
+.v-tier.gated::before { content: ""; position: absolute; left: 0; top: 0; bottom: 0; width: 4px; background: var(--accent); }
+.v-tier.gated.on { background: var(--accent-soft); }
+.v-gate-row { display: flex; flex-wrap: wrap; gap: 6px; margin-top: 7px; align-items: center; }
+.v-gate { display: inline-flex; align-items: center; gap: 4px; font-size: 11px; font-weight: 700; letter-spacing: .02em; padding: 2px 8px; border-radius: 100px; background: color-mix(in srgb, var(--accent) 18%, transparent); color: var(--accent); }
+.v-gate.ok { background: color-mix(in srgb, #22C55E 18%, transparent); color: var(--green-lt); }
+.v-gate-i { display: inline-flex; align-items: center; background: none; border: 0; padding: 2px; color: var(--muted); cursor: pointer; }
+.v-gate-i:hover, .v-gate-i[aria-expanded="true"] { color: var(--accent); }
+.v-gate-info { margin-top: 8px; font-size: 12px; color: var(--muted); line-height: 1.45; background: var(--surface-2); border-radius: 9px; padding: 9px 11px; }
+.v-gate-info b { color: var(--head); }
+.v-code { margin-top: 10px; display: flex; gap: 8px; }
+.v-code input { flex: 1; min-width: 0; font: inherit; font-family: ui-monospace, SFMono-Regular, Menlo, monospace; letter-spacing: .12em; text-transform: uppercase; font-size: 14px; color: var(--head); background: var(--bg); border: 1px solid var(--line-hi); border-radius: 10px; padding: 9px 11px; outline: none; }
+.v-code input:focus { border-color: var(--accent); }
+.v-code button { font: inherit; font-weight: 700; font-size: 13px; border: 0; border-radius: 10px; padding: 0 14px; background: var(--accent); color: var(--accent-fg); cursor: pointer; white-space: nowrap; }
+.v-code button:disabled { opacity: .5; cursor: default; }
+.v-code-err { margin-top: 6px; font-size: 12px; color: #F87171; }
 .v-qty { display: flex; align-items: center; justify-content: space-between; padding: 12px 2px 14px; border-top: 1px solid var(--line); margin-top: 4px; gap: 10px; }
 .v-qty > span { font-size: 13.5px; color: var(--muted); }
 .v-qty-ctrl { display: flex; align-items: center; gap: 14px; }

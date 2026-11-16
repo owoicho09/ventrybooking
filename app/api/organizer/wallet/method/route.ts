@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { getAuthUser } from '@/lib/server/auth';
 import { getServerSupabase } from '@/lib/supabase/server';
+import { requireChangeGrant } from '@/lib/server/settingsChange';
 
 /**
  * Organiser picks how they're paid: 'bank' (each day's sales settled to their
@@ -13,11 +14,15 @@ export async function POST(req: NextRequest) {
   if (!user || user.role !== 'organizer') {
     return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
   }
+  const db = getServerSupabase();
+  // Every settings change needs a fresh emailed-code grant (055).
+  const denied = await requireChangeGrant(db, user.sub, req);
+  if (denied) return denied;
   const { method } = await req.json().catch(() => ({}));
   if (method !== 'bank' && method !== 'wallet') {
     return NextResponse.json({ error: 'Choose bank or wallet' }, { status: 400 });
   }
-  const { error } = await getServerSupabase().from('users').update({ payout_method: method }).eq('id', user.sub);
+  const { error } = await db.from('users').update({ payout_method: method }).eq('id', user.sub);
   if (error) {
     console.error('POST /api/organizer/wallet/method error', error.message);
     return NextResponse.json({ error: 'Could not save your choice' }, { status: 500 });

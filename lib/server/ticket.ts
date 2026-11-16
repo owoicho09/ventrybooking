@@ -9,6 +9,8 @@ import { recordAffiliateCommissionIfApplicable } from '@/lib/server/affiliateCom
 export interface CartItem {
   tierId: string;
   quantity: number;
+  /** Promo code the tier was unlocked with (054), for organiser reporting. */
+  accessCodeId?: string | null;
 }
 
 export interface PaymentData {
@@ -166,13 +168,13 @@ export async function createTicketFromClaimedPayment(p: PaymentData): Promise<st
   // pre-processing amount, with the very last ticket absorbing whatever
   // rounding remainder is left — same pattern the single-tier code used
   // within one tier, just generalized across tiers of differing price.
-  type TicketUnit = { tierId: string; tierName: string; subtotal: number; serviceFee: number };
+  type TicketUnit = { tierId: string; tierName: string; subtotal: number; serviceFee: number; accessCodeId: string | null };
   const units: TicketUnit[] = [];
   for (const item of items) {
     const tier = tierById.get(item.tierId)!;
     const serviceFee = serviceFeePerTicket(tier.price);
     for (let i = 0; i < item.quantity; i++) {
-      units.push({ tierId: item.tierId, tierName: tier.name, subtotal: tier.price, serviceFee });
+      units.push({ tierId: item.tierId, tierName: tier.name, subtotal: tier.price, serviceFee, accessCodeId: typeof item.accessCodeId === 'string' ? item.accessCodeId : null });
     }
   }
 
@@ -202,6 +204,7 @@ export async function createTicketFromClaimedPayment(p: PaymentData): Promise<st
       id:                  ticketIds[i],
       event_id:            p.eventId,
       tier_id:             unit.tierId,
+      access_code_id:      unit.accessCodeId,
       organizer_id:        eventRow.organizer_id,
       buyer_name:          p.buyerName || email,
       buyer_email:         email,

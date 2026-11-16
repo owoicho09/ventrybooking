@@ -134,7 +134,7 @@ export function createBuyerTools(ctx: BuyerToolContext): AgentTool[] {
     {
       name: 'get_event_details',
       kind: 'read',
-      description: 'Look up public details for an event by name: date, venue, city, lineup, email-domain restrictions, and whether it is sold out.',
+      description: 'Look up public details for an event by name: date, venue, city, lineup, email-domain restrictions, which ticket tiers need a promo code or a specific email domain (gatedTiers), and whether it is sold out. Promo codes come only from the organiser; never guess or invent one.',
       input_schema: {
         type: 'object',
         properties: { eventName: { type: 'string' } },
@@ -157,7 +157,7 @@ export function createBuyerTools(ctx: BuyerToolContext): AgentTool[] {
 
         const { data: tiers } = await db
           .from('ticket_tiers')
-          .select('available, sold')
+          .select('name, available, sold, requires_code, allowed_email_domains')
           .eq('event_id', event.id)
           .eq('hidden', false);
         const soldOut = (tiers ?? []).length > 0 && (tiers ?? []).every(t => t.sold >= t.available);
@@ -172,6 +172,12 @@ export function createBuyerTools(ctx: BuyerToolContext): AgentTool[] {
           lineup: event.lineup,
           allowedEmailDomains: event.allowed_email_domains,
           soldOut,
+          // Gated tiers: which ones need a promo code from the organiser or a
+          // specific email domain. The codes themselves are never available
+          // to the assistant; a buyer without one must ask the organiser.
+          gatedTiers: (tiers ?? [])
+            .filter(t => t.requires_code || (t.allowed_email_domains?.length ?? 0) > 0)
+            .map(t => ({ tier: t.name, needsPromoCode: !!t.requires_code, emailDomains: t.allowed_email_domains ?? null })),
         };
       },
     },

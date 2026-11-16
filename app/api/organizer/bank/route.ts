@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { getAuthUser } from '@/lib/server/auth';
 import { getServerSupabase } from '@/lib/supabase/server';
+import { requireChangeGrant } from '@/lib/server/settingsChange';
 import { voidAffiliateCommissionsForOrganizer } from '@/lib/server/affiliateCommission';
 import { getBankCode } from '@/lib/banks';
 import { resolveAccountName } from '@/lib/server/paystack';
@@ -39,6 +40,11 @@ export async function POST(req: NextRequest) {
     // from POST /api/organizer/bank/otp (Organiser Terms 3.8). Adding the
     // first account doesn't.
     const changing = !!me?.account_number && (me.account_number !== accountNumber || me.bank_name !== bankName);
+    if (!changing) {
+      // Adding the first account (or re-saving the same one): emailed-code grant (055).
+      const denied = await requireChangeGrant(db, user.sub, req);
+      if (denied) return denied;
+    }
     if (changing) {
       const code = String(otp ?? '').trim();
       const valid = !!code && !!me?.bank_change_otp && !!me?.bank_change_otp_expires_at

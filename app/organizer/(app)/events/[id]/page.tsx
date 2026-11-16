@@ -5,8 +5,11 @@ import { useParams, useRouter } from 'next/navigation';
 import Link from 'next/link';
 import {
   ArrowLeft, Download, Plus, Pencil, Check, X,
-  AlertTriangle, Ticket, Copy, Eye, EyeOff, Users, Upload,
+  AlertTriangle, Ticket, Copy, Eye, EyeOff, Users, Upload, Clock, RotateCcw, KeyRound, Mail,
 } from 'lucide-react';
+import { TierAccessPanel } from '@/components/organizer/TierAccessPanel';
+import { MonitorLinksPanel } from '@/components/organizer/MonitorLinksPanel';
+import { TierGateFields, EMPTY_GATES, gatesPayload, gatesDraftProblem, domainConflict, DomainConflictWarning, type TierGateDraft } from '@/components/organizer/TierGateFields';
 import { Badge } from '@/components/ui/Badge';
 import { Button } from '@/components/ui/Button';
 import { Input, Textarea } from '@/components/ui/Input';
@@ -26,7 +29,7 @@ import { EventQRCode } from '@/components/organizer/EventQRCode';
 import { GoLiveField } from '@/components/organizer/GoLiveField';
 import { isScheduled, fmtGoLive, toLagosInput, fromLagosInput } from '@/lib/goLive';
 
-interface Tier { id: string; name: string; price: number; available: number; sold: number; description?: string | null; }
+interface Tier { id: string; name: string; price: number; available: number; sold: number; description?: string | null; requires_code?: boolean | null; allowed_email_domains?: string[] | null; }
 interface Affiliate { id: string; name: string; code: string; link: string; clicks: number; buys: number; }
 type LineupLiability = 'headliner' | 'guest' | 'surprise';
 interface LineupAct { name: string; role: string; liability?: LineupLiability; photoUrl?: string | null; }
@@ -52,6 +55,7 @@ interface OrgEvent {
   refund_policy: RefundPolicyAnswers | null; refund_policy_set_at: string | null;
   verified: boolean; venue_proof_url: string | null; venue_contact_name: string | null; venue_contact_phone: string | null;
   lga: string | null; address_reveal_at: string | null; goes_live_at: string | null;
+  submitted_at: string | null; rejection_reason: string | null;
   organizer_id: string; tiers: Tier[];
 }
 
@@ -69,6 +73,17 @@ function TierProgress({ tier }: { tier: Tier }) {
           <span className="ml-2 text-xs" style={{ color: 'var(--color-text-dim)' }}>
             {tier.price === 0 ? 'Free' : formatNGN(tier.price)}
           </span>
+          {tier.requires_code && (
+            <span className="ml-2 inline-flex items-center gap-1 text-xs rounded px-1.5 py-0.5" style={{ backgroundColor: 'rgba(168,85,247,.12)', color: 'var(--color-purple-light)' }}>
+              <KeyRound size={11} />Promo code
+            </span>
+          )}
+          {!!tier.allowed_email_domains?.length && (
+            <span className="ml-2 inline-flex items-center gap-1 text-xs rounded px-1.5 py-0.5" style={{ backgroundColor: 'rgba(168,85,247,.12)', color: 'var(--color-purple-light)' }}
+              title={tier.allowed_email_domains.map(d => `@${d}`).join(', ')}>
+              <Mail size={11} />{tier.allowed_email_domains.length === 1 ? `@${tier.allowed_email_domains[0]} only` : `${tier.allowed_email_domains.length} email domains`}
+            </span>
+          )}
         </div>
         {isSoldOut
           ? <Badge variant="gray">Sold Out</Badge>
@@ -168,12 +183,15 @@ export default function OrganizerEventDetailPage() {
   const [goLiveScheduled, setGoLiveScheduled] = useState(false);
   const [goLiveAt, setGoLiveAt] = useState('');
   const [savingGoLive, setSavingGoLive] = useState(false);
+  const [resubmitting, setResubmitting] = useState(false);
   const [editingTierId, setEditingTierId] = useState<string | null>(null);
   const [addingTier, setAddingTier] = useState(false);
   const [newTierName, setNewTierName] = useState('');
   const [newTierPrice, setNewTierPrice] = useState('');
   const [newTierQty, setNewTierQty]   = useState('');
   const [newTierDesc, setNewTierDesc] = useState('');
+  const [newTierGates, setNewTierGates] = useState<TierGateDraft>(EMPTY_GATES);
+  const [accessTierId, setAccessTierId] = useState<string | null>(null);
   const [addingLoading, setAddingLoading] = useState(false);
   const [downloadLoading, setDownloadLoading] = useState(false);
   const [affiliates, setAffiliates] = useState<Affiliate[]>([]);
@@ -299,6 +317,8 @@ export default function OrganizerEventDetailPage() {
 
   const handleSaveGoLive = async () => {
     if (goLiveScheduled && !goLiveAt) { toast('Choose when your tickets go on sale', 'error'); return; }
+    // "Now" when nothing is scheduled is already the current state.
+    if (!goLiveScheduled && !isScheduled(event?.goes_live_at)) { toast('Saved', 'success'); return; }
     setSavingGoLive(true);
     try {
       const goesLiveAt = goLiveScheduled ? fromLagosInput(goLiveAt) : null;
@@ -309,12 +329,26 @@ export default function OrganizerEventDetailPage() {
       });
       const data = await res.json();
       if (!res.ok) { toast(data.error || 'Update failed', 'error'); return; }
+      const approved = event?.status === 'approved';
       toast(goesLiveAt && isScheduled(goesLiveAt)
-        ? `Scheduled: your event goes live ${fmtGoLive(goesLiveAt)}`
-        : 'Your event is live! Tickets are on sale now.', 'success');
+        ? (approved ? `Scheduled: your event goes live ${fmtGoLive(goesLiveAt)}` : `Saved: tickets go on sale ${fmtGoLive(goesLiveAt)} if your event is approved by then`)
+        : (approved ? 'Your event is live! Tickets are on sale now.' : 'Saved: tickets go on sale as soon as your event is approved'), 'success');
       load();
     } finally {
       setSavingGoLive(false);
+    }
+  };
+
+  const handleResubmit = async () => {
+    setResubmitting(true);
+    try {
+      const res = await fetch(`/api/organizer/events/${id}/resubmit`, { method: 'POST' });
+      const data = await res.json().catch(() => ({}));
+      if (!res.ok) { toast(data.error || 'Could not resubmit your event', 'error'); return; }
+      toast('Resubmitted. We’ll email you once it’s reviewed.', 'success');
+      load();
+    } finally {
+      setResubmitting(false);
     }
   };
 
@@ -370,7 +404,7 @@ export default function OrganizerEventDetailPage() {
     refundPolicy: draftPolicy.ok ? draftPolicy.value : event.refund_policy,
     allowedEmailDomains: restrictedDomainsInput.split(',').map(d => d.trim()).filter(Boolean),
     lineup: lineup.filter(a => a.name.trim() || a.liability === 'surprise').map(a => ({ name: a.name, role: a.role, liability: a.liability, photoUrl: a.photoUrl ?? null })),
-    tiers: event.tiers,
+    tiers: event.tiers.map(t => ({ ...t, requiresCode: !!t.requires_code, allowedEmailDomains: t.allowed_email_domains?.length ? t.allowed_email_domains : null })),
     organizer: {
       id: me?.id ?? event.organizer_id,
       name: me?.name ?? displayName,
@@ -507,20 +541,22 @@ export default function OrganizerEventDetailPage() {
 
   const handleAddTier = async () => {
     if (!newTierName || newTierQty === '') return;
+    const gateProblem = gatesDraftProblem(newTierGates, newTierName);
+    if (gateProblem) { toast(gateProblem, 'error'); return; }
     setAddingLoading(true);
     try {
       const res = await fetch(`/api/organizer/events/${id}/tiers`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ name: newTierName, price: newTierPrice || 0, quantity: newTierQty, description: newTierDesc }),
+        body: JSON.stringify({ name: newTierName, price: newTierPrice || 0, quantity: newTierQty, description: newTierDesc, ...gatesPayload(newTierGates) }),
       });
       const data = await res.json();
       if (!res.ok) { toast(data.error || 'Failed to add tier', 'error'); return; }
       toast('Tier added', 'success');
       setAddingTier(false);
       setNewTierName(''); setNewTierPrice(''); setNewTierQty('');
-    setNewTierDesc('');
-        setNewTierDesc('');
+      setNewTierDesc('');
+      setNewTierGates(EMPTY_GATES);
       load();
     } finally {
       setAddingLoading(false);
@@ -631,8 +667,69 @@ export default function OrganizerEventDetailPage() {
         </div>
       </div>
 
+      {/* Review gate (053): nothing is public until an admin approves it. */}
+      {event.status === 'under_review' && (
+        <div className="rounded-xl border p-5 flex items-start gap-3"
+          style={{ backgroundColor: '#f59e0b10', borderColor: '#f59e0b40' }}>
+          <Clock size={18} className="flex-shrink-0 mt-0.5" style={{ color: '#f59e0b' }} />
+          <div className="text-sm flex flex-col gap-1">
+            <p className="font-semibold" style={{ color: 'var(--color-text)' }}>Your event is being reviewed</p>
+            <p style={{ color: 'var(--color-text-muted)' }}>
+              Our team checks every event before it goes public. This usually takes less than 24 hours, and we&apos;ll email you as soon as it&apos;s approved.
+              Until then your event page is hidden and tickets aren&apos;t on sale.
+            </p>
+            <p style={{ color: 'var(--color-text-muted)' }}>
+              You can keep editing details, tiers and staff IDs while you wait.
+              {event.event_mode === 'physical' && !event.venue_proof_url && ' Uploading your venue proof below helps us approve it faster.'}
+            </p>
+          </div>
+        </div>
+      )}
+      {event.status === 'rejected' && (
+        <div className="rounded-xl border p-5 flex flex-col gap-3"
+          style={{ backgroundColor: '#ef444410', borderColor: '#ef444440' }}>
+          <div className="flex items-start gap-3">
+            <AlertTriangle size={18} className="flex-shrink-0 mt-0.5" style={{ color: '#ef4444' }} />
+            <div className="text-sm flex flex-col gap-1">
+              <p className="font-semibold" style={{ color: 'var(--color-text)' }}>Your event wasn&apos;t approved yet</p>
+              {event.rejection_reason && (
+                <p style={{ color: 'var(--color-text)' }}><strong>What we need:</strong> {event.rejection_reason}</p>
+              )}
+              <p style={{ color: 'var(--color-text-muted)' }}>Fix the details below, then resubmit it. It goes back into our review queue.</p>
+            </div>
+          </div>
+          <div>
+            <Button size="sm" onClick={handleResubmit} disabled={resubmitting}>
+              <RotateCcw size={13} />{resubmitting ? 'Resubmitting...' : 'Resubmit for review'}
+            </Button>
+          </div>
+        </div>
+      )}
+
       {/* Scheduled go-live: movable until the event is live; an event that's
-          live but hasn't sold anything yet can still be scheduled. */}
+          live but hasn't sold anything yet can still be scheduled. While it's
+          waiting for review the time can be set too: it goes on sale at
+          approval or at that time, whichever is later. */}
+      {(event.status === 'under_review' || event.status === 'rejected') && (
+        <div className="rounded-xl border p-5 flex flex-col gap-4"
+          style={{ backgroundColor: 'var(--color-surface)', borderColor: 'var(--color-border)' }}>
+          <div>
+            <h2 className="font-semibold" style={{ color: 'var(--color-text)' }}>When tickets go on sale</h2>
+            <p className="text-xs mt-0.5" style={{ color: 'var(--color-text-muted)' }}>
+              {isScheduled(event.goes_live_at)
+                ? <>Once approved, tickets go on sale at <strong style={{ color: 'var(--color-text)' }}>{fmtGoLive(event.goes_live_at as string)}</strong>. If approval comes after that, they go on sale the moment it&apos;s approved.</>
+                : 'Tickets go on sale the moment your event is approved. You can pick a later time instead.'}
+            </p>
+          </div>
+          <GoLiveField scheduled={goLiveScheduled} onScheduledChange={setGoLiveScheduled} value={goLiveAt} onChange={setGoLiveAt}
+            nowLabel="As soon as it's approved" />
+          <div>
+            <Button size="sm" onClick={handleSaveGoLive} disabled={savingGoLive}>
+              {savingGoLive ? 'Saving...' : 'Save'}
+            </Button>
+          </div>
+        </div>
+      )}
       {event.status === 'approved' && (isScheduled(event.goes_live_at) || !hasSales) && (
         <div className="rounded-xl border p-5 flex flex-col gap-4"
           style={{ backgroundColor: 'var(--color-surface)', borderColor: isScheduled(event.goes_live_at) ? '#f59e0b55' : 'var(--color-border)' }}>
@@ -694,13 +791,27 @@ export default function OrganizerEventDetailPage() {
             : (
               <div key={tier.id} className="flex flex-col gap-2">
                 <TierProgress tier={tier} />
-                <button
-                  className="self-start text-xs flex items-center gap-1"
-                  style={{ color: 'var(--color-text-dim)' }}
-                  onClick={() => setEditingTierId(tier.id)}
-                >
-                  <Pencil size={11} />Edit tier
-                </button>
+                <div className="flex items-center gap-4">
+                  <button
+                    className="text-xs flex items-center gap-1"
+                    style={{ color: 'var(--color-text-dim)' }}
+                    onClick={() => setEditingTierId(tier.id)}
+                  >
+                    <Pencil size={11} />Edit tier
+                  </button>
+                  <button
+                    className="text-xs flex items-center gap-1"
+                    style={{ color: accessTierId === tier.id ? 'var(--color-purple-light)' : 'var(--color-text-dim)' }}
+                    aria-expanded={accessTierId === tier.id}
+                    onClick={() => setAccessTierId(cur => (cur === tier.id ? null : tier.id))}
+                  >
+                    <KeyRound size={11} />Who can buy{tier.requires_code || tier.allowed_email_domains?.length ? ' (restricted)' : ''}
+                  </button>
+                </div>
+                {domainConflict(event.allowed_email_domains, tier.allowed_email_domains) && accessTierId !== tier.id && (
+                  <DomainConflictWarning eventDomains={event.allowed_email_domains ?? []} tierName={tier.name} />
+                )}
+                {accessTierId === tier.id && <TierAccessPanel eventId={event.id} tier={tier} onChanged={load} eventDomains={event.allowed_email_domains} />}
               </div>
             )
         ))}
@@ -714,11 +825,12 @@ export default function OrganizerEventDetailPage() {
               <Input label="Quantity" type="number" value={newTierQty} onChange={e => setNewTierQty(e.target.value)} placeholder="100" min="1" />
               <Textarea label="Tier description" value={newTierDesc} onChange={e => setNewTierDesc(e.target.value)} placeholder="What does this ticket include?" rows={3} className="col-span-3" />
             </div>
+            <TierGateFields value={newTierGates} onChange={setNewTierGates} eventDomains={event.allowed_email_domains ?? []} />
             <div className="flex gap-2">
               <Button size="sm" disabled={addingLoading || !newTierName || !newTierQty} onClick={handleAddTier}>
                 <Check size={13} />Add Tier
               </Button>
-              <Button size="sm" variant="outline" disabled={addingLoading} onClick={() => { setAddingTier(false); setNewTierName(''); setNewTierPrice(''); setNewTierQty(''); }}>
+              <Button size="sm" variant="outline" disabled={addingLoading} onClick={() => { setAddingTier(false); setNewTierName(''); setNewTierPrice(''); setNewTierQty(''); setNewTierGates(EMPTY_GATES); }}>
                 <X size={13} />Cancel
               </Button>
             </div>
@@ -1056,10 +1168,18 @@ export default function OrganizerEventDetailPage() {
         )}
       </div>
 
+      {/* Sponsor monitor links (056) */}
+      <MonitorLinksPanel eventId={event.id} />
+
       {/* QR code */}
       <div className="rounded-xl border p-5 flex flex-col gap-3"
         style={{ backgroundColor: 'var(--color-surface)', borderColor: 'var(--color-border)' }}>
         <h2 className="font-semibold" style={{ color: 'var(--color-text)' }}>Event QR Code</h2>
+        {(event.status === 'under_review' || event.status === 'rejected') && (
+          <p className="text-xs" style={{ color: 'var(--color-text-muted)' }}>
+            Your event page opens for the public once it&apos;s approved. Until then this link won&apos;t work for buyers.
+          </p>
+        )}
         <EventQRCode
           url={`${typeof window !== 'undefined' ? window.location.origin : ''}/${event.slug || `events/${event.id}`}`}
           eventName={event.event_name}

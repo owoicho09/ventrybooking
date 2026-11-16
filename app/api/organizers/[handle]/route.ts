@@ -1,11 +1,12 @@
 import { NextRequest, NextResponse } from 'next/server';
+import { publicTierGates } from '@/lib/server/tierAccess';
 import { onlyLive } from '@/lib/goLive';
 import { getServerSupabase } from '@/lib/supabase/server';
 import { addressHiddenNow } from '@/lib/addressReveal';
 import { getEventsHostedCounts } from '@/lib/server/eventsHosted';
 import { ticketUrgency } from '@/lib/ticketUrgency';
 
-type RawTier = { id: string; name: string; price: number; available: number; sold: number };
+type RawTier = { id: string; name: string; price: number; available: number; sold: number; requires_code?: boolean | null; allowed_email_domains?: string[] | null };
 
 function computeBadge(tiers: RawTier[]) {
   if (!tiers?.length) return undefined;
@@ -41,14 +42,14 @@ function shapeEvent(row: any, organizer: unknown) {
     totalSold: row.total_sold,
     badge: computeBadge(row.tiers ?? []),
     organizer,
-    tiers: row.tiers ?? [],
+    tiers: ((row.tiers ?? []) as RawTier[]).map(({ requires_code, allowed_email_domains, ...t }) => ({ ...t, ...publicTierGates({ requires_code, allowed_email_domains }) })),
   };
 }
 
 const EVENT_SELECT = `
   id, slug, event_name, category, description, date, time, event_mode, venue, address, city, landmark, location_hidden, lga, address_reveal_at,
   status, total_sold, banner_color, banner_url, header_banner_url, verified, goes_live_at,
-  tiers:ticket_tiers(id, name, price, available, sold)
+  tiers:ticket_tiers(id, name, price, available, sold, requires_code, allowed_email_domains)
 `;
 
 function calcStats(rows: { rating: number }[] | null): { avg: number | null; count: number } {

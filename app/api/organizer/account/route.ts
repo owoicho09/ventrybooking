@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { getAuthUser } from '@/lib/server/auth';
 import { getServerSupabase } from '@/lib/supabase/server';
+import { requireChangeGrant } from '@/lib/server/settingsChange';
 import { verifyPassword } from '@/lib/server/password';
 
 export async function DELETE(req: NextRequest) {
@@ -10,12 +11,15 @@ export async function DELETE(req: NextRequest) {
   }
 
   try {
+    const db = getServerSupabase();
+    // Every settings change needs a fresh emailed-code grant (055).
+    const denied = await requireChangeGrant(db, user.sub, req);
+    if (denied) return denied;
+
     const { password } = await req.json() as { password?: string };
     if (!password) {
       return NextResponse.json({ error: 'Password is required to confirm deletion' }, { status: 400 });
     }
-
-    const db = getServerSupabase();
 
     const { data: userData } = await db
       .from('users')

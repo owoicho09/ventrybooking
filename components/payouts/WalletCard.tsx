@@ -5,6 +5,7 @@ import { ArrowUpRight, Clock, Landmark, WalletMinimal } from 'lucide-react';
 import { Button } from '@/components/ui/Button';
 import { formatNGN } from '@/lib/utils';
 import type { Wallet } from '@/lib/server/withdrawals';
+import { useSecureChange } from '@/components/organizer/SecureChange';
 
 const day = (d: string) => new Date(`${d.slice(0, 10)}T12:00:00Z`).toLocaleDateString('en-GB', { weekday: 'short', day: 'numeric', month: 'short', timeZone: 'UTC' });
 
@@ -18,15 +19,17 @@ export function WalletCard({ wallet, onRequested }: { wallet: Wallet; onRequeste
   const [busy, setBusy] = useState(false);
   const [msg, setMsg] = useState<{ ok: boolean; text: string } | null>(null);
   const [savingMethod, setSavingMethod] = useState(false);
+  const { secure, secureModal } = useSecureChange();
   const isWallet = wallet.payoutMethod === 'wallet';
 
   const chooseMethod = async (method: 'bank' | 'wallet') => {
     if (savingMethod || method === wallet.payoutMethod) return;
     setSavingMethod(true); setMsg(null);
     try {
-      const res = await fetch('/api/organizer/wallet/method', {
-        method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ method }),
-      });
+      const res = await secure(h => fetch('/api/organizer/wallet/method', {
+        method: 'POST', headers: { ...h, 'Content-Type': 'application/json' }, body: JSON.stringify({ method }),
+      }));
+      if (!res) return;
       const d = await res.json().catch(() => null);
       if (!res.ok || !d?.success) setMsg({ ok: false, text: d?.error ?? 'Could not save your choice.' });
       else {
@@ -120,6 +123,7 @@ export function WalletCard({ wallet, onRequested }: { wallet: Wallet; onRequeste
           ? <>Your sales stay in your wallet until you withdraw. Each day&apos;s sales become available to withdraw the next working day, after Ventry&apos;s 3% fee. Tap Withdraw and Ventry pays the full balance to your bank account, usually the same working day.</>
           : <>You don&apos;t need to do anything to get paid: each working day&apos;s sales are settled to your bank the next working day. Withdraw now is for when you&apos;d like what&apos;s available today without waiting for that run.</>}
       </p>
+      {secureModal}
     </div>
   );
 }

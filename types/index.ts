@@ -49,6 +49,10 @@ export interface TicketTier {
   description?: string | null;
   available: number;
   sold: number;
+  /** Code-gated tier (054): the buyer must enter a promo code to buy it. */
+  requiresCode?: boolean;
+  /** Tier-level email gate (054); null = any email. The event-wide gate is separate. */
+  allowedEmailDomains?: string[] | null;
 }
 
 export interface Event {

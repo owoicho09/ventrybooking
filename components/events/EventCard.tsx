@@ -37,8 +37,11 @@ export function EventCard({ event, variant = 'default' }: EventCardProps) {
   // the event page masthead only — and fall back to it purely so events
   // without a flyer show something real instead of the gradient placeholder.
   const cardImage = event.banner_url || event.headerBannerUrl || null;
-  const minPrice  = event.tiers.length ? Math.min(...event.tiers.map((t) => t.price)) : 0;
-  const freeTier  = minPrice === 0 ? (event.tiers.find(t => t.price === 0) ?? null) : null;
+  // Gated tiers (promo code / email domain) don't set the advertised price when an open tier exists.
+  const openTiers = event.tiers.filter(t => !t.requiresCode && !(t.allowedEmailDomains && t.allowedEmailDomains.length));
+  const priceTiers = openTiers.length ? openTiers : event.tiers;
+  const minPrice  = priceTiers.length ? Math.min(...priceTiers.map((t) => t.price)) : 0;
+  const freeTier  = minPrice === 0 ? (priceTiers.find(t => t.price === 0) ?? null) : null;
   const locationText = event.event_mode === 'online'
     ? 'Online Event'
     : event.location_hidden || event.locationHidden

@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { getAuthUser } from '@/lib/server/auth';
 import { getServerSupabase } from '@/lib/supabase/server';
+import { normalizeEmailDomains } from '@/lib/server/domainRestriction';
 
 export async function PATCH(
   req: NextRequest,
@@ -62,6 +63,21 @@ export async function PATCH(
       const raw = body.description == null ? '' : String(body.description);
       const trimmed = raw.trim().slice(0, 280);
       updates.description = trimmed.length ? trimmed : null;
+    }
+
+    // Tier gates (054). Turning the promo gate on is allowed with no codes yet
+    // (the page warns that nobody can buy until a code is added); turning it
+    // off makes the tier open to everyone again, codes are kept for later.
+    if (body.requires_code !== undefined) {
+      updates.requires_code = body.requires_code === true;
+    }
+    if (body.allowed_email_domains !== undefined) {
+      const raw = Array.isArray(body.allowed_email_domains) ? body.allowed_email_domains : [];
+      const domains = normalizeEmailDomains(raw);
+      if (raw.some((d: unknown) => String(d ?? '').trim()) && domains.length === 0) {
+        return NextResponse.json({ error: 'Enter email domains like company.com or unilag.edu.ng' }, { status: 400 });
+      }
+      updates.allowed_email_domains = domains.length ? domains : null;
     }
 
     if (Object.keys(updates).length === 0) {

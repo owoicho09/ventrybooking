@@ -2,12 +2,14 @@
 
 import { useState, useEffect } from 'react';
 import { useRouter } from 'next/navigation';
-import { Copy } from 'lucide-react';
+import Link from 'next/link';
+import { Copy, ShieldCheck } from 'lucide-react';
 import { Button } from '@/components/ui/Button';
 import { Input, Textarea } from '@/components/ui/Input';
 import { Modal } from '@/components/ui/Modal';
-import { NIGERIAN_BANKS } from '@/lib/banks';
 import type { Socials } from '@/components/organizer/SocialLinks';
+import { useSecureChange } from '@/components/organizer/SecureChange';
+import { TrustedDevicesPanel } from '@/components/organizer/TrustedDevicesPanel';
 
 function Toggle({ checked, onChange }: { checked: boolean; onChange: () => void }) {
   return (
@@ -37,13 +39,21 @@ export default function OrganizerSettingsPage() {
   const [coverUploading, setCoverUploading]     = useState(false);
   const [shareCopied, setShareCopied]           = useState(false);
   const [profileSaving, setProfileSaving] = useState(false);
-  const [bankSaving, setBankSaving]   = useState(false);
   const [pwSaving, setPwSaving]       = useState(false);
   const [profileMsg, setProfileMsg]   = useState('');
-  const [bankMsg, setBankMsg]         = useState('');
+  const [notifSaving, setNotifSaving] = useState(false);
+  const [notifMsg, setNotifMsg]       = useState('');
   const [pwMsg, setPwMsg]             = useState('');
   const [pw, setPw]                   = useState({ current: '', newPw: '', confirm: '' });
-  const [editingBank, setEditingBank] = useState(false);
+  // Email change (055): confirm current inbox (grant), then a code to the new one.
+  const [emailEditing, setEmailEditing] = useState(false);
+  const [newEmail, setNewEmail]         = useState('');
+  const [emailCodeSentTo, setEmailCodeSentTo] = useState<string | null>(null);
+  const [emailCode, setEmailCode]       = useState('');
+  const [emailBusy, setEmailBusy]       = useState(false);
+  const [emailMsg, setEmailMsg]         = useState<{ ok: boolean; text: string } | null>(null);
+  const { secure, secureModal } = useSecureChange();
+  const json = (headers: Record<string, string>) => ({ ...headers, 'Content-Type': 'application/json' });
   const [deleteOpen,     setDeleteOpen]     = useState(false);
   const [deletePassword, setDeletePassword] = useState('');
   const [deleteError,    setDeleteError]    = useState('');
@@ -59,39 +69,77 @@ export default function OrganizerSettingsPage() {
   const saveProfile = async (e: React.FormEvent) => {
     e.preventDefault();
     setProfileSaving(true); setProfileMsg('');
-    const res = await fetch('/api/organizer/settings', {
-      method: 'PATCH',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ name: me.name, phone: me.phone, bio: me.bio, email_notifications: me.email_notifications, sms_alerts: me.sms_alerts }),
-    });
-    const d = await res.json();
-    setProfileMsg(d.success ? 'Profile saved.' : (d.error ?? 'Failed to save profile'));
-    setProfileSaving(false);
+    try {
+      const res = await secure(h => fetch('/api/organizer/settings', {
+        method: 'PATCH',
+        headers: json(h),
+        body: JSON.stringify({ name: me.name, phone: me.phone, bio: me.bio }),
+      }));
+      if (!res) return;
+      const d = await res.json();
+      setProfileMsg(d.success ? 'Profile saved.' : (d.error ?? 'Failed to save profile'));
+    } finally { setProfileSaving(false); }
+  };
+
+  const sendNewEmailCode = async () => {
+    setEmailBusy(true); setEmailMsg(null);
+    try {
+      const res = await secure(h => fetch('/api/organizer/settings/email', {
+        method: 'POST', headers: json(h), body: JSON.stringify({ newEmail }),
+      }));
+      if (!res) return;
+      const d = await res.json().catch(() => ({}));
+      if (!res.ok) { setEmailMsg({ ok: false, text: d.error ?? 'Could not send the code' }); return; }
+      setEmailCodeSentTo(d.data.sentTo);
+      setEmailCode('');
+    } finally { setEmailBusy(false); }
+  };
+
+  const confirmNewEmail = async () => {
+    setEmailBusy(true); setEmailMsg(null);
+    try {
+      const res = await secure(h => fetch('/api/organizer/settings/email/confirm', {
+        method: 'POST', headers: json(h), body: JSON.stringify({ code: emailCode }),
+      }));
+      if (!res) return;
+      const d = await res.json().catch(() => ({}));
+      if (!res.ok) { setEmailMsg({ ok: false, text: d.error ?? 'Could not change your email' }); return; }
+      setMe(p => ({ ...p, email: d.data.email }));
+      setEmailEditing(false); setNewEmail(''); setEmailCodeSentTo(null); setEmailCode('');
+      setEmailMsg({ ok: true, text: `Email changed. Sign in with ${d.data.email} from now on.` });
+    } finally { setEmailBusy(false); }
+  };
+
+  const cancelEmailChange = () => {
+    setEmailEditing(false); setNewEmail(''); setEmailCodeSentTo(null); setEmailCode(''); setEmailMsg(null);
   };
 
   const saveStorefront = async (e: React.FormEvent) => {
     e.preventDefault();
     setStorefrontSaving(true); setStorefrontMsg('');
-    const res = await fetch('/api/organizer/settings', {
-      method: 'PATCH',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ handle: me.handle, socials: me.socials || {} }),
-    });
-    const d = await res.json();
-    setStorefrontMsg(d.success ? 'Storefront saved.' : (d.error ?? 'Failed to save'));
-    setStorefrontSaving(false);
-    if (d.success && me.handle) setMe(p => ({ ...p, handle: d.data?.handle ?? p.handle }));
+    try {
+      const res = await secure(h => fetch('/api/organizer/settings', {
+        method: 'PATCH',
+        headers: json(h),
+        body: JSON.stringify({ handle: me.handle, socials: me.socials || {} }),
+      }));
+      if (!res) return;
+      const d = await res.json();
+      setStorefrontMsg(d.success ? 'Storefront saved.' : (d.error ?? 'Failed to save'));
+      if (d.success && me.handle) setMe(p => ({ ...p, handle: d.data?.handle ?? p.handle }));
+    } finally { setStorefrontSaving(false); }
   };
 
   const handleAvatarChange = async (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0];
     if (!file) return;
+    e.target.value = '';
     setAvatarUploading(true);
     const fd = new FormData();
     fd.append('avatar', file);
-    const res = await fetch('/api/organizer/avatar', { method: 'POST', body: fd });
+    const res = await secure(h => fetch('/api/organizer/avatar', { method: 'POST', headers: h, body: fd })).finally(() => setAvatarUploading(false));
+    if (!res) return;
     const d = await res.json();
-    setAvatarUploading(false);
     if (!res.ok) { setStorefrontMsg(d.error || 'Avatar upload failed'); return; }
     setMe(p => ({ ...p, avatar_url: d.data.avatarUrl }));
   };
@@ -99,12 +147,13 @@ export default function OrganizerSettingsPage() {
   const handleCoverChange = async (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0];
     if (!file) return;
+    e.target.value = '';
     setCoverUploading(true);
     const fd = new FormData();
     fd.append('cover', file);
-    const res = await fetch('/api/organizer/cover', { method: 'POST', body: fd });
+    const res = await secure(h => fetch('/api/organizer/cover', { method: 'POST', headers: h, body: fd })).finally(() => setCoverUploading(false));
+    if (!res) return;
     const d = await res.json();
-    setCoverUploading(false);
     if (!res.ok) { setStorefrontMsg(d.error || 'Cover image upload failed'); return; }
     setMe(p => ({ ...p, cover_image_url: d.data.coverImageUrl }));
   };
@@ -128,39 +177,22 @@ export default function OrganizerSettingsPage() {
     }
   };
 
-  const saveBank = async (e: React.FormEvent) => {
-    e.preventDefault();
-    setBankSaving(true); setBankMsg('');
-    const res = await fetch('/api/organizer/bank', {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({
-        bankName: me.bank_name,
-        accountNumber: me.account_number,
-        accountName: me.account_name,
-        legalName: me.legal_name,
-      }),
-    });
-    const d = await res.json();
-    setBankMsg(d.success ? 'Bank details saved.' : (d.error ?? 'Failed to save bank details'));
-    setBankSaving(false);
-    if (d.success) setEditingBank(false);
-  };
-
   const changePassword = async (e: React.FormEvent) => {
     e.preventDefault();
     if (pw.newPw !== pw.confirm) { setPwMsg('New passwords do not match'); return; }
     if (pw.newPw.length < 8)    { setPwMsg('Password must be at least 8 characters'); return; }
     setPwSaving(true); setPwMsg('');
-    const res = await fetch('/api/auth/change-password', {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ currentPassword: pw.current, newPassword: pw.newPw }),
-    });
-    const d = await res.json();
-    setPwMsg(d.success ? 'Password changed successfully.' : (d.error ?? 'Failed to change password'));
-    setPwSaving(false);
-    if (d.success) setPw({ current: '', newPw: '', confirm: '' });
+    try {
+      const res = await secure(h => fetch('/api/auth/change-password', {
+        method: 'POST',
+        headers: json(h),
+        body: JSON.stringify({ currentPassword: pw.current, newPassword: pw.newPw }),
+      }));
+      if (!res) return;
+      const d = await res.json();
+      setPwMsg(d.success ? 'Password changed successfully.' : (d.error ?? 'Failed to change password'));
+      if (d.success) setPw({ current: '', newPw: '', confirm: '' });
+    } finally { setPwSaving(false); }
   };
 
   const set = (field: keyof Me) => (e: React.ChangeEvent<HTMLInputElement | HTMLTextAreaElement | HTMLSelectElement>) =>
@@ -172,6 +204,10 @@ export default function OrganizerSettingsPage() {
         style={{ color: 'var(--color-text)', fontFamily: 'var(--font-syne), sans-serif' }}>
         Settings
       </h1>
+      <p className="text-sm -mt-5 flex items-start gap-2" style={{ color: 'var(--color-text-muted)' }}>
+        <ShieldCheck size={16} className="flex-shrink-0 mt-0.5" style={{ color: 'var(--color-purple-light)' }} />
+        For your security, saving any change here asks for a code we email you. One code covers 10 minutes of changes.
+      </p>
 
       {/* Profile */}
       <section className="rounded-xl border p-6 flex flex-col gap-5"
@@ -184,7 +220,48 @@ export default function OrganizerSettingsPage() {
             onChange={set('name')}
             helper="What buyers see on your events, tickets and profile. Your legal name, used for verification and payouts, is under Bank Details below."
           />
-          <Input label="Email" type="email" value={me.email || ''} disabled />
+          <div className="flex flex-col gap-2">
+            <div className="flex items-end gap-2">
+              <div className="flex-1"><Input label="Email" type="email" value={me.email || ''} disabled /></div>
+              {!emailEditing && (
+                <Button type="button" variant="outline" onClick={() => { setEmailEditing(true); setEmailMsg(null); }}>Change</Button>
+              )}
+            </div>
+            {emailEditing && (
+              <div className="rounded-lg border p-4 flex flex-col gap-3" style={{ borderColor: 'var(--color-border)', backgroundColor: 'var(--color-surface-2)' }}>
+                {!emailCodeSentTo ? (
+                  <>
+                    <Input label="New email" type="email" value={newEmail} onChange={e => setNewEmail(e.target.value)} placeholder="you@newaddress.com" />
+                    <p className="text-xs" style={{ color: 'var(--color-text-dim)' }}>
+                      We&apos;ll confirm it&apos;s you with a code to your current email, then send a second code to the new one.
+                    </p>
+                    <div className="flex gap-2">
+                      <Button type="button" disabled={emailBusy || !newEmail.trim()} onClick={sendNewEmailCode}>{emailBusy ? 'Sending…' : 'Send code to new email'}</Button>
+                      <Button type="button" variant="outline" disabled={emailBusy} onClick={cancelEmailChange}>Cancel</Button>
+                    </div>
+                  </>
+                ) : (
+                  <>
+                    <p className="text-sm" style={{ color: 'var(--color-text-muted)' }}>
+                      Enter the 6-digit code we sent to <strong style={{ color: 'var(--color-text)' }}>{emailCodeSentTo}</strong>.
+                    </p>
+                    <input value={emailCode} onChange={e => setEmailCode(e.target.value.replace(/\D/g, '').slice(0, 6))}
+                      inputMode="numeric" autoComplete="one-time-code" placeholder="000000" aria-label="Code from your new email"
+                      className="w-full rounded-lg border px-3 py-2.5 text-center text-xl font-mono tracking-[0.4em] outline-none"
+                      style={{ backgroundColor: 'var(--color-surface)', borderColor: 'var(--color-border)', color: 'var(--color-text)' }} />
+                    <div className="flex gap-2 flex-wrap">
+                      <Button type="button" disabled={emailBusy || emailCode.length !== 6} onClick={confirmNewEmail}>{emailBusy ? 'Confirming…' : 'Confirm new email'}</Button>
+                      <Button type="button" variant="outline" disabled={emailBusy} onClick={sendNewEmailCode}>Resend</Button>
+                      <Button type="button" variant="outline" disabled={emailBusy} onClick={cancelEmailChange}>Cancel</Button>
+                    </div>
+                  </>
+                )}
+              </div>
+            )}
+            {emailMsg && (
+              <p className="text-xs" style={{ color: emailMsg.ok ? 'var(--color-green)' : 'var(--color-red)' }}>{emailMsg.text}</p>
+            )}
+          </div>
           <Input label="Phone Number" type="tel" value={me.phone || ''} onChange={set('phone')} />
           <Textarea label="Bio" value={me.bio || ''} onChange={set('bio')} placeholder="Tell attendees about yourself…" rows={3} />
           {profileMsg && (
@@ -267,83 +344,36 @@ export default function OrganizerSettingsPage() {
         </form>
       </section>
 
-      {/* Bank Details */}
+      {/* Bank Details: managed on the Payouts page, where account changes need
+          your password plus an emailed code (Organiser Terms 3.8). */}
       <section className="rounded-xl border p-6 flex flex-col gap-5"
         style={{ backgroundColor: 'var(--color-surface)', borderColor: 'var(--color-border)' }}>
         <div className="flex items-center justify-between">
           <h2 className="font-semibold" style={{ color: 'var(--color-text)' }}>Bank Details</h2>
-          <button onClick={() => setEditingBank(!editingBank)} className="text-sm font-medium"
-            style={{ color: 'var(--color-purple-light)' }}>
-            {editingBank ? 'Cancel' : 'Edit'}
-          </button>
+          <Link href="/organizer/payouts" className="text-sm font-medium" style={{ color: 'var(--color-purple-light)' }}>
+            {me.account_number ? 'Change on Payouts' : 'Add on Payouts'}
+          </Link>
         </div>
-        {!editingBank ? (
-          <div className="flex flex-col gap-3 text-sm">
-            <div className="flex justify-between">
-              <span style={{ color: 'var(--color-text-muted)' }}>Bank</span>
-              <span style={{ color: 'var(--color-text)' }}>{me.bank_name || '—'}</span>
-            </div>
-            <div className="flex justify-between">
-              <span style={{ color: 'var(--color-text-muted)' }}>Account</span>
-              <span className="font-mono" style={{ color: 'var(--color-text)' }}>
-                {me.account_number ? `****${me.account_number.slice(-4)}` : '—'}
-              </span>
-            </div>
-            <div className="flex justify-between">
-              <span style={{ color: 'var(--color-text-muted)' }}>Account Name</span>
-              <span style={{ color: 'var(--color-text)' }}>{me.account_name || '—'}</span>
-            </div>
-            <div className="flex justify-between">
-              <span style={{ color: 'var(--color-text-muted)' }}>Legal Name</span>
-              <span style={{ color: 'var(--color-text)' }}>{me.legal_name || '—'}</span>
-            </div>
+        <div className="flex flex-col gap-3 text-sm">
+          <div className="flex justify-between">
+            <span style={{ color: 'var(--color-text-muted)' }}>Bank</span>
+            <span style={{ color: 'var(--color-text)' }}>{me.bank_name || '—'}</span>
           </div>
-        ) : (
-          <form onSubmit={saveBank} className="flex flex-col gap-4">
-            {/* Bank selector — maps to the correct Paystack bank_code */}
-            <div className="flex flex-col gap-1.5">
-              <label className="text-sm font-medium" style={{ color: 'var(--color-text)' }}>Bank</label>
-              <select
-                value={me.bank_name || ''}
-                onChange={set('bank_name')}
-                required
-                className="w-full rounded-lg border px-3 py-2.5 text-sm outline-none focus:border-[var(--color-purple)]"
-                style={{ backgroundColor: 'var(--color-surface-2)', borderColor: 'var(--color-border)', color: 'var(--color-text)' }}
-              >
-                <option value="" disabled>Select your bank</option>
-                {NIGERIAN_BANKS.map(b => (
-                  <option key={b.code} value={b.name}>{b.name}</option>
-                ))}
-              </select>
-            </div>
-            <Input
-              label="Account Number"
-              value={me.account_number || ''}
-              onChange={set('account_number')}
-              placeholder="10-digit account number"
-              maxLength={10}
-            />
-            <Input
-              label="Account Name (as on bank account)"
-              value={me.account_name || ''}
-              onChange={set('account_name')}
-              placeholder="Exact name as registered with the bank"
-            />
-            <Input
-              label="Legal Name"
-              value={me.legal_name || ''}
-              onChange={set('legal_name')}
-              placeholder="Your legal name exactly as it appears on your bank account"
-              helper="This is never shown to buyers — your display name is what they see. It's used to match your settlement bank account."
-            />
-            {bankMsg && (
-              <p className="text-xs" style={{ color: bankMsg.includes('saved') ? 'var(--color-green)' : 'var(--color-red)' }}>
-                {bankMsg}
-              </p>
-            )}
-            <Button type="submit" disabled={bankSaving}>{bankSaving ? 'Saving…' : 'Save Bank Details'}</Button>
-          </form>
-        )}
+          <div className="flex justify-between">
+            <span style={{ color: 'var(--color-text-muted)' }}>Account</span>
+            <span className="font-mono" style={{ color: 'var(--color-text)' }}>
+              {me.account_number ? `****${me.account_number.slice(-4)}` : '—'}
+            </span>
+          </div>
+          <div className="flex justify-between">
+            <span style={{ color: 'var(--color-text-muted)' }}>Account Name</span>
+            <span style={{ color: 'var(--color-text)' }}>{me.account_name || '—'}</span>
+          </div>
+          <div className="flex justify-between">
+            <span style={{ color: 'var(--color-text-muted)' }}>Legal Name</span>
+            <span style={{ color: 'var(--color-text)' }}>{me.legal_name || '—'}</span>
+          </div>
+        </div>
       </section>
 
       {/* Notifications */}
@@ -362,21 +392,26 @@ export default function OrganizerSettingsPage() {
             <Toggle checked={!!me[field]} onChange={() => setMe(p => ({ ...p, [field]: !p[field] }))} />
           </div>
         ))}
+        {notifMsg && (
+          <p className="text-xs" style={{ color: notifMsg.includes('saved') ? 'var(--color-green)' : 'var(--color-red)' }}>{notifMsg}</p>
+        )}
         <Button
           onClick={async () => {
-            setProfileSaving(true); setProfileMsg('');
-            const res = await fetch('/api/organizer/settings', {
-              method: 'PATCH',
-              headers: { 'Content-Type': 'application/json' },
-              body: JSON.stringify({ name: me.name, phone: me.phone, bio: me.bio, email_notifications: me.email_notifications, sms_alerts: me.sms_alerts }),
-            });
-            const d = await res.json();
-            setProfileMsg(d.success ? 'Preferences saved.' : (d.error ?? 'Failed to save'));
-            setProfileSaving(false);
+            setNotifSaving(true); setNotifMsg('');
+            try {
+              const res = await secure(h => fetch('/api/organizer/settings', {
+                method: 'PATCH',
+                headers: json(h),
+                body: JSON.stringify({ email_notifications: me.email_notifications, sms_alerts: me.sms_alerts }),
+              }));
+              if (!res) return;
+              const d = await res.json();
+              setNotifMsg(d.success ? 'Preferences saved.' : (d.error ?? 'Failed to save'));
+            } finally { setNotifSaving(false); }
           }}
-          disabled={profileSaving}
+          disabled={notifSaving}
         >
-          Save Notification Preferences
+          {notifSaving ? 'Saving…' : 'Save Notification Preferences'}
         </Button>
       </section>
 
@@ -395,6 +430,9 @@ export default function OrganizerSettingsPage() {
           )}
           <Button type="submit" disabled={pwSaving}>{pwSaving ? 'Changing…' : 'Change Password'}</Button>
         </form>
+        <div className="pt-5 border-t" style={{ borderColor: 'var(--color-border)' }}>
+          <TrustedDevicesPanel secure={secure} />
+        </div>
       </section>
 
       {/* Danger zone */}
@@ -436,11 +474,12 @@ export default function OrganizerSettingsPage() {
                 setDeleting(true);
                 setDeleteError('');
                 try {
-                  const res = await fetch('/api/organizer/account', {
+                  const res = await secure(h => fetch('/api/organizer/account', {
                     method: 'DELETE',
-                    headers: { 'Content-Type': 'application/json' },
+                    headers: json(h),
                     body: JSON.stringify({ password: deletePassword }),
-                  });
+                  }));
+                  if (!res) { setDeleting(false); return; }
                   const data = await res.json();
                   if (!res.ok) {
                     setDeleteError(data.error ?? 'Failed to delete account');
@@ -462,6 +501,7 @@ export default function OrganizerSettingsPage() {
           </div>
         </div>
       </Modal>
+      {secureModal}
     </div>
   );
 }

@@ -4,10 +4,13 @@ import { getServerSupabase } from '@/lib/supabase/server';
 import { initializeFlutterwaveTransaction } from '@/lib/server/flutterwave';
 import { buyerTotalForItems } from '@/lib/server/fees';
 import { isEmailDomainAllowed } from '@/lib/server/domainRestriction';
+import { checkCartAccess } from '@/lib/server/tierAccess';
+import { getIp } from '@/lib/server/rateLimit';
 import { isCheckoutEmailVerified, EMAIL_NOT_VERIFIED_CODE } from '@/lib/server/checkoutEmailVerification';
 import { v4 as uuidv4 } from 'uuid';
 
-interface CartItem { tierId: string; quantity: number }
+// accessCode: the promo code for a code-gated tier (054), checked server-side.
+interface CartItem { tierId: string; quantity: number; accessCode?: string }
 
 export async function POST(req: NextRequest) {
   try {
@@ -67,7 +70,7 @@ export async function POST(req: NextRequest) {
     // so a single missing/foreign tier can't sneak a wrong price through.
     const { data: tiers } = await db
       .from('ticket_tiers')
-      .select('id, name, price, available, sold')
+      .select('id, name, price, available, sold, requires_code, allowed_email_domains')
       .in('id', cartItems.map(i => i.tierId))
       .eq('event_id', eventId)
       .eq('hidden', false);
@@ -83,6 +86,18 @@ export async function POST(req: NextRequest) {
         return NextResponse.json({ error: `Only ${remaining} of "${tier.name}" remaining` }, { status: 400 });
       }
     }
+
+    // Tier gates (promo code / tier email domains). Checked here, before any
+    // payment exists; once a buyer has paid, the ticket is always issued even
+    // if the organiser switches the code off in the meantime.
+    const access = await checkCartAccess(db, {
+      eventId,
+      email: String(buyerEmail).toLowerCase().trim(),
+      ip: getIp(req.headers),
+      items: cartItems,
+      tierById,
+    });
+    if (!access.ok) return NextResponse.json({ error: access.error, code: access.code }, { status: access.status });
 
     // A free tier can still ride along in an otherwise-paid cart — cap it
     // here too, cumulative with any free tickets already claimed for this
@@ -149,7 +164,7 @@ export async function POST(req: NextRequest) {
       callbackUrl: `${appUrl}/api/flutterwave/callback?ref=${reference}`,
       metadata: {
         eventId,
-        items: cartItems.map(i => ({ tierId: i.tierId, quantity: i.quantity })),
+        items: cartItems.map(i => ({ tierId: i.tierId, quantity: i.quantity, accessCodeId: access.codeIdByTier.get(i.tierId) })),
         buyerEmail,
         buyerName:        buyerName || '',
         marketingConsent: marketingConsent === true,
@@ -177,7 +192,7 @@ export async function POST(req: NextRequest) {
         event_id:          eventId,
         tier_id:           cartItems[0].tierId,
         quantity:          cartItems[0].quantity,
-        items:             cartItems.map(i => ({ tier_id: i.tierId, quantity: i.quantity })),
+        items:             cartItems.map(i => ({ tier_id: i.tierId, quantity: i.quantity, access_code_id: access.codeIdByTier.get(i.tierId) ?? null })),
         buyer_email:       buyerEmail,
         buyer_name:        buyerName || '',
         subtotal,

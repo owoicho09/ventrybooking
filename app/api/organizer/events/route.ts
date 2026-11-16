@@ -4,12 +4,13 @@ import { getAuthUser } from '@/lib/server/auth';
 import { getServerSupabase } from '@/lib/supabase/server';
 import { v4 as uuidv4 } from 'uuid';
 import { notify } from '@/lib/server/notify';
-import { sendAdminNewEventEmail } from '@/lib/server/email';
+import { sendAdminNewEventEmail, sendEventSubmittedEmail } from '@/lib/server/email';
 import { generateEventSlug } from '@/lib/server/slug';
 import { isValidAccentColor } from '@/lib/accentColors';
 import { PLATFORM_FEE_RATE } from '@/lib/fees';
 import { normalizeLineup } from '@/lib/server/lineup';
 import { normalizeEmailDomains } from '@/lib/server/domainRestriction';
+import { parseTierGates, type ParsedTierGates } from '@/lib/server/tierGatesInput';
 import { parseRefundPolicy } from '@/lib/refundPolicy';
 import { revealTimeProblem } from '@/lib/addressReveal';
 
@@ -72,7 +73,7 @@ export async function POST(req: NextRequest) {
     // Verify KYC approved
     // Listing needs a confirmed email. Identity verification is separate: an
     // unverified organiser can sell, with settlement capped (Organiser Terms 3.7).
-    const { data: org, error: orgError } = await db.from('users').select('email_verified, name').eq('id', organizerId).maybeSingle();
+    const { data: org, error: orgError } = await db.from('users').select('email_verified, name, email').eq('id', organizerId).maybeSingle();
     if (orgError) {
       console.error('POST /api/organizer/events kyc check db error:', orgError.message);
       return NextResponse.json({ error: orgError.message }, { status: 500 });
@@ -212,6 +213,23 @@ export async function POST(req: NextRequest) {
     }
 
     const tiers = tiersJson ? JSON.parse(tiersJson) : [];
+
+    // Tier gates (054) are validated before anything is written, so a bad
+    // code can't leave a half-created event behind.
+    const tierGates: ParsedTierGates[] = [];
+    {
+      const seen = new Set<string>();
+      for (const t of tiers as { name?: string }[]) {
+        const parsed = parseTierGates(t, String(t.name ?? 'this tier'));
+        if (!parsed.ok) return NextResponse.json({ error: parsed.error }, { status: 400 });
+        for (const c of parsed.value.codes) {
+          if (seen.has(c)) return NextResponse.json({ error: `The code ${c} is used on two tiers. Each code can unlock only one tier.` }, { status: 400 });
+          seen.add(c);
+        }
+        tierGates.push(parsed.value);
+      }
+    }
+
     const slug = await generateEventSlug(db, name);
 
     const { data: eventData, error: insertError } = await db.from('events').insert({
@@ -232,16 +250,13 @@ export async function POST(req: NextRequest) {
       meeting_link: eventMode === 'online' ? meetingLink : null,
       meeting_passcode: eventMode === 'online' && meetingPasscode ? meetingPasscode : null,
       organizer_id: organizerId,
-      // Live immediately — no pre-approval wait. Admin still gets notified
-      // below to review after the fact and can reject/cancel it if something's
-      // wrong; the "Ventry Verified Event" badge is unaffected by this either
-      // way, since it already tracks the organiser's own KYC status, not
-      // per-event review.
-      status: 'approved',
+      // Every new event waits for an admin to review it (053). Approval makes
+      // it public, or, for a scheduled event, public at goes_live_at. The
+      // approve route / go-live cron set live_notified_at when it is announced.
+      status: 'under_review',
+      submitted_at: new Date().toISOString(),
       goes_live_at: goesLiveAt,
-      // The go-live cron emails the organiser when a scheduled event goes
-      // live; an event that's live straight away has nothing to announce.
-      live_notified_at: goesLiveAt ? null : new Date().toISOString(),
+      live_notified_at: null,
       total_sold: 0,
       banner_url: bannerUrl,
       header_banner_url: headerBannerUrl,
@@ -261,26 +276,55 @@ export async function POST(req: NextRequest) {
 
     const eventId = eventData.id;
 
-    // Insert ticket tiers
-    if (tiers.length > 0) {
-      const tierInserts = tiers.map((t: { name: string; price: string; quantity: string; description?: string | null }) => ({
-        event_id: eventId,
-        name: t.name,
-        price: Number(t.price),
-        description: t.description ? String(t.description).trim().slice(0, 280) : null,
-        available: Number(t.quantity),
-        sold: 0,
-      }));
-      await db.from('ticket_tiers').insert(tierInserts);
+    // Insert ticket tiers. One at a time so each gated tier's codes can be
+    // attached to its own id (an event has a handful of tiers at most).
+    // If any of it fails, the half-made event is removed (tiers and codes
+    // cascade with it), so the organiser can simply try again without ending
+    // up with a duplicate. Nothing can have sold yet: it's still under review.
+    try {
+      for (let i = 0; i < tiers.length; i++) {
+        const t = tiers[i] as { name: string; price: string; quantity: string; description?: string | null };
+        const gates = tierGates[i];
+        const { data: tierRow, error: tierErr } = await db.from('ticket_tiers').insert({
+          event_id: eventId,
+          name: t.name,
+          price: Number(t.price),
+          description: t.description ? String(t.description).trim().slice(0, 280) : null,
+          available: Number(t.quantity),
+          sold: 0,
+          requires_code: gates.requiresCode,
+          allowed_email_domains: gates.allowedEmailDomains.length ? gates.allowedEmailDomains : null,
+        }).select('id').single();
+        if (tierErr) throw tierErr;
+        if (gates.codes.length) {
+          const { error: codeErr } = await db.from('tier_access_codes').insert(
+            gates.codes.map(code => ({ event_id: eventId, tier_id: tierRow.id, code })),
+          );
+          if (codeErr) throw codeErr;
+        }
+      }
+    } catch (tierFailure) {
+      console.error('POST /api/organizer/events: tier save failed, removing the half-created event', { eventId, tierFailure });
+      const { error: cleanupErr } = await db.from('events').delete().eq('id', eventId).eq('status', 'under_review');
+      if (cleanupErr) console.error('POST /api/organizer/events: cleanup failed', { eventId, cleanupErr });
+      return NextResponse.json({ error: 'We couldn’t save your ticket tiers, so the event wasn’t created. Please try again.' }, { status: 500 });
     }
 
     notify(
       { type: 'admin' },
-      goesLiveAt
-        ? { notifType: 'event', title: 'New Event Scheduled', body: `"${name}" was listed and goes live ${fmtGoLive(goesLiveAt)}.`, link: '/admin/events' }
-        : { notifType: 'event', title: 'New Event Live', body: `"${name}" just went live.`, link: '/admin/events' },
+      {
+        notifType: 'event',
+        title: 'New Event to Review',
+        body: goesLiveAt
+          ? `"${name}" is waiting for review (scheduled to go live ${fmtGoLive(goesLiveAt)}).`
+          : `"${name}" is waiting for review.`,
+        link: '/admin/events',
+      },
       { emailChannel: 'dedicated' }, // sendAdminNewEventEmail below covers this
     ).catch(console.error);
+
+    sendEventSubmittedEmail({ to: org.email, organizerName: org.name || 'there', eventName: name, eventId })
+      .catch(err => console.error('POST /api/organizer/events: submitted email error', err));
 
     sendAdminNewEventEmail({
       eventName:     name,
