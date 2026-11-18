@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from 'next/server';
 import { getAuthUser } from '@/lib/server/auth';
 import { getServerSupabase } from '@/lib/supabase/server';
 import { parseTierGates } from '@/lib/server/tierGatesInput';
+import { TIER_DESCRIPTION_MAX } from '@/lib/tiers';
 
 export async function POST(
   req: NextRequest,
@@ -53,7 +54,7 @@ export async function POST(
         price:     Number(price),
         available: Number(quantity),
         sold:      0,
-        description: typeof description === 'string' && description.trim().length ? description.trim().slice(0, 280) : null,
+        description: typeof description === 'string' && description.trim().length ? description.trim().slice(0, TIER_DESCRIPTION_MAX) : null,
         requires_code: gates.value.requiresCode,
         allowed_email_domains: gates.value.allowedEmailDomains.length ? gates.value.allowedEmailDomains : null,
       })

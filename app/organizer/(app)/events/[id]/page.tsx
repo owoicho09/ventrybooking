@@ -5,8 +5,10 @@ import { useParams, useRouter } from 'next/navigation';
 import Link from 'next/link';
 import {
   ArrowLeft, Download, Plus, Pencil, Check, X,
-  AlertTriangle, Ticket, Copy, Eye, EyeOff, Users, Upload, Clock, RotateCcw, KeyRound, Mail,
+  AlertTriangle, Ticket, Copy, Eye, EyeOff, Users, Upload, Clock, RotateCcw, KeyRound, Mail, Trash2,
 } from 'lucide-react';
+
+const EVENT_TYPES = ['Concert', 'Party', 'Festival', 'Sports', 'Theater', 'Conference', 'Other'].map(v => ({ value: v, label: v }));
 import { TierAccessPanel } from '@/components/organizer/TierAccessPanel';
 import { MonitorLinksPanel } from '@/components/organizer/MonitorLinksPanel';
 import { TierGateFields, EMPTY_GATES, gatesPayload, gatesDraftProblem, domainConflict, DomainConflictWarning, type TierGateDraft } from '@/components/organizer/TierGateFields';
@@ -109,7 +111,8 @@ function TierProgress({ tier }: { tier: Tier }) {
 
 function EditTierRow({
   tier, onSave, onCancel,
-}: { tier: Tier; onSave: (updates: { price?: number; available?: number; description?: string | null }) => Promise<void>; onCancel: () => void; }) {
+}: { tier: Tier; onSave: (updates: { name?: string; price?: number; available?: number; description?: string | null }) => Promise<void>; onCancel: () => void; }) {
+  const [name, setName]           = useState(tier.name);
   const [price, setPrice]         = useState(String(tier.price));
   const [available, setAvailable] = useState(String(tier.available));
   const [description, setDescription] = useState(tier.description ?? '');
@@ -118,6 +121,7 @@ function EditTierRow({
   const handleSave = async () => {
     setSaving(true);
     await onSave({
+      ...(tier.sold === 0 && name.trim() !== tier.name ? { name: name.trim() } : {}),
       price:     Number(price),
       available: Number(available),
       description,
@@ -127,7 +131,14 @@ function EditTierRow({
 
   return (
     <div className="rounded-lg border p-4 flex flex-col gap-3" style={{ borderColor: 'var(--color-purple)', backgroundColor: 'var(--color-purple-dim)' }}>
-      <p className="text-sm font-medium" style={{ color: 'var(--color-text)' }}>{tier.name}</p>
+      {tier.sold === 0 ? (
+        <Input label="Tier name" value={name} onChange={e => setName(e.target.value)} maxLength={80} />
+      ) : (
+        <div>
+          <p className="text-sm font-medium" style={{ color: 'var(--color-text)' }}>{tier.name}</p>
+          <p className="text-xs" style={{ color: 'var(--color-text-dim)' }}>The name is locked once tickets in this tier have sold.</p>
+        </div>
+      )}
       <div className="grid grid-cols-2 gap-3">
         <Input
           label="Price (NGN, 0 = Free)"
@@ -168,6 +179,8 @@ export default function OrganizerEventDetailPage() {
   const [loading, setLoading]     = useState(true);
   const [editingInfo, setEditingInfo] = useState(false);
   const [description, setDescription] = useState('');
+  const [eventName, setEventName] = useState('');
+  const [category, setCategory] = useState('Concert');
   const [date, setDate] = useState('');
   const [time, setTime] = useState('');
   const [venue, setVenue] = useState('');
@@ -246,6 +259,8 @@ export default function OrganizerEventDetailPage() {
           setEvent(d.data);
           if (typeof d.platformFeeRate === 'number') setPlatformFeeRate(d.platformFeeRate);
           setDescription(d.data.description);
+          setEventName(d.data.event_name ?? '');
+          setCategory(d.data.category ?? 'Concert');
           setDate(d.data.date);
           setTime(d.data.time);
           setVenue(d.data.venue);
@@ -289,15 +304,22 @@ export default function OrganizerEventDetailPage() {
   useEffect(() => { if (id) { load(); loadAffiliates(); } }, [id]);
 
   const handleSaveInfo = async () => {
+    const unsold = !!event && event.tiers.every(t => t.sold === 0);
+    if (unsold && !eventName.trim()) { toast('Your event needs a name', 'error'); return; }
     setSavingInfo(true);
     try {
+      // Name and type stay editable until the first ticket sells; the link
+      // (slug) never changes, so shared links and flyers keep working.
+      const identity = unsold
+        ? { event_name: eventName.trim(), ...(category !== event?.category ? { category } : {}) }
+        : {};
       const res = await fetch(`/api/organizer/events/${id}`, {
         method: 'PATCH',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify(
           event?.event_mode === 'online'
-            ? { description, date, time, meeting_link: meetingLink, meeting_passcode: meetingPasscode }
-            : { description, date, time, venue, address, city, landmark, lga, location_hidden: locationHidden, address_reveal_at: locationHidden ? ((v: string) => (v ? new Date(`${v}:00+01:00`).toISOString() : null))(revealAt) : null },
+            ? { ...identity, description, date, time, meeting_link: meetingLink, meeting_passcode: meetingPasscode }
+            : { ...identity, description, date, time, venue, address, city, landmark, lga, location_hidden: locationHidden, address_reveal_at: locationHidden ? ((v: string) => (v ? new Date(`${v}:00+01:00`).toISOString() : null))(revealAt) : null },
         ),
       });
       const data = await res.json();
@@ -531,7 +553,17 @@ export default function OrganizerEventDetailPage() {
     load();
   };
 
-  const handleSaveTier = async (tierId: string, updates: { price?: number; available?: number; description?: string | null }) => {
+  const handleDeleteTier = async (tierId: string, tierName: string) => {
+    if (!window.confirm(`Remove the "${tierName}" tier? This can't be undone.`)) return;
+    const res = await fetch(`/api/organizer/events/${id}/tiers/${tierId}`, { method: 'DELETE' });
+    const data = await res.json().catch(() => ({}));
+    if (!res.ok) { toast(data.error || 'Could not remove tier', 'error'); return; }
+    toast('Tier removed', 'success');
+    if (editingTierId === tierId) setEditingTierId(null);
+    load();
+  };
+
+  const handleSaveTier = async (tierId: string, updates: { name?: string; price?: number; available?: number; description?: string | null }) => {
     const res = await fetch(`/api/organizer/events/${id}/tiers/${tierId}`, {
       method: 'PATCH',
       headers: { 'Content-Type': 'application/json' },
@@ -827,6 +859,15 @@ export default function OrganizerEventDetailPage() {
                   >
                     <KeyRound size={11} />Who can buy{tier.requires_code || tier.allowed_email_domains?.length ? ' (restricted)' : ''}
                   </button>
+                  {tier.sold === 0 && event.tiers.length > 1 && (
+                    <button
+                      className="text-xs flex items-center gap-1"
+                      style={{ color: 'var(--color-red)' }}
+                      onClick={() => handleDeleteTier(tier.id, tier.name)}
+                    >
+                      <Trash2 size={11} />Remove
+                    </button>
+                  )}
                 </div>
                 {domainConflict(event.allowed_email_domains, tier.allowed_email_domains) && accessTierId !== tier.id && (
                   <DomainConflictWarning eventDomains={event.allowed_email_domains ?? []} tierName={tier.name} />
@@ -882,7 +923,14 @@ export default function OrganizerEventDetailPage() {
 
         {editingInfo ? (
           <div className="flex flex-col gap-4">
-            <Textarea label="Description" value={description} onChange={e => setDescription(e.target.value)} rows={4} />
+            {!hasSales && (
+              <>
+                <Input label="Event Name" value={eventName} onChange={e => setEventName(e.target.value)} maxLength={150}
+                  helper="Your event link stays the same if you rename it, so flyers and shared links keep working." />
+                <Select label="Event Type" options={EVENT_TYPES} value={category} onChange={e => setCategory(e.target.value)} />
+              </>
+            )}
+            <Textarea label="Description" value={description} onChange={e => setDescription(e.target.value)} rows={8} />
             <div className="grid grid-cols-2 gap-3">
               <Input label="Event Date" type="date" value={date} onChange={e => setDate(e.target.value)} />
               <Input label="Start Time" type="time" value={time} onChange={e => setTime(e.target.value)} />

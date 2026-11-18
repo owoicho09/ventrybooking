@@ -136,6 +136,15 @@ export async function PATCH(
       }
     }
 
+    if (updates.event_name !== undefined) {
+      const n = String(updates.event_name).slice(0, 150);
+      if (!n) return NextResponse.json({ error: 'Your event needs a name' }, { status: 400 });
+      updates.event_name = n;
+    }
+    if (updates.category !== undefined && !EVENT_CATEGORIES.includes(String(updates.category))) {
+      return NextResponse.json({ error: 'Choose a valid event type' }, { status: 400 });
+    }
+
     // Scheduled go-live: movable as often as the organiser likes while the
     // event is still waiting. Clearing it (or picking a time already past)
     // means "go live now". Once an event is live and selling it can't be
@@ -426,6 +435,8 @@ async function notifyTicketBuyersOfMeetingLinkChange(
     ),
   );
 }
+
+const EVENT_CATEGORIES = ['Concert', 'Party', 'Festival', 'Sports', 'Theater', 'Conference', 'Other'];
 
 // Matches HORIZON_HOURS in lib/server/reconcile.ts.
 const DELETE_CHECKOUT_HORIZON_HOURS = 48;

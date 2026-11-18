@@ -13,6 +13,7 @@ import { normalizeEmailDomains } from '@/lib/server/domainRestriction';
 import { parseTierGates, type ParsedTierGates } from '@/lib/server/tierGatesInput';
 import { parseRefundPolicy } from '@/lib/refundPolicy';
 import { revealTimeProblem } from '@/lib/addressReveal';
+import { TIER_DESCRIPTION_MAX } from '@/lib/tiers';
 
 export async function GET(req: NextRequest) {
   try {
@@ -289,7 +290,7 @@ export async function POST(req: NextRequest) {
           event_id: eventId,
           name: t.name,
           price: Number(t.price),
-          description: t.description ? String(t.description).trim().slice(0, 280) : null,
+          description: t.description ? String(t.description).trim().slice(0, TIER_DESCRIPTION_MAX) : null,
           available: Number(t.quantity),
           sold: 0,
           requires_code: gates.requiresCode,
