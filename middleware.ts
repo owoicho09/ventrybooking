@@ -1,5 +1,5 @@
 import { NextRequest, NextResponse } from 'next/server';
-import { jwtVerify } from 'jose';
+import { jwtVerify, SignJWT, type JWTPayload } from 'jose';
 
 const ORGANIZER_LOGIN = '/organizer/login';
 const ADMIN_LOGIN = '/admin/login';
@@ -22,13 +22,43 @@ const AFFILIATE_AUTH_PATHS = [
 
 const SECRET = new TextEncoder().encode(process.env.JWT_SECRET!);
 
-async function verifyToken(token: string): Promise<{ role: string } | null> {
+async function verifyToken(token: string): Promise<({ role: string } & JWTPayload) | null> {
   try {
     const { payload } = await jwtVerify(token, SECRET);
-    return payload as { role: string };
+    return payload as { role: string } & JWTPayload;
   } catch {
     return null;
   }
+}
+
+// Sessions roll: every signed-in page visit more than a day after the token
+// was issued swaps in a fresh 30-day one, so people who use the dashboard
+// are never signed out mid-task. Only an idle 30 days ends a session.
+const SESSION_SECONDS = 30 * 24 * 60 * 60;
+const REFRESH_AFTER_SECONDS = 24 * 60 * 60;
+
+async function withRefreshedSession(res: NextResponse, payload: { role: string } & JWTPayload) {
+  const now = Math.floor(Date.now() / 1000);
+  if (!payload.iat || now - payload.iat < REFRESH_AFTER_SECONDS) return res;
+  if (typeof payload.sub !== 'string' || typeof payload.email !== 'string') return res;
+  try {
+    const token = await new SignJWT({ sub: payload.sub, role: payload.role, email: payload.email })
+      .setProtectedHeader({ alg: 'HS256', typ: 'JWT' })
+      .setIssuedAt(now)
+      .setExpirationTime(now + SESSION_SECONDS)
+      .sign(SECRET);
+    // Same attributes as lib/server/auth.ts cookieOptions.
+    res.cookies.set({
+      name: 'ventry_token',
+      value: token,
+      httpOnly: true,
+      secure: process.env.NODE_ENV === 'production',
+      sameSite: 'lax',
+      path: '/',
+      maxAge: SESSION_SECONDS,
+    });
+  } catch { /* keep the existing session */ }
+  return res;
 }
 
 export async function middleware(req: NextRequest) {
@@ -74,7 +104,7 @@ export async function middleware(req: NextRequest) {
     if (!payload || payload.role !== 'admin') {
       return NextResponse.redirect(new URL(ADMIN_LOGIN, req.url));
     }
-    return NextResponse.next();
+    return withRefreshedSession(NextResponse.next(), payload);
   }
 
   // Organizer routes
@@ -99,7 +129,7 @@ export async function middleware(req: NextRequest) {
     if (!payload || payload.role !== 'organizer') {
       return NextResponse.redirect(new URL(ORGANIZER_LOGIN, req.url));
     }
-    return NextResponse.next();
+    return withRefreshedSession(NextResponse.next(), payload);
   }
 
   // Affiliate routes
@@ -123,7 +153,7 @@ export async function middleware(req: NextRequest) {
     if (!payload || payload.role !== 'affiliate') {
       return NextResponse.redirect(new URL(AFFILIATE_LOGIN, req.url));
     }
-    return NextResponse.next();
+    return withRefreshedSession(NextResponse.next(), payload);
   }
 
   return NextResponse.next();

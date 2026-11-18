@@ -558,7 +558,7 @@ export async function sendKYCRejectedEmail(to: string, name: string, reason: str
  * when it was approved ahead of its scheduled go-live time: it stays hidden
  * until then, and the go-live cron sends the "your event is live" email.
  */
-export async function sendEventApprovedEmail(to: string, organizerName: string, eventName: string, eventSlug: string, scheduledLiveAt?: string | null) {
+export async function sendEventApprovedEmail(to: string, organizerName: string, eventName: string, eventSlug: string, scheduledLiveAt?: string | null, keptInactive = false) {
   const eventUrl = `${APP_URL}/${eventSlug}`;
   await sendEmail({
     to,
@@ -567,7 +567,9 @@ export async function sendEventApprovedEmail(to: string, organizerName: string, 
     html: emailShell(scheduledLiveAt ? `
       <h1 style="color:#a855f7;font-size:22px;margin:0 0 12px;">Event Approved ✓</h1>
       <p style="color:#f1f0ff;">Hi ${esc(organizerName)}, <strong>&ldquo;${esc(eventName)}&rdquo;</strong> has been approved.</p>
-      <p style="color:#f1f0ff;">Tickets go on sale <strong>${esc(scheduledLiveAt)}</strong>, as you scheduled. We&rsquo;ll email you the moment it&rsquo;s live.</p>
+      ${keptInactive
+        ? `<p style="color:#f1f0ff;">As you asked, it stays <strong>inactive</strong> (hidden, with no tickets on sale) until you make it active. When you&rsquo;re ready, open the event in your dashboard and choose <strong>Go live now</strong>.</p>`
+        : `<p style="color:#f1f0ff;">Tickets go on sale <strong>${esc(scheduledLiveAt)}</strong>, as you scheduled. We&rsquo;ll email you the moment it&rsquo;s live.</p>`}
       <br/>
       <a href="${APP_URL}/organizer/events" class="btn">Open Your Dashboard</a>
     ` : `

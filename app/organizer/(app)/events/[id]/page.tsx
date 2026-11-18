@@ -27,7 +27,7 @@ import { BannerCropInput } from '@/components/organizer/BannerCropInput';
 import { FlyerUploadInput } from '@/components/organizer/FlyerUploadInput';
 import { EventQRCode } from '@/components/organizer/EventQRCode';
 import { GoLiveField } from '@/components/organizer/GoLiveField';
-import { isScheduled, fmtGoLive, toLagosInput, fromLagosInput } from '@/lib/goLive';
+import { isScheduled, isInactive, INACTIVE_GO_LIVE, fmtGoLive, toLagosInput, fromLagosInput } from '@/lib/goLive';
 
 interface Tier { id: string; name: string; price: number; available: number; sold: number; description?: string | null; requires_code?: boolean | null; allowed_email_domains?: string[] | null; }
 interface Affiliate { id: string; name: string; code: string; link: string; clicks: number; buys: number; }
@@ -182,6 +182,7 @@ export default function OrganizerEventDetailPage() {
   const [savingInfo, setSavingInfo] = useState(false);
   const [goLiveScheduled, setGoLiveScheduled] = useState(false);
   const [goLiveAt, setGoLiveAt] = useState('');
+  const [goLiveInactive, setGoLiveInactive] = useState(false);
   const [savingGoLive, setSavingGoLive] = useState(false);
   const [resubmitting, setResubmitting] = useState(false);
   const [editingTierId, setEditingTierId] = useState<string | null>(null);
@@ -254,7 +255,8 @@ export default function OrganizerEventDetailPage() {
           setLga(d.data.lga ?? '');
           setRevealAt(((iso: string | null) => (iso ? new Date(new Date(iso).getTime() + 60 * 60 * 1000).toISOString().slice(0, 16) : ''))(d.data.address_reveal_at ?? null));
           setLocationHidden(Boolean(d.data.location_hidden));
-          setGoLiveScheduled(isScheduled(d.data.goes_live_at));
+          setGoLiveInactive(isInactive(d.data.goes_live_at));
+          setGoLiveScheduled(isScheduled(d.data.goes_live_at) && !isInactive(d.data.goes_live_at));
           setGoLiveAt(isScheduled(d.data.goes_live_at) ? toLagosInput(d.data.goes_live_at) : '');
           setMeetingLink(d.data.meeting_link ?? '');
           setMeetingPasscode(d.data.meeting_passcode ?? '');
@@ -316,12 +318,13 @@ export default function OrganizerEventDetailPage() {
   };
 
   const handleSaveGoLive = async () => {
-    if (goLiveScheduled && !goLiveAt) { toast('Choose when your tickets go on sale', 'error'); return; }
+    if (!goLiveInactive && goLiveScheduled && !goLiveAt) { toast('Choose when your tickets go on sale', 'error'); return; }
     // "Now" when nothing is scheduled is already the current state.
-    if (!goLiveScheduled && !isScheduled(event?.goes_live_at)) { toast('Saved', 'success'); return; }
+    if (!goLiveInactive && !goLiveScheduled && !isScheduled(event?.goes_live_at)) { toast('Saved', 'success'); return; }
+    if (goLiveInactive && isInactive(event?.goes_live_at)) { toast('Saved', 'success'); return; }
     setSavingGoLive(true);
     try {
-      const goesLiveAt = goLiveScheduled ? fromLagosInput(goLiveAt) : null;
+      const goesLiveAt = goLiveInactive ? INACTIVE_GO_LIVE : goLiveScheduled ? fromLagosInput(goLiveAt) : null;
       const res = await fetch(`/api/organizer/events/${id}`, {
         method: 'PATCH',
         headers: { 'Content-Type': 'application/json' },
@@ -330,7 +333,9 @@ export default function OrganizerEventDetailPage() {
       const data = await res.json();
       if (!res.ok) { toast(data.error || 'Update failed', 'error'); return; }
       const approved = event?.status === 'approved';
-      toast(goesLiveAt && isScheduled(goesLiveAt)
+      toast(goLiveInactive
+        ? (approved ? 'Your event is now inactive: hidden, with no tickets on sale.' : 'Saved: your event will stay inactive after approval until you make it active.')
+        : goesLiveAt && isScheduled(goesLiveAt)
         ? (approved ? `Scheduled: your event goes live ${fmtGoLive(goesLiveAt)}` : `Saved: tickets go on sale ${fmtGoLive(goesLiveAt)} if your event is approved by then`)
         : (approved ? 'Your event is live! Tickets are on sale now.' : 'Saved: tickets go on sale as soon as your event is approved'), 'success');
       load();
@@ -657,7 +662,9 @@ export default function OrganizerEventDetailPage() {
           <div className="flex items-center gap-2 flex-wrap">
             <Button size="sm" variant="outline" onClick={() => setPreviewing(true)}><Eye size={14} />Preview page</Button>
             {allSoldOut && <Badge variant="gray">Sold Out</Badge>}
-            {event.status === 'approved' && (isScheduled(event.goes_live_at)
+            {event.status === 'approved' && (isInactive(event.goes_live_at)
+              ? <Badge variant="gray">Inactive</Badge>
+              : isScheduled(event.goes_live_at)
               ? <Badge variant="amber">Scheduled</Badge>
               : <Badge variant="green">Live</Badge>)}
             {event.status === 'under_review' && <Badge variant="amber">Under Review</Badge>}
@@ -716,13 +723,16 @@ export default function OrganizerEventDetailPage() {
           <div>
             <h2 className="font-semibold" style={{ color: 'var(--color-text)' }}>When tickets go on sale</h2>
             <p className="text-xs mt-0.5" style={{ color: 'var(--color-text-muted)' }}>
-              {isScheduled(event.goes_live_at)
+              {isInactive(event.goes_live_at)
+                ? 'Once approved, your event stays inactive (hidden, no tickets on sale) until you make it active here.'
+                : isScheduled(event.goes_live_at)
                 ? <>Once approved, tickets go on sale at <strong style={{ color: 'var(--color-text)' }}>{fmtGoLive(event.goes_live_at as string)}</strong>. If approval comes after that, they go on sale the moment it&apos;s approved.</>
                 : 'Tickets go on sale the moment your event is approved. You can pick a later time instead.'}
             </p>
           </div>
           <GoLiveField scheduled={goLiveScheduled} onScheduledChange={setGoLiveScheduled} value={goLiveAt} onChange={setGoLiveAt}
-            nowLabel="As soon as it's approved" />
+            nowLabel="As soon as it's approved" inactive={goLiveInactive} onInactiveChange={setGoLiveInactive}
+            inactiveLabel="Approved, but hidden until I turn it on" />
           <div>
             <Button size="sm" onClick={handleSaveGoLive} disabled={savingGoLive}>
               {savingGoLive ? 'Saving...' : 'Save'}
@@ -734,18 +744,28 @@ export default function OrganizerEventDetailPage() {
         <div className="rounded-xl border p-5 flex flex-col gap-4"
           style={{ backgroundColor: 'var(--color-surface)', borderColor: isScheduled(event.goes_live_at) ? '#f59e0b55' : 'var(--color-border)' }}>
           <div>
-            <h2 className="font-semibold" style={{ color: 'var(--color-text)' }}>When tickets go on sale</h2>
+            <h2 className="font-semibold" style={{ color: 'var(--color-text)' }}>
+              {isInactive(event.goes_live_at) ? 'Your event is inactive' : 'When tickets go on sale'}
+            </h2>
             <p className="text-xs mt-0.5" style={{ color: 'var(--color-text-muted)' }}>
-              {isScheduled(event.goes_live_at)
+              {isInactive(event.goes_live_at)
+                ? 'It’s approved, but hidden from the public with no tickets on sale. Make it active now, or schedule a time.'
+                : isScheduled(event.goes_live_at)
                 ? <>Hidden from the public until <strong style={{ color: 'var(--color-text)' }}>{fmtGoLive(event.goes_live_at as string)}</strong>. Move it to any time, or go live now.</>
-                : 'Your event is live. Nothing has sold yet, so you can still take it off sale until a time you choose.'}
+                : 'Your event is live. Nothing has sold yet, so you can still make it inactive, or take it off sale until a time you choose.'}
             </p>
           </div>
           <GoLiveField scheduled={goLiveScheduled} onScheduledChange={setGoLiveScheduled} value={goLiveAt} onChange={setGoLiveAt}
-            nowLabel={isScheduled(event.goes_live_at) ? 'Put tickets on sale right away' : 'Keep it on sale'} />
+            nowLabel={isScheduled(event.goes_live_at) ? 'Put tickets on sale right away' : 'Keep it on sale'}
+            inactive={goLiveInactive} onInactiveChange={setGoLiveInactive}
+            inactiveLabel={isInactive(event.goes_live_at) ? 'Stay hidden for now' : 'Hide it until I turn it back on'} />
           <div>
             <Button size="sm" onClick={handleSaveGoLive} disabled={savingGoLive}>
-              {savingGoLive ? 'Saving...' : goLiveScheduled ? 'Save go-live time' : isScheduled(event.goes_live_at) ? 'Go live now' : 'Save'}
+              {savingGoLive ? 'Saving...'
+                : goLiveInactive ? (isInactive(event.goes_live_at) ? 'Save' : 'Make inactive')
+                : goLiveScheduled ? 'Save go-live time'
+                : isInactive(event.goes_live_at) ? 'Make active now'
+                : isScheduled(event.goes_live_at) ? 'Go live now' : 'Save'}
             </Button>
           </div>
         </div>

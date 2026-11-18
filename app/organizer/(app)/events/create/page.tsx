@@ -1,9 +1,9 @@
 'use client';
 
-import { useEffect, useMemo, useState } from 'react';
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { useRouter } from 'next/navigation';
 import Link from 'next/link';
-import { Plus, Trash2, Upload, Eye } from 'lucide-react';
+import { Plus, Trash2, Upload, Eye, Save, CloudOff, Check, Loader2 } from 'lucide-react';
 import { Input, Textarea } from '@/components/ui/Input';
 import { Select } from '@/components/ui/Select';
 import { Button } from '@/components/ui/Button';
@@ -16,10 +16,14 @@ import { RefundPolicyFields, type RefundPolicyDraft } from '@/components/organiz
 import { parseRefundPolicy } from '@/lib/refundPolicy';
 import { EventPreview } from '@/components/events/EventPreview';
 import { GoLiveField } from '@/components/organizer/GoLiveField';
-import { fromLagosInput } from '@/lib/goLive';
+import { fromLagosInput, INACTIVE_GO_LIVE } from '@/lib/goLive';
 import { TierGateFields, EMPTY_GATES, gatesPayload, gatesDraftProblem, type TierGateDraft } from '@/components/organizer/TierGateFields';
 import type { DetailEvent } from '@/components/events/EventDetailContent';
 import type { EventCategory } from '@/types';
+import {
+  newDraftId, saveLocalDraft, loadLocalDraft, listLocalDrafts, removeLocalDraft,
+  putDraftFile, getDraftFiles, type LocalDraft,
+} from '@/lib/eventDrafts';
 
 interface Tier { id: string; name: string; price: string; quantity: string; description?: string; gates: TierGateDraft; }
 type LineupLiability = 'headliner' | 'guest' | 'surprise';
@@ -36,6 +40,28 @@ const LIABILITY_HINT: Record<LineupLiability, string> = {
   guest: 'Listed and promoted alongside the headliner — no refund exposure if they drop out.',
   surprise: "Listed on the page, but their name is never shown to buyers — you can still enter it here for your own record.",
 };
+
+/** Everything in the form except images and the two confirmations, which the
+ *  organiser re-ticks before submitting. Saved as a draft (059). */
+interface DraftData {
+  v: 1;
+  name: string; category: string; description: string; date: string; time: string;
+  eventMode: 'physical' | 'online'; venue: string; address: string; city: string; landmark: string;
+  locationHidden: boolean; lga: string; revealAt: string; goLiveScheduled: boolean; goLiveAt: string; goLiveInactive?: boolean;
+  meetingLink: string; meetingPasscode: string; venueContactName: string; venueContactPhone: string;
+  tiers: Tier[]; accentColor: string | null; accentAutoDetected: boolean; colorManuallySet: boolean;
+  lineup: { id: string; name: string; role: string; liability: LineupLiability }[];
+  restrictedDomainsInput: string; refundPolicy: RefundPolicyDraft;
+  /** Names of the images picked, so another device can say what to re-add. */
+  files: { banner?: string; headerBanner?: string; venueProof?: string; lineup?: Record<string, string> };
+}
+
+/** The device copy remembers whether its latest edit reached the server. */
+interface DeviceDraft extends DraftData { syncedAt?: string | null; dirty?: boolean }
+
+type SaveStatus = 'idle' | 'saving' | 'saved' | 'local' | 'signed_out';
+
+const AUTOSAVE_MS = 1500;
 
 const eventTypes = [
   { value: 'Concert', label: 'Concert' },
@@ -66,6 +92,7 @@ export default function CreateEventPage() {
   const [lga, setLga] = useState('');
   const [revealAt, setRevealAt] = useState('');
   const [goLiveScheduled, setGoLiveScheduled] = useState(false);
+  const [goLiveInactive, setGoLiveInactive] = useState(false);
   const [goLiveAt, setGoLiveAt] = useState('');
   const [meetingLink, setMeetingLink] = useState('');
   const [meetingPasscode, setMeetingPasscode] = useState('');
@@ -98,6 +125,16 @@ export default function CreateEventPage() {
   const [me, setMe] = useState<{ id?: string; name?: string; verified?: boolean; handle?: string | null; avatar_url?: string | null; member_since?: string; socials?: Record<string, string> } | null>(null);
   const [previewing, setPreviewing] = useState(false);
 
+  // ── Drafts ──────────────────────────────────────────────────
+  const [draftId, setDraftId] = useState<string | null>(null);
+  const draftIdRef = useRef<string | null>(null);
+  const [hydrated, setHydrated] = useState(false);
+  const [saveStatus, setSaveStatus] = useState<SaveStatus>('idle');
+  const [savedAt, setSavedAt] = useState<string | null>(null);
+  const [missingFiles, setMissingFiles] = useState<string[]>([]);
+  const [otherDrafts, setOtherDrafts] = useState<{ id: string; name: string }[]>([]);
+  const submittedRef = useRef(false);
+
   // The organiser's display name, for the refund-policy preview; their
   // account email pre-fills the refund contact (they can change it).
   useEffect(() => {
@@ -112,6 +149,219 @@ export default function CreateEventPage() {
       .catch(() => {});
   }, []);
   const policyCheck = parseRefundPolicy(refundPolicy);
+
+  const draftData: DraftData = useMemo(() => ({
+    v: 1, name, category, description, date, time, eventMode, venue, address, city, landmark,
+    locationHidden, lga, revealAt, goLiveScheduled, goLiveAt, goLiveInactive, meetingLink, meetingPasscode,
+    venueContactName, venueContactPhone, tiers, accentColor, accentAutoDetected, colorManuallySet,
+    lineup: lineup.map(a => ({ id: a.id, name: a.name, role: a.role, liability: a.liability })),
+    restrictedDomainsInput, refundPolicy,
+    files: {
+      banner: banner?.name, headerBanner: headerBanner?.name, venueProof: venueProof?.name,
+      lineup: Object.fromEntries(lineup.filter(a => a.photoFile).map(a => [a.id, a.photoFile!.name])),
+    },
+  }), [name, category, description, date, time, eventMode, venue, address, city, landmark, locationHidden, lga, revealAt,
+    goLiveScheduled, goLiveAt, goLiveInactive, meetingLink, meetingPasscode, venueContactName, venueContactPhone, tiers, accentColor,
+    accentAutoDetected, colorManuallySet, lineup, restrictedDomainsInput, refundPolicy, banner, headerBanner, venueProof]);
+
+  // Only start a draft once the organiser has actually entered something; the
+  // refund-contact email pre-fill alone shouldn't create one.
+  const hasContent = !!(
+    name.trim() || description.trim() || date || time || venue.trim() || address.trim() || city.trim() || lga.trim() ||
+    landmark.trim() || meetingLink.trim() || restrictedDomainsInput.trim() || lineup.length || banner || headerBanner || venueProof ||
+    tiers.length > 1 || tiers.some(t => t.price || t.quantity || t.description || t.name !== 'Regular')
+  );
+
+  const latestRef = useRef(draftData);
+  useEffect(() => { latestRef.current = draftData; }, [draftData]);
+
+  /** The draft id, creating one (and putting it in the URL so a refresh comes back to it). */
+  const ensureDraftId = useCallback(() => {
+    if (draftIdRef.current) return draftIdRef.current;
+    const id = newDraftId();
+    draftIdRef.current = id;
+    setDraftId(id);
+    try {
+      const url = new URL(window.location.href);
+      url.searchParams.set('draft', id);
+      window.history.replaceState(window.history.state, '', url.toString());
+    } catch { /* ignore */ }
+    return id;
+  }, []);
+
+  const writeDevice = useCallback((id: string, data: DraftData, patch: Partial<DeviceDraft>) => {
+    const prev = loadLocalDraft<DeviceDraft>(id)?.data;
+    const draft: LocalDraft<DeviceDraft> = {
+      id, name: data.name.trim(), updatedAt: new Date().toISOString(),
+      data: { ...data, syncedAt: prev?.syncedAt ?? null, dirty: prev?.dirty ?? true, ...patch },
+    };
+    return saveLocalDraft(draft);
+  }, []);
+
+  // Server saves run one at a time; a change during a save queues one more.
+  const savingRef = useRef(false);
+  const queuedRef = useRef(false);
+  const saveToServer = useCallback(async (): Promise<boolean> => {
+    const id = draftIdRef.current;
+    if (!id || submittedRef.current) return false;
+    if (savingRef.current) { queuedRef.current = true; return false; }
+    savingRef.current = true;
+    setSaveStatus('saving');
+    let ok = false;
+    do {
+      queuedRef.current = false;
+      const data = latestRef.current;
+      ok = false;
+      try {
+        const res = await fetch(`/api/organizer/event-drafts/${id}`, {
+          method: 'PUT',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ name: data.name, data }),
+          keepalive: true,
+        });
+        if (res.ok) {
+          const d = await res.json().catch(() => ({}));
+          const at: string = d?.data?.updated_at ?? new Date().toISOString();
+          // Only mark the device copy clean if nothing changed mid-request.
+          if (latestRef.current === data) writeDevice(id, data, { syncedAt: at, dirty: false });
+          setSavedAt(at);
+          setSaveStatus('saved');
+          ok = true;
+        } else {
+          setSaveStatus(res.status === 401 ? 'signed_out' : 'local');
+        }
+      } catch {
+        setSaveStatus('local');
+      }
+    } while (queuedRef.current && !submittedRef.current);
+    savingRef.current = false;
+    return ok;
+  }, [writeDevice]);
+
+  function applyDraft(d: DraftData, files: Record<string, File>) {
+    setName(d.name ?? ''); setCategory(d.category ?? 'Concert'); setDescription(d.description ?? '');
+    setDate(d.date ?? ''); setTime(d.time ?? ''); setEventMode(d.eventMode === 'online' ? 'online' : 'physical');
+    setVenue(d.venue ?? ''); setAddress(d.address ?? ''); setCity(d.city ?? ''); setLandmark(d.landmark ?? '');
+    setLocationHidden(!!d.locationHidden); setLga(d.lga ?? ''); setRevealAt(d.revealAt ?? '');
+    setGoLiveScheduled(!!d.goLiveScheduled); setGoLiveAt(d.goLiveAt ?? ''); setGoLiveInactive(!!d.goLiveInactive);
+    setMeetingLink(d.meetingLink ?? ''); setMeetingPasscode(d.meetingPasscode ?? '');
+    setVenueContactName(d.venueContactName ?? ''); setVenueContactPhone(d.venueContactPhone ?? '');
+    if (Array.isArray(d.tiers) && d.tiers.length) setTiers(d.tiers.map(t => ({ ...t, gates: t.gates ?? EMPTY_GATES })));
+    setAccentColor(d.accentColor ?? null); setAccentAutoDetected(!!d.accentAutoDetected); setColorManuallySet(!!d.colorManuallySet);
+    setRestrictedDomainsInput(d.restrictedDomainsInput ?? '');
+    if (d.refundPolicy) setRefundPolicy(d.refundPolicy);
+    setBanner(files.banner ?? null);
+    setHeaderBanner(files.headerBanner ?? null);
+    setVenueProof(files.venueProof ?? null);
+    setLineup((d.lineup ?? []).map(a => {
+      const f = files[`lineup:${a.id}`];
+      return { ...a, photoFile: f ?? null, photoPreview: f ? URL.createObjectURL(f) : undefined };
+    }));
+    // Images picked on another device (or cleared from this browser) need re-adding.
+    const missing: string[] = [];
+    if (d.files?.banner && !files.banner) missing.push('event flyer');
+    if (d.files?.headerBanner && !files.headerBanner) missing.push('header banner');
+    if (d.files?.venueProof && !files.venueProof) missing.push('venue proof');
+    const lostPhotos = Object.keys(d.files?.lineup ?? {}).filter(k => !files[`lineup:${k}`]).length;
+    if (lostPhotos) missing.push(`${lostPhotos} lineup photo${lostPhotos > 1 ? 's' : ''}`);
+    setMissingFiles(missing);
+  }
+
+  // Restore a draft named in the URL (?draft=…); otherwise offer existing ones.
+  useEffect(() => {
+    let cancelled = false;
+    (async () => {
+      const id = new URLSearchParams(window.location.search).get('draft');
+      if (!id) {
+        const local = listLocalDrafts();
+        let server: { id: string; name: string }[] = [];
+        try {
+          const r = await fetch('/api/organizer/event-drafts', { cache: 'no-store' });
+          const d = await r.json();
+          if (d?.success) server = d.data;
+        } catch { /* offline */ }
+        const seen = new Set<string>();
+        const all = [...server, ...local].filter(x => (seen.has(x.id) ? false : (seen.add(x.id), true)));
+        if (!cancelled) { setOtherDrafts(all.map(x => ({ id: x.id, name: x.name }))); setHydrated(true); }
+        return;
+      }
+
+      draftIdRef.current = id;
+      setDraftId(id);
+      const device = loadLocalDraft<DeviceDraft>(id);
+      let server: { data: DraftData; updated_at: string } | null = null;
+      try {
+        const r = await fetch(`/api/organizer/event-drafts/${id}`, { cache: 'no-store' });
+        if (r.ok) server = (await r.json())?.data ?? null;
+      } catch { /* offline: use the device copy */ }
+
+      // Unsynced edits on this device win; otherwise take the server copy if
+      // it was saved after this device last synced (e.g. edited elsewhere).
+      let pick: DraftData | null = device?.data ?? null;
+      if (server && (!device || (!device.data.dirty && (!device.data.syncedAt || server.updated_at > device.data.syncedAt)))) {
+        pick = server.data;
+      }
+      const files = await getDraftFiles(id);
+      if (cancelled) return;
+      if (pick) {
+        applyDraft(pick, files);
+        if (server) setSavedAt(server.updated_at);
+        setSaveStatus(server ? 'saved' : 'local');
+      } else {
+        toast('That draft could not be found. You can start a new event here.', 'error');
+      }
+      setHydrated(true);
+    })();
+    return () => { cancelled = true; };
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
+
+  // Autosave: the device copy straight away, the server once typing pauses.
+  useEffect(() => {
+    if (!hydrated || submittedRef.current) return;
+    if (!draftIdRef.current && !hasContent) return;
+    const id = ensureDraftId();
+    writeDevice(id, draftData, { dirty: true });
+    const t = setTimeout(() => { void saveToServer(); }, AUTOSAVE_MS);
+    return () => clearTimeout(t);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [draftData, hydrated]);
+
+  // Phones often discard the tab while the gallery/camera is open, so push
+  // the latest copy out the moment the page is hidden.
+  useEffect(() => {
+    const flush = () => {
+      const id = draftIdRef.current;
+      if (!id || submittedRef.current) return;
+      writeDevice(id, latestRef.current, {});
+      void saveToServer();
+    };
+    const onVis = () => { if (document.visibilityState === 'hidden') flush(); };
+    document.addEventListener('visibilitychange', onVis);
+    window.addEventListener('pagehide', flush);
+    return () => {
+      document.removeEventListener('visibilitychange', onVis);
+      window.removeEventListener('pagehide', flush);
+    };
+  }, [writeDevice, saveToServer]);
+
+  /** Keep a picked image with the draft on this device. */
+  const persistFile = (slot: string, file: File | null) => {
+    if (!file && !draftIdRef.current) return;
+    void putDraftFile(ensureDraftId(), slot, file);
+  };
+  const pickBanner = (f: File | null) => { setBanner(f); persistFile('banner', f); };
+  const pickHeaderBanner = (f: File | null) => { setHeaderBanner(f); persistFile('headerBanner', f); };
+  const pickVenueProof = (f: File | null) => { setVenueProof(f); persistFile('venueProof', f); };
+
+  const saveDraftNow = async () => {
+    const id = ensureDraftId();
+    writeDevice(id, latestRef.current, { dirty: true });
+    const ok = await saveToServer();
+    if (ok) toast('Draft saved. Continue any time from My Events.', 'success');
+    else if (savingRef.current || queuedRef.current) toast('Saving your draft…', 'success');
+    else toast('Saved on this device. It will sync to your account once you’re online and signed in.', 'error');
+  };
 
   const flyerUrl = useMemo(() => (banner ? URL.createObjectURL(banner) : null), [banner]);
   const headerUrl = useMemo(() => (headerBanner ? URL.createObjectURL(headerBanner) : null), [headerBanner]);
@@ -174,7 +424,7 @@ export default function CreateEventPage() {
     setTiers(p => p.map(t => (t.id === id ? { ...t, [field]: value } : t)));
 
   const addAct = () => setLineup(p => [...p, { id: Date.now().toString(), name: '', role: '', liability: 'guest' }]);
-  const removeAct = (id: string) => setLineup(p => p.filter(a => a.id !== id));
+  const removeAct = (id: string) => { setLineup(p => p.filter(a => a.id !== id)); persistFile(`lineup:${id}`, null); };
   const updateAct = (id: string, field: 'name' | 'role', value: string) =>
     setLineup(p => p.map(a => (a.id === id ? { ...a, [field]: value } : a)));
   const updateLiability = (id: string, liability: LineupLiability) =>
@@ -184,15 +434,17 @@ export default function CreateEventPage() {
       if (liability === 'headliner' && a.liability === 'headliner') return { ...a, liability: 'guest' };
       return a;
     }));
-  const updatePhoto = (id: string, file: File | null) =>
+  const updatePhoto = (id: string, file: File | null) => {
     setLineup(p => p.map(a => (a.id === id ? { ...a, photoFile: file, photoPreview: file ? URL.createObjectURL(file) : undefined } : a)));
+    persistFile(`lineup:${id}`, file);
+  };
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     if (!policyCheck.ok) { toast(policyCheck.error, 'error'); return; }
     if (!policyConfirmed) { toast('Confirm your refund policy before submitting', 'error'); return; }
     if (!accuracyConfirmed) { toast('Confirm your event information is accurate before submitting', 'error'); return; }
-    if (goLiveScheduled && !goLiveAt) { toast('Choose when your tickets go on sale', 'error'); return; }
+    if (!goLiveInactive && goLiveScheduled && !goLiveAt) { toast('Choose when your tickets go on sale', 'error'); return; }
     for (const t of tiers) {
       const gateProblem = gatesDraftProblem(t.gates, t.name.trim());
       if (gateProblem) { toast(gateProblem, 'error'); return; }
@@ -225,7 +477,8 @@ export default function CreateEventPage() {
       if (accentColor) fd.append('accentColor', accentColor);
       fd.append('refundPolicy', JSON.stringify(policyCheck.value));
       fd.append('confirmAccurate', 'true');
-      if (goLiveScheduled && goLiveAt) fd.append('goesLiveAt', fromLagosInput(goLiveAt) ?? '');
+      if (goLiveInactive) fd.append('goesLiveAt', INACTIVE_GO_LIVE);
+      else if (goLiveScheduled && goLiveAt) fd.append('goesLiveAt', fromLagosInput(goLiveAt) ?? '');
       const domains = restrictedDomainsInput.split(',').map(d => d.trim()).filter(Boolean);
       if (domains.length) fd.append('allowedEmailDomains', JSON.stringify(domains));
       const validLineup = lineup.filter(a => a.name.trim() || a.liability === 'surprise');
@@ -264,8 +517,20 @@ export default function CreateEventPage() {
         return;
       }
       if (!res.ok) {
-        toast(data.error || 'Failed to create event', 'error');
+        toast(
+          res.status === 401
+            ? 'You were signed out. Your draft is saved: sign in again and continue it from My Events.'
+            : (data.error || 'Failed to create event'),
+          'error',
+        );
         return;
+      }
+      // The event exists now, so drop the draft everywhere.
+      submittedRef.current = true;
+      const doneId = draftIdRef.current;
+      if (doneId) {
+        removeLocalDraft(doneId);
+        fetch(`/api/organizer/event-drafts/${doneId}`, { method: 'DELETE' }).catch(() => {});
       }
       toast('Submitted for review! We’ll email you as soon as your event is approved, usually within 24 hours.', 'success');
       const newId = data.data?.eventId;
@@ -281,8 +546,44 @@ export default function CreateEventPage() {
     <form onSubmit={handleSubmit} className="max-w-2xl flex flex-col gap-10">
       <div>
         <h1 className="text-2xl font-bold mb-1" style={{ color: 'var(--color-text)', fontFamily: 'var(--font-syne), sans-serif' }}>Create Event</h1>
-        <p className="text-sm" style={{ color: 'var(--color-text-muted)' }}>Fill in all sections and submit for review.</p>
+        <p className="text-sm" style={{ color: 'var(--color-text-muted)' }}>Fill in all sections and submit for review. Your progress saves automatically.</p>
       </div>
+
+      <div className="sticky top-0 z-20 -mt-6 flex items-center justify-between gap-3 rounded-xl border px-4 py-2.5"
+        style={{ backgroundColor: 'var(--color-surface)', borderColor: 'var(--color-border)' }}>
+        <span className="text-xs flex items-center gap-1.5 min-w-0"
+          style={{ color: saveStatus === 'signed_out' || saveStatus === 'local' ? 'var(--color-amber)' : 'var(--color-text-muted)' }}>
+          {saveStatus === 'saving' && <><Loader2 size={13} className="animate-spin flex-shrink-0" />Saving draft…</>}
+          {saveStatus === 'saved' && <><Check size={13} className="flex-shrink-0" style={{ color: 'var(--color-green)' }} />Draft saved{savedAt ? ` · ${new Date(savedAt).toLocaleTimeString([], { hour: 'numeric', minute: '2-digit' })}` : ''}</>}
+          {saveStatus === 'local' && <><CloudOff size={13} className="flex-shrink-0" />Saved on this device. Will sync when you&apos;re back online.</>}
+          {saveStatus === 'signed_out' && <><CloudOff size={13} className="flex-shrink-0" />Signed out. Saved on this device; sign in again to sync.</>}
+          {saveStatus === 'idle' && <>{draftId ? 'Draft' : 'Saves automatically as you fill it in.'}</>}
+        </span>
+        <Button type="button" variant="outline" size="sm" onClick={saveDraftNow} disabled={!hydrated || (!hasContent && !draftId)}>
+          <Save size={13} />Save draft
+        </Button>
+      </div>
+
+      {!draftId && otherDrafts.length > 0 && (
+        <div className="rounded-xl border px-4 py-3 text-sm flex flex-col gap-2"
+          style={{ backgroundColor: 'var(--color-purple-dim)', borderColor: 'var(--color-border)', color: 'var(--color-text-muted)' }}>
+          <p>You have {otherDrafts.length === 1 ? 'an unfinished draft' : `${otherDrafts.length} unfinished drafts`}. Pick up where you stopped:</p>
+          <div className="flex flex-wrap gap-x-4 gap-y-1">
+            {otherDrafts.slice(0, 3).map(d => (
+              <a key={d.id} href={`/organizer/events/create?draft=${d.id}`} className="font-medium underline" style={{ color: 'var(--color-purple-light)' }}>
+                {d.name || 'Untitled draft'}
+              </a>
+            ))}
+            {otherDrafts.length > 3 && <Link href="/organizer/events" className="underline">See all in My Events</Link>}
+          </div>
+        </div>
+      )}
+
+      {missingFiles.length > 0 && (
+        <div className="rounded-xl border px-4 py-3 text-sm" style={{ backgroundColor: '#f59e0b10', borderColor: '#f59e0b30', color: 'var(--color-text-muted)' }}>
+          Draft restored. Images stay on the device that picked them, so please re-add: <strong style={{ color: 'var(--color-text)' }}>{missingFiles.join(', ')}</strong>.
+        </div>
+      )}
 
       <section className="rounded-xl border p-6 flex flex-col gap-5" style={{ backgroundColor: 'var(--color-surface)', borderColor: 'var(--color-border)' }}>
         <h2 className="font-semibold text-lg" style={{ color: 'var(--color-text)' }}>1. Event Details</h2>
@@ -291,7 +592,7 @@ export default function CreateEventPage() {
         <Textarea label="Description" value={description} onChange={e => setDescription(e.target.value)} placeholder="Tell attendees what to expect..." rows={4} />
         <FlyerUploadInput
           label="Event Flyer"
-          onFile={setBanner}
+          onFile={pickBanner}
           onColorExtracted={handleColorExtracted}
           buttonText={banner ? `${banner.name} — click to replace` : undefined}
         />
@@ -302,7 +603,7 @@ export default function CreateEventPage() {
             minWidth={1200}
             minHeight={600}
             safeZoneHint
-            onCropped={setHeaderBanner}
+            onCropped={pickHeaderBanner}
             onColorExtracted={handleColorExtracted}
             buttonText={headerBanner ? `${headerBanner.name} — click to replace` : 'Click or drag to upload a wide header banner'}
           />
@@ -450,7 +751,7 @@ export default function CreateEventPage() {
                 Upload a lease agreement, booking confirmation, or receipt from the venue. Photos of the building are <strong>not</strong> accepted as proof.
               </p>
               <label className="flex items-center gap-3 rounded-xl border-2 border-dashed px-4 py-3.5 cursor-pointer transition-colors hover:border-[var(--color-purple)]" style={{ borderColor: 'var(--color-border)' }}>
-                <input type="file" className="sr-only" accept=".pdf,image/*" onChange={e => setVenueProof(e.target.files?.[0] ?? null)} />
+                <input type="file" className="sr-only" accept=".pdf,image/*" onChange={e => pickVenueProof(e.target.files?.[0] ?? null)} />
                 <Upload size={16} style={{ color: 'var(--color-text-dim)' }} />
                 <span className="text-sm" style={{ color: venueProof ? 'var(--color-green)' : 'var(--color-text-muted)' }}>
                   {venueProof ? venueProof.name : 'Upload lease agreement, booking confirmation, or receipt'}
@@ -580,13 +881,16 @@ export default function CreateEventPage() {
         <div>
           <p className="text-sm font-medium mb-1.5" style={{ color: 'var(--color-text)' }}>When do tickets go on sale?</p>
           <GoLiveField scheduled={goLiveScheduled} onScheduledChange={setGoLiveScheduled} value={goLiveAt} onChange={setGoLiveAt}
-            nowLabel="As soon as it's approved" />
+            nowLabel="As soon as it's approved" inactive={goLiveInactive} onInactiveChange={setGoLiveInactive}
+            inactiveLabel="Approved, but hidden until I turn it on" />
         </div>
         <div className="rounded-lg px-4 py-3 flex items-start gap-3 text-sm" style={{ backgroundColor: '#f59e0b10', border: '1px solid #f59e0b30' }}>
           <span className="flex-shrink-0 mt-0.5" style={{ color: '#f59e0b' }}>ⓘ</span>
           <p style={{ color: 'var(--color-text-muted)' }}>
             Every event is <strong style={{ color: 'var(--color-text)' }}>reviewed by our team</strong> before it goes public, usually within 24 hours.
-            {goLiveScheduled
+            {goLiveInactive
+              ? <> Once approved, it stays inactive until you make it active from the event page.</>
+              : goLiveScheduled
               ? <> Once approved, tickets go on sale at the time you picked (or at approval, if that comes later).</>
               : <> Tickets go on sale the moment it&apos;s approved.</>}
             {' '}A venue proof helps us approve physical events faster.

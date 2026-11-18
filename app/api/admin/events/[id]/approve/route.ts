@@ -4,7 +4,7 @@ import { getServerSupabase } from '@/lib/supabase/server';
 import { sendEventApprovedEmail } from '@/lib/server/email';
 import { notify } from '@/lib/server/notify';
 import { sendSubscriberTeasers } from '@/lib/server/eventTeasers';
-import { isScheduled, fmtGoLive } from '@/lib/goLive';
+import { isScheduled, isInactive, fmtGoLive } from '@/lib/goLive';
 
 export async function POST(
   _req: NextRequest,
@@ -58,7 +58,7 @@ export async function POST(
     const liveAt = scheduled ? fmtGoLive(event.goes_live_at as string) : null;
 
     if (organizer?.email && event.slug) {
-      await sendEventApprovedEmail(organizer.email, organizer.name, event.event_name, event.slug, liveAt).catch(console.error);
+      await sendEventApprovedEmail(organizer.email, organizer.name, event.event_name, event.slug, liveAt, isInactive(event.goes_live_at)).catch(console.error);
     }
     if (organizer?.id) {
       notify(

@@ -283,7 +283,9 @@ export default function AdminEventsPage() {
                 )}
                 {selectedEvent.goes_live_at && (
                   <span style={{ color: 'var(--color-text-muted)' }}>
-                    Organiser scheduled sales for {new Date(selectedEvent.goes_live_at).toLocaleString('en-NG', { timeZone: 'Africa/Lagos', dateStyle: 'medium', timeStyle: 'short' })}
+                    {selectedEvent.goes_live_at.startsWith('9999')
+                      ? 'Organiser is keeping it inactive until they make it active'
+                      : <>Organiser scheduled sales for {new Date(selectedEvent.goes_live_at).toLocaleString('en-NG', { timeZone: 'Africa/Lagos', dateStyle: 'medium', timeStyle: 'short' })}</>}
                   </span>
                 )}
                 {selectedEvent.rejection_reason && (

@@ -427,6 +427,9 @@ async function notifyTicketBuyersOfMeetingLinkChange(
   );
 }
 
+// Matches HORIZON_HOURS in lib/server/reconcile.ts.
+const DELETE_CHECKOUT_HORIZON_HOURS = 48;
+
 export async function DELETE(
   _req: NextRequest,
   { params }: { params: Promise<{ id: string }> }
@@ -449,11 +452,45 @@ export async function DELETE(
     if (!event || event.organizer_id !== user.sub) {
       return NextResponse.json({ error: 'Event not found' }, { status: 404 });
     }
-    if (event.status === 'approved') {
-      return NextResponse.json({ error: 'Cannot delete an approved event' }, { status: 403 });
+
+    // An event can be deleted only while no money or ticket has ever touched
+    // it — any status, as long as nothing was sold. Once a ticket (paid or
+    // free, even refunded) or a payout exists, the event is part of the
+    // financial/audit trail and must stay.
+    const horizon = new Date(Date.now() - DELETE_CHECKOUT_HORIZON_HOURS * 3600 * 1000).toISOString();
+    const [tickets, payouts, recentCheckouts] = await Promise.all([
+      db.from('tickets').select('id', { count: 'exact', head: true }).eq('event_id', id),
+      db.from('payouts').select('id', { count: 'exact', head: true }).eq('event_id', id),
+      // A recent checkout may still turn into a ticket: the payment provider
+      // can confirm late and the reconcile sweep recovers orders for up to
+      // 48h. Deleting now would leave a buyer charged with no ticket.
+      db.from('pending_orders').select('reference', { count: 'exact', head: true })
+        .eq('event_id', id).gt('created_at', horizon),
+    ]);
+    if (tickets.error || payouts.error || recentCheckouts.error) {
+      throw tickets.error ?? payouts.error ?? recentCheckouts.error;
+    }
+    if ((tickets.count ?? 0) > 0 || (payouts.count ?? 0) > 0) {
+      return NextResponse.json({
+        error: 'This event already has ticket sales, so it can\'t be deleted. Contact support if you need to cancel it.',
+      }, { status: 409 });
+    }
+    if ((recentCheckouts.count ?? 0) > 0) {
+      return NextResponse.json({
+        error: `Someone started checkout for this event in the last ${DELETE_CHECKOUT_HORIZON_HOURS} hours. To make sure no buyer is charged without a ticket, it can be deleted once that window has passed.`,
+      }, { status: 409 });
     }
 
-    await db.from('events').delete().eq('id', id);
+    // Rows with a non-cascading FK to events. With no tickets these are only
+    // abandoned checkouts, door-staff codes and invalid-scan logs.
+    for (const table of ['scan_logs', 'pending_orders', 'staff_ids'] as const) {
+      const { error } = await db.from(table).delete().eq('event_id', id);
+      if (error) throw error;
+    }
+
+    // ticket_tiers, access codes, reviews, monitor links etc. cascade.
+    const { error: delErr } = await db.from('events').delete().eq('id', id).eq('organizer_id', user.sub);
+    if (delErr) throw delErr;
     return NextResponse.json({ success: true });
   } catch (err) {
     console.error('DELETE /api/organizer/events/[id] error', err);
