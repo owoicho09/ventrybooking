@@ -36,6 +36,10 @@ export function EventQRCode({ url, eventName }: { url: string; eventName: string
           color: { dark: BRAND_DARK, light: '#ffffff' },
         });
         if (cancelled) return;
+        // toCanvas() writes style.width/height = 1024px onto the element; put
+        // the on-screen size back (the drawing stays 1024px for the download).
+        canvas.style.width = '100%';
+        canvas.style.height = 'auto';
 
         const ctx = canvas.getContext('2d');
         if (!ctx) return;
@@ -94,14 +98,14 @@ export function EventQRCode({ url, eventName }: { url: string; eventName: string
   };
 
   return (
-    <div className="flex flex-col sm:flex-row items-center gap-5">
+    <div className="flex flex-col sm:flex-row items-center sm:items-start gap-5 w-full min-w-0">
       <div
-        className="rounded-xl border p-3 flex-shrink-0"
+        className="rounded-xl border p-3 flex-shrink-0 w-[168px] max-w-full"
         style={{ backgroundColor: '#ffffff', borderColor: 'var(--color-border)' }}
       >
-        <canvas ref={canvasRef} width={CANVAS_SIZE} height={CANVAS_SIZE} style={{ width: 168, height: 168, display: 'block' }} />
+        <canvas ref={canvasRef} width={CANVAS_SIZE} height={CANVAS_SIZE} style={{ width: '100%', height: 'auto', display: 'block', aspectRatio: '1 / 1' }} />
       </div>
-      <div className="flex flex-col gap-2">
+      <div className="flex flex-col gap-2 items-center sm:items-start text-center sm:text-left min-w-0">
         <p className="text-sm" style={{ color: 'var(--color-text-muted)' }}>
           A scannable, branded QR code for your event link — put it on flyers, posters, or screens. High
           error correction keeps it scannable even printed small.
@@ -109,7 +113,7 @@ export function EventQRCode({ url, eventName }: { url: string; eventName: string
         {error && (
           <p className="text-xs" style={{ color: 'var(--color-red)' }}>Failed to generate QR code — try refreshing the page.</p>
         )}
-        <Button size="sm" variant="outline" disabled={!ready} onClick={handleDownload} className="self-start">
+        <Button size="sm" variant="outline" disabled={!ready} onClick={handleDownload}>
           <Download size={13} />Download High-Res PNG
         </Button>
       </div>

@@ -1,7 +1,7 @@
 'use client';
 
 import Link from 'next/link';
-import { usePathname, useRouter } from 'next/navigation';
+import { usePathname } from 'next/navigation';
 import { RotateCcw,
   LayoutDashboard,
   CalendarDays,
@@ -16,6 +16,7 @@ import { RotateCcw,
   Presentation,
 } from 'lucide-react';
 import { ThemeToggle } from './ThemeToggle';
+import { useOrganizerLogout } from './useOrganizerLogout';
 import { NotificationBell } from '@/components/ui/NotificationBell';
 
 const navItems = [
@@ -34,13 +35,8 @@ const navItems = [
 
 export function OrganizerSidebar() {
   const pathname = usePathname();
-  const router = useRouter();
 
-  const handleLogout = async () => {
-    await fetch('/api/auth/logout', { method: 'POST' });
-    router.push('/organizer/login');
-    router.refresh();
-  };
+  const { logout: handleLogout, loggingOut } = useOrganizerLogout();
 
   return (
     <aside
@@ -70,12 +66,14 @@ export function OrganizerSidebar() {
 
       <div className="p-3 border-t flex items-center justify-between" style={{ borderColor: 'var(--color-border)' }}>
         <button
+          type="button"
           onClick={handleLogout}
-          className="flex items-center gap-2 px-3 py-2 rounded-lg text-sm transition-colors hover:text-red-400"
+          disabled={loggingOut}
+          className="flex items-center gap-2 px-3 py-2 rounded-lg text-sm transition-colors hover:text-red-400 disabled:opacity-50"
           style={{ color: 'var(--color-text-muted)' }}
         >
           <LogOut size={16} />
-          Logout
+          {loggingOut ? 'Logging out…' : 'Logout'}
         </button>
         <div className="flex items-center gap-2">
           <NotificationBell openUp align="left" />

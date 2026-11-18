@@ -14,10 +14,12 @@ import { RotateCcw,
   Share2,
   Users,
   MoreHorizontal,
+  LogOut,
   Presentation,
 } from 'lucide-react';
 import { NotificationBell } from '@/components/ui/NotificationBell';
 import { Drawer } from '@/components/ui/Drawer';
+import { useOrganizerLogout } from './useOrganizerLogout';
 
 const navItems = [
   { href: '/organizer/dashboard',     label: 'Overview',   icon: LayoutDashboard },
@@ -40,6 +42,7 @@ const moreItems = [
 export function OrganizerBottomNav() {
   const pathname = usePathname();
   const [moreOpen, setMoreOpen] = useState(false);
+  const { logout, loggingOut } = useOrganizerLogout();
 
   // Auto-close the sheet after navigating to one of its own links.
   useEffect(() => { setMoreOpen(false); }, [pathname]);
@@ -104,6 +107,16 @@ export function OrganizerBottomNav() {
               </Link>
             );
           })}
+          <button
+            type="button"
+            onClick={logout}
+            disabled={loggingOut}
+            className="flex items-center gap-3 px-3 py-3 mt-1 rounded-lg text-sm font-medium border-t disabled:opacity-50"
+            style={{ color: 'var(--color-red)', borderColor: 'var(--color-border)' }}
+          >
+            <LogOut size={18} />
+            {loggingOut ? 'Logging out…' : 'Log out'}
+          </button>
         </div>
       </Drawer>
     </>

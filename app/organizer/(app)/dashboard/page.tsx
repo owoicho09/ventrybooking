@@ -2,7 +2,8 @@
 
 import { useState, useEffect } from 'react';
 import Link from 'next/link';
-import { Ticket, Wallet, CheckCircle, ArrowUpRight, Plus, Mail, ShieldAlert } from 'lucide-react';
+import { Ticket, Wallet, CheckCircle, ArrowUpRight, Plus, Mail, ShieldAlert, LogOut } from 'lucide-react';
+import { useOrganizerLogout } from '@/components/layout/useOrganizerLogout';
 import { StatsCard } from '@/components/admin/StatsCard';
 import { Badge } from '@/components/ui/Badge';
 import { Button } from '@/components/ui/Button';
@@ -23,6 +24,7 @@ const statusBadge = (status: string) => {
 };
 
 export default function OrganizerDashboardPage() {
+  const { logout, loggingOut } = useOrganizerLogout();
   const [stats, setStats] = useState<Stats | null>(null);
   const [events, setEvents] = useState<OrgEvent[]>([]);
   const [me, setMe] = useState<Me | null>(null);
@@ -72,7 +74,14 @@ export default function OrganizerDashboardPage() {
             Welcome back{me ? `, ${me.name.split(' ')[0]}` : ''}
           </p>
         </div>
-        <Link href="/organizer/events/create"><Button><Plus size={16} />Create Event</Button></Link>
+        <div className="flex items-center gap-2">
+          <Link href="/organizer/events/create"><Button><Plus size={16} />Create Event</Button></Link>
+          <button type="button" onClick={logout} disabled={loggingOut} aria-label="Log out"
+            className="lg:hidden inline-flex items-center justify-center w-10 h-10 rounded-lg border disabled:opacity-50"
+            style={{ borderColor: 'var(--color-border)', color: 'var(--color-text-muted)' }}>
+            <LogOut size={17} />
+          </button>
+        </div>
       </div>
 
       {/* All money figures are the organiser's share after Ventry's fee — never gross. */}

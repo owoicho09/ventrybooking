@@ -66,8 +66,10 @@ export function EventDetailContent({ identifier, preview }: EventDetailContentPr
   const [fetchedEvent, setEvent] = useState<DetailEvent | null>(null);
   const event = preview?.event ?? fetchedEvent;
   const [loading, setLoading] = useState(!preview);
-  const [selectedId, setSelectedId] = useState<string | null>(null);
-  const [qty, setQty] = useState(1);
+  // Quantity per tier: a buyer can mix tiers in one order (2 Regular + 1 VIP).
+  const [qtys, setQtys] = useState<Record<string, number>>({});
+  // The code-gated tier whose promo-code box is open.
+  const [codeOpenId, setCodeOpenId] = useState<string | null>(null);
   const [feeOpenId, setFeeOpenId] = useState<string | null>(null);
   // Gated tiers (054). unlocked: tierId -> the promo code that unlocked it.
   const [unlocked, setUnlocked] = useState<Record<string, string>>({});
@@ -91,8 +93,7 @@ export function EventDetailContent({ identifier, preview }: EventDetailContentPr
         // Preselect the cheapest open tier still on sale, one ticket. Gated
         // tiers (promo code / email domain) are never preselected.
         const firstOnSale = [...ev.tiers].sort((a, b) => a.price - b.price).find(t => t.available - t.sold > 0 && !isGated(t));
-        setSelectedId(firstOnSale?.id ?? null);
-        setQty(1);
+        setQtys(firstOnSale ? { [firstOnSale.id]: 1 } : {});
         // Codes this buyer already unlocked in this tab survive a reload / back.
         try {
           const saved = JSON.parse(sessionStorage.getItem(`ventry_codes_${ev.id}`) || '{}');
@@ -137,26 +138,50 @@ export function EventDetailContent({ identifier, preview }: EventDetailContentPr
     return () => target.removeEventListener('scroll', onScroll);
   }, [scrollRoot]);
 
-  const maxQtyForTier = (tier: TicketTier) =>
-    Math.max(0, Math.min(tier.price === 0 ? FREE_TIER_ORDER_CAP : PAID_TIER_ORDER_CAP, tier.available - tier.sold));
-
-  // In preview the event arrives as a prop, so fall back to the cheapest tier on sale.
+  // In preview the event arrives as a prop, so start with the cheapest open tier.
   const defaultTierId = event ? [...event.tiers].sort((a, b) => a.price - b.price).find(t => t.available - t.sold > 0 && !isGated(t))?.id ?? null : null;
-  const selectedTier = event?.tiers.find(t => t.id === (selectedId ?? (preview ? defaultTierId : null))) ?? null;
-  const maxQty = selectedTier ? maxQtyForTier(selectedTier) : 0;
-  const quantity = selectedTier ? Math.min(qty, maxQty) : 0;
-  // A code tier can be selected (so the code box shows) but not bought until unlocked.
-  const needsCode = !!selectedTier?.requiresCode && !unlocked[selectedTier.id];
-  const hasSelection = !!selectedTier && quantity > 0 && !needsCode;
-  // The exact helper checkout charges with — the total shown is the total debited.
-  const totals = buyerTotalForItems(hasSelection ? [{ price: selectedTier!.price, quantity }] : []);
-  const allFree = hasSelection && selectedTier!.price === 0;
+  const effectiveQtys: Record<string, number> = preview && Object.keys(qtys).length === 0 && defaultTierId ? { [defaultTierId]: 1 } : qtys;
+  const locked = (t: TicketTier) => !!t.requiresCode && !unlocked[t.id];
+  const qtyOf = (t: TicketTier) => (locked(t) ? 0 : effectiveQtys[t.id] ?? 0);
 
+  // Free tickets are capped per ORDER (all free tiers together); paid tiers per tier.
+  const freeInOrder = (event?.tiers ?? []).reduce((n, t) => n + (t.price === 0 ? qtyOf(t) : 0), 0);
+  const maxQtyForTier = (tier: TicketTier) => {
+    const left = Math.max(0, tier.available - tier.sold);
+    if (tier.price > 0) return Math.min(PAID_TIER_ORDER_CAP, left);
+    return Math.min(left, Math.max(0, FREE_TIER_ORDER_CAP - (freeInOrder - qtyOf(tier))));
+  };
+
+  const lines = [...(event?.tiers ?? [])]
+    .sort((a, b) => a.price - b.price)
+    .map(t => ({ tier: t, quantity: Math.min(qtyOf(t), Math.max(0, t.available - t.sold)) }))
+    .filter(l => l.quantity > 0);
+  const ticketCount = lines.reduce((n, l) => n + l.quantity, 0);
+  const hasSelection = lines.length > 0;
+  // A code tier the buyer opened but hasn't unlocked yet.
+  const needsCode = !hasSelection && !!codeOpenId && !!event?.tiers.find(t => t.id === codeOpenId && locked(t));
+  // The exact helper checkout charges with: the total shown is the total debited.
+  const totals = buyerTotalForItems(lines.map(l => ({ price: l.tier.price, quantity: l.quantity })));
+  const allFree = hasSelection && lines.every(l => l.tier.price === 0);
+  const orderSummary = lines.length === 1 ? `${lines[0].quantity} \u00d7 ${lines[0].tier.name}` : `${ticketCount} tickets, ${lines.length} types`;
+
+  const setTierQty = (tier: TicketTier, n: number) =>
+    setQtys(q => {
+      const next = { ...(preview && Object.keys(q).length === 0 && defaultTierId ? { [defaultTierId]: 1 } : q) };
+      const v = Math.max(0, Math.min(n, maxQtyForTier(tier)));
+      if (v > 0) next[tier.id] = v; else delete next[tier.id];
+      return next;
+    });
+
+  // Tapping a tier adds one ticket (or opens the code box for a locked promo tier).
   const selectTier = (tier: TicketTier) => {
     if (tier.available - tier.sold <= 0) return;
-    if (tier.id !== selectedId) { setCodeDraft(''); setCodeErr(''); }
-    setSelectedId(tier.id);
-    setQty(q => Math.max(1, Math.min(q, maxQtyForTier(tier))));
+    if (locked(tier)) {
+      if (codeOpenId !== tier.id) { setCodeDraft(''); setCodeErr(''); }
+      setCodeOpenId(id => (id === tier.id ? null : tier.id));
+      return;
+    }
+    if (qtyOf(tier) === 0) setTierQty(tier, 1);
   };
 
   const unlockTier = async (tier: TicketTier) => {
@@ -175,6 +200,8 @@ export function EventDetailContent({ identifier, preview }: EventDetailContentPr
       setUnlocked(next);
       try { sessionStorage.setItem(`ventry_codes_${event.id}`, JSON.stringify(next)); } catch { /* ignore */ }
       setCodeDraft('');
+      setCodeOpenId(null);
+      setQtys(q => ({ ...q, [tier.id]: Math.max(1, q[tier.id] ?? 0) }));
       toast(`Unlocked: ${tier.name}`, 'success');
     } catch {
       setCodeErr('Network error. Try again.');
@@ -191,14 +218,14 @@ export function EventDetailContent({ identifier, preview }: EventDetailContentPr
       eventId:   event.id,
       eventName: event.name,
       eventDate: event.date,
-      items: [{
-        tierId:    selectedTier!.id,
-        tierName:  selectedTier!.name,
-        tierPrice: selectedTier!.price,
+      items: lines.map(({ tier, quantity }) => ({
+        tierId:    tier.id,
+        tierName:  tier.name,
+        tierPrice: tier.price,
         quantity,
-        accessCode: unlocked[selectedTier!.id] || undefined,
-        allowedEmailDomains: selectedTier!.allowedEmailDomains ?? null,
-      }],
+        accessCode: unlocked[tier.id] || undefined,
+        allowedEmailDomains: tier.allowedEmailDomains ?? null,
+      })),
       ref,
       allowedEmailDomains: event.allowedEmailDomains ?? null,
       // Shown again at checkout so the buyer sees it right before paying.
@@ -335,11 +362,13 @@ export function EventDetailContent({ identifier, preview }: EventDetailContentPr
         </p>
       )}
 
-      <div role={isCompleted ? undefined : 'radiogroup'} aria-label="Ticket type">
+      {!isCompleted && sortedTiers.length > 1 && <p className="v-hint">Pick as many ticket types as you like.</p>}
+      <div role={isCompleted ? undefined : 'group'} aria-label="Ticket types">
         {sortedTiers.map(tier => {
           const remaining = tier.available - tier.sold;
           const out = remaining <= 0;
-          const on = !isCompleted && tier.id === selectedTier?.id;
+          const tierQty = qtyOf(tier);
+          const on = !isCompleted && (tierQty > 0 || codeOpenId === tier.id);
           const urgency = ticketUrgency(tier.available, tier.sold);
           return (
             <div
@@ -349,27 +378,18 @@ export function EventDetailContent({ identifier, preview }: EventDetailContentPr
             >
               <div
                 className="v-tier-choice"
-                role={isCompleted ? undefined : 'radio'}
-                aria-checked={isCompleted ? undefined : on}
+                role={isCompleted ? undefined : 'button'}
+                aria-pressed={isCompleted ? undefined : tierQty > 0}
                 aria-disabled={out || isCompleted || undefined}
-                tabIndex={!out && !isCompleted && on ? 0 : -1}
+                tabIndex={!out && !isCompleted ? 0 : -1}
                 onClick={() => {
                   if (!out && !isCompleted) selectTier(tier);
                 }}
                 onKeyDown={e => {
                   if (out || isCompleted) return;
-                  if (e.key === ' ' || e.key === 'Enter') {
+                  if (e.target === e.currentTarget && (e.key === ' ' || e.key === 'Enter')) {
                     e.preventDefault();
                     selectTier(tier);
-                  } else if (['ArrowDown', 'ArrowRight', 'ArrowUp', 'ArrowLeft'].includes(e.key)) {
-                    e.preventDefault();
-                    const group = e.currentTarget.closest('[role="radiogroup"]');
-                    const options = Array.from(group?.querySelectorAll<HTMLElement>('[role="radio"]:not([aria-disabled="true"])') ?? []);
-                    const direction = e.key === 'ArrowDown' || e.key === 'ArrowRight' ? 1 : -1;
-                    const nextIndex = (options.indexOf(e.currentTarget) + direction + options.length) % options.length;
-                    const nextOption = options[nextIndex];
-                    nextOption?.focus();
-                    nextOption?.click();
                   }
                 }}
               >
@@ -426,7 +446,18 @@ export function EventDetailContent({ identifier, preview }: EventDetailContentPr
                 </div>
               )}
 
-              {on && !out && tier.requiresCode && !unlocked[tier.id] && (
+              {!isCompleted && !out && !locked(tier) && (
+                <div className="v-tier-qty">
+                  <span>{tierQty > 0 ? `${tierQty} selected` : 'Add to order'}</span>
+                  <div className="v-qty-ctrl">
+                    <button type="button" className="v-qbtn" onClick={() => setTierQty(tier, tierQty - 1)} disabled={tierQty <= 0} aria-label={`One fewer ${tier.name}`}>−</button>
+                    <span className="v-qnum" aria-live="polite">{tierQty}</span>
+                    <button type="button" className="v-qbtn" onClick={() => setTierQty(tier, tierQty + 1)} disabled={tierQty >= maxQtyForTier(tier)} aria-label={`One more ${tier.name}`}>+</button>
+                  </div>
+                </div>
+              )}
+
+              {codeOpenId === tier.id && !out && locked(tier) && (
                 <div onClick={e => e.stopPropagation()}>
                   <form className="v-code" onSubmit={e => { e.preventDefault(); unlockTier(tier); }}>
                     <input value={codeDraft} maxLength={8} autoComplete="off" autoCapitalize="characters" spellCheck={false}
@@ -470,24 +501,24 @@ export function EventDetailContent({ identifier, preview }: EventDetailContentPr
 
       {!isCompleted && (
         <>
-          <div className="v-qty">
-            <span>How many{selectedTier ? ` × ${selectedTier.name}` : ''}?</span>
-            <div className="v-qty-ctrl">
-              <button type="button" className="v-qbtn" onClick={() => setQty(q => Math.max(1, Math.min(q, maxQty) - 1))} disabled={!selectedTier || quantity <= 1} aria-label="One fewer">−</button>
-              <span className="v-qnum" aria-live="polite">{quantity}</span>
-              <button type="button" className="v-qbtn" onClick={() => setQty(q => Math.min(maxQty, q + 1))} disabled={!selectedTier || quantity >= maxQty} aria-label="One more">+</button>
+          {hasSelection && (
+            <div className="v-order" aria-live="polite">
+              {lines.map(({ tier, quantity }) => (
+                <div className="v-sum" key={tier.id}>
+                  <span>{quantity} × {tier.name}</span>
+                  <span>{tier.price === 0 ? 'Free' : formatNGN(ticketPriceWithService(tier.price) * quantity)}</span>
+                </div>
+              ))}
+              {allFree ? (
+                <div className="v-sum tot"><span>Total</span><span style={{ color: 'var(--green-lt)' }}>Free</span></div>
+              ) : (
+                <>
+                  <div className="v-sum"><span>Processing fee</span><span>{formatNGN(totals.processingFee)}</span></div>
+                  <div className="v-sum tot"><span>Total{lines.length > 1 ? ` (${ticketCount} tickets)` : ''}</span><span>{formatNGN(totals.total)}</span></div>
+                </>
+              )}
             </div>
-          </div>
-
-          {hasSelection && (allFree ? (
-            <div className="v-sum tot"><span>Total</span><span style={{ color: 'var(--green-lt)' }}>Free</span></div>
-          ) : (
-            <>
-              <div className="v-sum"><span>{quantity} × {selectedTier!.name}</span><span>{formatNGN(totals.subtotal + totals.serviceFee)}</span></div>
-<div className="v-sum"><span>Processing fee</span><span>{formatNGN(totals.processingFee)}</span></div>
-              <div className="v-sum tot"><span>Total</span><span>{formatNGN(totals.total)}</span></div>
-            </>
-          ))}
+          )}
 
           <button type="button" className="v-btn v-btn-accent v-btn-block" style={{ marginTop: 14 }} disabled={!hasSelection} onClick={handlePurchase}>
             {!minOnSale ? 'Sold out' : needsCode ? 'Enter your code to continue' : allFree ? 'Get free tickets' : 'Get tickets'}
@@ -749,7 +780,7 @@ export function EventDetailContent({ identifier, preview }: EventDetailContentPr
           <>
             <button type="button" className="p" style={{ background: 'none', border: 0, textAlign: 'left', padding: 0, cursor: 'pointer' }} onClick={() => tiersRef.current?.scrollIntoView({ behavior: 'smooth', block: 'start' })}>
               {hasSelection ? (allFree ? 'Free' : formatNGN(totals.total)) : minOnSale ? (minOnSale.price === 0 ? 'Free' : `From ${formatNGN(ticketPriceWithService(minOnSale.price))}`) : 'Sold out'}
-              <i>{hasSelection ? `${quantity} × ${selectedTier!.name}${allFree ? '' : ', all fees in'} · change` : 'Choose a ticket'}</i>
+              <i>{hasSelection ? `${orderSummary}${allFree ? '' : ', all fees in'} · change` : 'Choose tickets'}</i>
             </button>
             <button type="button" className="v-btn v-btn-accent" disabled={!hasSelection} onClick={handlePurchase}>
               {allFree ? 'Get free tickets' : 'Get tickets'}
