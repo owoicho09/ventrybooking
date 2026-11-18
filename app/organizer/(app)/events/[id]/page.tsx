@@ -54,6 +54,7 @@ interface OrgEvent {
   meeting_link: string | null; meeting_passcode: string | null;
   status: string; total_sold: number; banner_url: string | null; header_banner_url: string | null; banner_color: string;
   accent_color: string | null; lineup: LineupAct[]; allowed_email_domains: string[] | null;
+  price_before_fees?: boolean;
   refund_policy: RefundPolicyAnswers | null; refund_policy_set_at: string | null;
   verified: boolean; venue_proof_url: string | null; venue_contact_name: string | null; venue_contact_phone: string | null;
   lga: string | null; address_reveal_at: string | null; goes_live_at: string | null;
@@ -427,6 +428,7 @@ export default function OrganizerEventDetailPage() {
     banner_url: event.banner_url,
     headerBannerUrl: event.header_banner_url,
     accentColor,
+    priceBeforeFees: event.price_before_fees === true,
     verified: false,
     refundPolicy: draftPolicy.ok ? draftPolicy.value : event.refund_policy,
     allowedEmailDomains: restrictedDomainsInput.split(',').map(d => d.trim()).filter(Boolean),
