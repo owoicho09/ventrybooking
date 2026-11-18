@@ -32,6 +32,8 @@ interface Cart {
   refundPolicy?: unknown;
   organizerName?: string | null;
   eventSlug?: string | null;
+  /** The event advertises prices before fees (060): itemise the service fee. */
+  priceBeforeFees?: boolean;
 }
 
 export default function CheckoutPage() {
@@ -307,10 +309,23 @@ export default function CheckoutPage() {
             </div>
 
             <div className="flex flex-col gap-1.5 text-sm mb-4 pt-3 border-t" style={{ borderColor: 'var(--color-border)' }}>
-              <div className="flex justify-between">
-                <span style={{ color: 'var(--color-text-muted)' }}>Tickets</span>
-                <span style={{ color: 'var(--color-text)' }}>{isFree ? 'Free' : formatNGN(subtotal + serviceFee)}</span>
-              </div>{!isFree && (
+              {cart.priceBeforeFees && !isFree ? (
+                <>
+                  <div className="flex justify-between">
+                    <span style={{ color: 'var(--color-text-muted)' }}>Tickets</span>
+                    <span style={{ color: 'var(--color-text)' }}>{formatNGN(subtotal)}</span>
+                  </div>
+                  <div className="flex justify-between">
+                    <span style={{ color: 'var(--color-text-muted)' }}>Service fee</span>
+                    <span style={{ color: 'var(--color-text)' }}>{formatNGN(serviceFee)}</span>
+                  </div>
+                </>
+              ) : (
+                <div className="flex justify-between">
+                  <span style={{ color: 'var(--color-text-muted)' }}>Tickets</span>
+                  <span style={{ color: 'var(--color-text)' }}>{isFree ? 'Free' : formatNGN(subtotal + serviceFee)}</span>
+                </div>
+              )}{!isFree && (
                 <div className="flex justify-between">
                   <span style={{ color: 'var(--color-text-muted)' }}>Processing fee</span>
                   <span style={{ color: 'var(--color-text)' }}>{formatNGN(processingFee)}</span>

@@ -411,6 +411,7 @@ function Featured({ event: e }: { event: PublicEvent }) {
               {price && (
                 <div className="v-feat-price" style={price.free ? { color: 'var(--green-lt)' } : undefined}>
                   {e.cheapestOnSale ? (e.cheapestOnSale.price === 0 ? 'Free' : naira(e.cheapestOnSale.price)) : price.value}
+                  {price.plusFees && (e.cheapestOnSale?.price ?? 1) > 0 && <span className="v-plus-fees">+ fees</span>}
                   {e.cheapestOnSale && (
                     <i>{e.cheapestOnSale.name}{e.urgency && e.cheapestOnSale.remaining <= 50 ? `, ${e.cheapestOnSale.remaining} left` : ''}</i>
                   )}

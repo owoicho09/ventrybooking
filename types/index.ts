@@ -83,6 +83,8 @@ export interface Event {
   banner_url?: string | null;
   headerBannerUrl?: string | null;
   accentColor?: string | null;
+  /** Advertise exact tier prices; fees are itemised at checkout (060). */
+  priceBeforeFees?: boolean;
   /** The organiser's published refund-policy answers (lib/refundPolicy.ts); null until set. */
   refundPolicy?: import('@/lib/refundPolicy').RefundPolicyAnswers | null;
   /** Venue booking confirmed by Ventry for this event (the public Verified badge). Distinct from organizer.verified. */

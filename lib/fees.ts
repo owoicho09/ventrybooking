@@ -34,6 +34,16 @@ export function ticketPriceWithService(ticketPrice: number): number {
 }
 
 /**
+ * The per-ticket price to advertise for a tier. Normally the service fee is
+ * folded in; an event set to show prices before fees (060) advertises the
+ * exact tier price and itemises every fee at checkout instead. The amount
+ * charged is the same either way.
+ */
+export function listedTicketPrice(ticketPrice: number, priceBeforeFees?: boolean | null): number {
+  return priceBeforeFees ? ticketPrice : ticketPriceWithService(ticketPrice);
+}
+
+/**
  * Processing fee owed on a pre-processing amount (ticket subtotal + service
  * fee): 1.5% of that amount, plus a flat ₦100 above the ₦2,500 threshold,
  * capped at ₦2,000, rounded up to the next whole naira.

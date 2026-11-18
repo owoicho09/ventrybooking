@@ -44,6 +44,7 @@ interface EventData {
   banner_url?: string | null;
   submitted_at?: string | null; reviewed_at?: string | null; reviewed_by?: string | null;
   rejection_reason?: string | null; goes_live_at?: string | null;
+  price_before_fees?: boolean;
   tiers?: { id: string; name: string; price: number; available: number }[];
   organizer: { name: string; tier?: string; verified?: boolean };
 }
@@ -93,6 +94,29 @@ export default function AdminEventsPage() {
       toast('Network error', 'error');
     } finally {
       setBadgeBusy(false);
+    }
+  };
+  // Per-event price display (060): exact tier prices, fees itemised at checkout.
+  const [priceBusy, setPriceBusy] = useState(false);
+  const setPriceBeforeFees = async (ev: EventData, on: boolean) => {
+    if (priceBusy) return;
+    setPriceBusy(true);
+    try {
+      const res = await fetch(`/api/admin/events/${ev.id}/price-display`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ priceBeforeFees: on }),
+      });
+      const d = await res.json();
+      if (!res.ok || !d.success) { toast(d.error ?? 'Could not update price display', 'error'); return; }
+      const patchEv = (e: EventData) => (e.id === ev.id ? { ...e, price_before_fees: d.data.price_before_fees } : e);
+      setEvents(list => list.map(patchEv));
+      setSelectedEvent(cur => (cur ? patchEv(cur) : cur));
+      toast(on ? 'Prices now shown before fees' : 'Prices now shown with fees included', 'success');
+    } catch {
+      toast('Network error', 'error');
+    } finally {
+      setPriceBusy(false);
     }
   };
   const [rejecting, setRejecting]       = useState(false);
@@ -423,6 +447,23 @@ export default function AdminEventsPage() {
                 </div>
               </div>
             )}
+
+            {/* Price display (060) */}
+            <div className="rounded-lg border p-3 flex flex-col gap-2" style={{ borderColor: selectedEvent.price_before_fees ? 'var(--color-purple)' : 'var(--color-border)', backgroundColor: 'var(--color-surface-2)' }}>
+              <p className="text-sm font-semibold" style={{ color: 'var(--color-text)' }}>
+                Ticket prices: {selectedEvent.price_before_fees ? 'shown before fees' : 'shown with fees included (default)'}
+              </p>
+              <p className="text-xs" style={{ color: 'var(--color-text-muted)' }}>
+                {selectedEvent.price_before_fees
+                  ? 'Buyers see the exact tier prices with “+ fees”; the service and processing fees are listed at checkout.'
+                  : 'For organisers who price on purpose (e.g. ₦4,444). Shows the exact tier prices and lists the fees at checkout. Buyers pay the same total either way.'}
+              </p>
+              <div>
+                <Button size="sm" variant="outline" disabled={priceBusy} onClick={() => setPriceBeforeFees(selectedEvent, !selectedEvent.price_before_fees)}>
+                  {priceBusy ? 'Saving…' : selectedEvent.price_before_fees ? 'Include fees in prices again' : 'Show prices before fees'}
+                </Button>
+              </div>
+            </div>
 
             {statusBadge(selectedEvent.status)}
 

@@ -7,7 +7,7 @@ import Link from 'next/link';
 import { ChevronLeft, MapPin, Share2, ShieldCheck, QrCode, Clock3, Info, Video, Lock, Mail, Check } from 'lucide-react';
 import { formatNGN } from '@/lib/utils';
 import {
-  buyerTotalForItems, ticketPriceWithService, serviceFeePerTicket,
+  buyerTotalForItems, listedTicketPrice, serviceFeePerTicket,
   SERVICE_FEE_RATE, SERVICE_FEE_FLAT, SERVICE_FEE_THRESHOLD,
   PROCESSING_FEE_RATE, PROCESSING_FEE_FLAT, PROCESSING_FEE_THRESHOLD, PROCESSING_FEE_CAP,
 } from '@/lib/fees';
@@ -162,6 +162,9 @@ export function EventDetailContent({ identifier, preview }: EventDetailContentPr
   const needsCode = !hasSelection && !!codeOpenId && !!event?.tiers.find(t => t.id === codeOpenId && locked(t));
   // The exact helper checkout charges with: the total shown is the total debited.
   const totals = buyerTotalForItems(lines.map(l => ({ price: l.tier.price, quantity: l.quantity })));
+  // Per-event (060): advertise the exact tier prices and itemise the service
+  // fee in the order summary instead of folding it into each price.
+  const beforeFees = event?.priceBeforeFees === true;
   const allFree = hasSelection && lines.every(l => l.tier.price === 0);
   const orderSummary = lines.length === 1 ? `${lines[0].quantity} \u00d7 ${lines[0].tier.name}` : `${ticketCount} tickets, ${lines.length} types`;
 
@@ -232,6 +235,7 @@ export function EventDetailContent({ identifier, preview }: EventDetailContentPr
       refundPolicy: event.refundPolicy ?? null,
       organizerName: event.organizer?.name?.trim() || null,
       eventSlug: event.slug || null,
+      priceBeforeFees: beforeFees,
     }));
     router.push('/checkout');
   };
@@ -396,7 +400,8 @@ export function EventDetailContent({ identifier, preview }: EventDetailContentPr
                 <div className="v-tier-top">
                   <span className="v-tier-n">{tier.name}</span>
                   <span className="v-tier-pw">
-                    <span className={`v-tier-p${tier.price === 0 ? ' free' : ''}`}>{tier.price === 0 ? 'Free' : formatNGN(ticketPriceWithService(tier.price))}</span>
+                    <span className={`v-tier-p${tier.price === 0 ? ' free' : ''}`}>{tier.price === 0 ? 'Free' : formatNGN(listedTicketPrice(tier.price, beforeFees))}</span>
+                    {beforeFees && tier.price > 0 && <span className="v-plus-fees">+ fees</span>}
                     {tier.price > 0 && (
                       <button
                         type="button"
@@ -480,7 +485,7 @@ export function EventDetailContent({ identifier, preview }: EventDetailContentPr
                       <span>Service fee ({capped ? `flat, capped at ${formatNGN(SERVICE_FEE_FLAT)}` : `${SERVICE_FEE_RATE * 100}%`})</span>
                       <span>{formatNGN(fee)}</span>
                     </div>
-                    <div className="t"><span>Price per ticket</span><span>{formatNGN(tier.price + fee)}</span></div>
+                    <div className="t"><span>{beforeFees ? 'With service fee' : 'Price per ticket'}</span><span>{formatNGN(tier.price + fee)}</span></div>
                     <p>
                       A payment processing fee of {PROCESSING_FEE_RATE * 100}% (+ {formatNGN(PROCESSING_FEE_FLAT)} on orders over {formatNGN(PROCESSING_FEE_THRESHOLD)}, max {formatNGN(PROCESSING_FEE_CAP)}) is added once per order and shown before you pay.
                     </p>
@@ -506,13 +511,16 @@ export function EventDetailContent({ identifier, preview }: EventDetailContentPr
               {lines.map(({ tier, quantity }) => (
                 <div className="v-sum" key={tier.id}>
                   <span>{quantity} × {tier.name}</span>
-                  <span>{tier.price === 0 ? 'Free' : formatNGN(ticketPriceWithService(tier.price) * quantity)}</span>
+                  <span>{tier.price === 0 ? 'Free' : formatNGN(listedTicketPrice(tier.price, beforeFees) * quantity)}</span>
                 </div>
               ))}
               {allFree ? (
                 <div className="v-sum tot"><span>Total</span><span style={{ color: 'var(--green-lt)' }}>Free</span></div>
               ) : (
                 <>
+                  {beforeFees && totals.serviceFee > 0 && (
+                    <div className="v-sum"><span>Service fee</span><span>{formatNGN(totals.serviceFee)}</span></div>
+                  )}
                   <div className="v-sum"><span>Processing fee</span><span>{formatNGN(totals.processingFee)}</span></div>
                   <div className="v-sum tot"><span>Total{lines.length > 1 ? ` (${ticketCount} tickets)` : ''}</span><span>{formatNGN(totals.total)}</span></div>
                 </>
@@ -779,7 +787,7 @@ export function EventDetailContent({ identifier, preview }: EventDetailContentPr
         ) : (
           <>
             <button type="button" className="p" style={{ background: 'none', border: 0, textAlign: 'left', padding: 0, cursor: 'pointer' }} onClick={() => tiersRef.current?.scrollIntoView({ behavior: 'smooth', block: 'start' })}>
-              {hasSelection ? (allFree ? 'Free' : formatNGN(totals.total)) : minOnSale ? (minOnSale.price === 0 ? 'Free' : `From ${formatNGN(ticketPriceWithService(minOnSale.price))}`) : 'Sold out'}
+              {hasSelection ? (allFree ? 'Free' : formatNGN(totals.total)) : minOnSale ? (minOnSale.price === 0 ? 'Free' : `From ${formatNGN(listedTicketPrice(minOnSale.price, beforeFees))}${beforeFees ? ' + fees' : ''}`) : 'Sold out'}
               <i>{hasSelection ? `${orderSummary}${allFree ? '' : ', all fees in'} · change` : 'Choose tickets'}</i>
             </button>
             <button type="button" className="v-btn v-btn-accent" disabled={!hasSelection} onClick={handlePurchase}>

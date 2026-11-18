@@ -93,7 +93,7 @@ export function EventCardV2({ event, cta = 'Get tickets', priority = false, size
                 : <div className="v-price-l" style={{ fontSize: 12 }}>Ticket sales closed</div>}
             </div>
           ) : price ? (
-            <div><div className="v-price-l">{price.label}</div><div className={`v-price${price.free ? ' free' : ''}`}>{price.value}</div></div>
+            <div><div className="v-price-l">{price.label}</div><div className={`v-price${price.free ? ' free' : ''}`}>{price.value}{price.plusFees && <span className="v-plus-fees">+ fees</span>}</div></div>
           ) : <div />}
           {!completed && (
             <Link href={href} className="v-btn v-btn-solid" tabIndex={-1}>{event.soldOut ? 'View' : cta}</Link>

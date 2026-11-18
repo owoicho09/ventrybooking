@@ -42,6 +42,8 @@ export interface PublicEvent {
   flyerUrl: string | null;
   headerBannerUrl: string | null;
   accentColor: string | null;
+  /** Prices shown are the exact tier prices; fees are added at checkout (060). */
+  priceBeforeFees: boolean;
   /** Ventry confirmed the venue booking for this event: the Verified badge. */
   verified: boolean;
   organizer: PublicOrganizer;
@@ -159,11 +161,11 @@ export function outcomeLabel(e: PublicEvent): string | null {
   return e.soldOut ? 'Sold out' : null;
 }
 
-export function priceLabel(e: PublicEvent): { label: string; value: string; free: boolean } | null {
+export function priceLabel(e: PublicEvent): { label: string; value: string; free: boolean; plusFees: boolean } | null {
   if (e.minPrice == null) return null;
   if (e.minPrice === 0) {
     const allFree = e.tiers.every(t => t.price === 0);
-    return { label: allFree ? 'Entry' : 'From', value: 'Free', free: true };
+    return { label: allFree ? 'Entry' : 'From', value: 'Free', free: true, plusFees: false };
   }
-  return { label: 'From', value: naira(e.minPrice), free: false };
+  return { label: 'From', value: naira(e.minPrice), free: false, plusFees: e.priceBeforeFees };
 }

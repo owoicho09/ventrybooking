@@ -3,7 +3,7 @@ import { onlyLive } from '@/lib/goLive';
 import { addressHiddenNow } from '@/lib/addressReveal';
 import { ticketUrgency } from '@/lib/ticketUrgency';
 import { normalizeCity, todayWAT, type PublicEvent, type PublicTier } from '@/lib/publicEvents';
-import { ticketPriceWithService } from '@/lib/fees';
+import { listedTicketPrice } from '@/lib/fees';
 
 // Every figure on the public pages comes from here, straight out of the
 // database. Nothing is rounded up, estimated or defaulted: when a number
@@ -11,7 +11,7 @@ import { ticketPriceWithService } from '@/lib/fees';
 
 const EVENT_SELECT = `
   id, slug, event_name, category, date, time, event_mode, venue, city, landmark, location_hidden, lga, address_reveal_at,
-  status, total_sold, banner_url, header_banner_url, accent_color, verified, goes_live_at,
+  status, total_sold, banner_url, header_banner_url, accent_color, verified, goes_live_at, price_before_fees,
   organizer:users!events_organizer_id_fkey(id, name, verified, handle, avatar_url, cover_image_url),
   tiers:ticket_tiers(id, name, price, available, sold, requires_code, allowed_email_domains)
 `;
@@ -36,7 +36,8 @@ function shape(row: any): PublicEvent {
   const totalAvailable = tiers.reduce((s, t) => s + t.available, 0);
   const totalSold = tiers.reduce((s, t) => s + t.sold, 0);
   const soldOut = tiers.length > 0 && onSale.length === 0;
-  const prices = (onSale.length ? onSale : tiers).map(t => (t.price === 0 ? 0 : ticketPriceWithService(t.price)));
+  const priceBeforeFees = row.price_before_fees === true;
+  const prices = (onSale.length ? onSale : tiers).map(t => (t.price === 0 ? 0 : listedTicketPrice(t.price, priceBeforeFees)));
   const locationHidden = addressHiddenNow({ location_hidden: row.location_hidden, address_reveal_at: row.address_reveal_at, date: String(row.date), time: row.time });
   const org = one(row.organizer) as { id: string; name: string; verified: boolean; handle: string | null; avatar_url: string | null; cover_image_url: string | null } | null;
   const status = row.status === 'completed' ? 'completed' : 'approved';
@@ -58,6 +59,7 @@ function shape(row: any): PublicEvent {
     flyerUrl: row.banner_url ?? null,
     headerBannerUrl: row.header_banner_url ?? null,
     accentColor: row.accent_color ?? null,
+    priceBeforeFees,
     verified: row.verified === true,
     organizer: {
       id: org?.id ?? '',
@@ -69,7 +71,7 @@ function shape(row: any): PublicEvent {
     },
     tiers,
     minPrice: prices.length ? Math.min(...prices) : null,
-    cheapestOnSale: onSale[0] ? { name: onSale[0].name, price: (onSale[0].price === 0 ? 0 : ticketPriceWithService(onSale[0].price)), remaining: onSale[0].available - onSale[0].sold } : null,
+    cheapestOnSale: onSale[0] ? { name: onSale[0].name, price: (onSale[0].price === 0 ? 0 : listedTicketPrice(onSale[0].price, priceBeforeFees)), remaining: onSale[0].available - onSale[0].sold } : null,
     totalSold,
     totalAvailable,
     soldOut,
