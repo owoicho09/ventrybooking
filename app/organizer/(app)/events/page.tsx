@@ -16,6 +16,8 @@ interface Tier { id: string; price: number; sold: number; available: number; }
 interface OrgEvent {
   id: string; name: string; date: string; category: string; city: string;
   status: string; total_sold: number; tiers: Tier[]; goes_live_at?: string | null;
+  /** This event's host share of Ventry's fee (062); null = the account rate. */
+  host_fee_rate?: number | null;
 }
 
 const statusBadge = (status: string, goesLiveAt?: string | null) => {
@@ -200,7 +202,7 @@ export default function OrganizerEventsPage() {
             <Tbody>
               {events.map((event) => {
                 const gross      = event.tiers?.reduce((s, t) => s + t.price * t.sold, 0) || 0;
-                const netRevenue = Math.round(gross * (1 - platformFeeRate));
+                const netRevenue = Math.round(gross * (1 - (event.host_fee_rate == null ? platformFeeRate : Number(event.host_fee_rate))));
                 return (
                   <Tr key={event.id}>
                     <Td>

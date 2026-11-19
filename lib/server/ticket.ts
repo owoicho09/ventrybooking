@@ -1,7 +1,7 @@
 import { getServerSupabase } from '@/lib/supabase/server';
 import { generateTicketId, generateRefundCode } from '@/lib/server/ids';
 import { sendTicketEmail } from '@/lib/server/email';
-import { calculateFees, serviceFeePerTicket } from '@/lib/server/fees';
+import { calculateFees, serviceFeePerTicket, SERVICE_FEE_RATE, PLATFORM_FEE_RATE } from '@/lib/server/fees';
 import { notify } from '@/lib/server/notify';
 import { recordCheckoutConsent } from '@/lib/server/marketingConsent';
 import { recordAffiliateCommissionIfApplicable } from '@/lib/server/affiliateCommission';
@@ -121,7 +121,7 @@ export async function createTicketFromClaimedPayment(p: PaymentData): Promise<st
   // ── Fetch event and every requested tier in parallel ────────────
   const [{ data: eventRow, error: eventErr }, { data: tierRows, error: tierErr }] = await Promise.all([
     db.from('events')
-      .select('event_name, date, time, event_mode, venue, organizer_id, banner_url')
+      .select('event_name, date, time, event_mode, venue, organizer_id, banner_url, buyer_fee_rate, host_fee_rate')
       .eq('id', p.eventId)
       .maybeSingle(),
     db.from('ticket_tiers')
@@ -168,11 +168,15 @@ export async function createTicketFromClaimedPayment(p: PaymentData): Promise<st
   // pre-processing amount, with the very last ticket absorbing whatever
   // rounding remainder is left — same pattern the single-tier code used
   // within one tier, just generalized across tiers of differing price.
+  // Fee split (062): the event's buyer and host shares; events created before
+  // it use the standard 2% buyer fee and the organiser's own rate.
+  const buyerRate = eventRow.buyer_fee_rate == null ? SERVICE_FEE_RATE : Number(eventRow.buyer_fee_rate);
+  const hostRate  = eventRow.host_fee_rate == null ? (orgRow?.platform_fee_rate ?? PLATFORM_FEE_RATE) : Number(eventRow.host_fee_rate);
   type TicketUnit = { tierId: string; tierName: string; subtotal: number; serviceFee: number; accessCodeId: string | null };
   const units: TicketUnit[] = [];
   for (const item of items) {
     const tier = tierById.get(item.tierId)!;
-    const serviceFee = serviceFeePerTicket(tier.price);
+    const serviceFee = serviceFeePerTicket(tier.price, buyerRate);
     for (let i = 0; i < item.quantity; i++) {
       units.push({ tierId: item.tierId, tierName: tier.name, subtotal: tier.price, serviceFee, accessCodeId: typeof item.accessCodeId === 'string' ? item.accessCodeId : null });
     }
@@ -181,7 +185,7 @@ export async function createTicketFromClaimedPayment(p: PaymentData): Promise<st
   const subtotal        = units.reduce((s, u) => s + u.subtotal, 0);
   const totalServiceFee = units.reduce((s, u) => s + u.serviceFee, 0);
   const preProcessingTotal = subtotal + totalServiceFee;
-  const { fee, net } = calculateFees(subtotal, orgRow?.platform_fee_rate);
+  const { fee, net } = calculateFees(subtotal, hostRate);
 
   const ticketIds: string[]   = [];
   const refundCodes: string[] = [];
@@ -215,6 +219,7 @@ export async function createTicketFromClaimedPayment(p: PaymentData): Promise<st
       // remainder, so the three columns always sum exactly to total_paid.
       subtotal:            unit.subtotal,
       service_fee:         unit.serviceFee,
+      host_fee_rate:       hostRate,
       processing_fee:      totalPaid - unit.subtotal - unit.serviceFee,
       status:              'valid',
       purchased_at:        purchasedAt,

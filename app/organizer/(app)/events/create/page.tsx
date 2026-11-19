@@ -11,6 +11,8 @@ import { useToast } from '@/components/ui/Toast';
 import { ACCENT_COLOR_PRESETS } from '@/lib/accentColors';
 import { BannerCropInput } from '@/components/organizer/BannerCropInput';
 import { FlyersField } from '@/components/organizer/FlyersField';
+import { FeeSplitField } from '@/components/organizer/FeeSplitField';
+import { DEFAULT_FEE_SPLIT, feeRatesFor, isFeeSplit, type FeeSplit } from '@/lib/feeSplit';
 import { compressImageFile } from '@/lib/compressImage';
 import { RefundPolicyFields, type RefundPolicyDraft } from '@/components/organizer/RefundPolicyFields';
 import { parseRefundPolicy } from '@/lib/refundPolicy';
@@ -53,6 +55,7 @@ interface DraftData {
   tiers: Tier[]; accentColor: string | null; accentAutoDetected: boolean; colorManuallySet: boolean;
   lineup: { id: string; name: string; role: string; liability: LineupLiability }[];
   restrictedDomainsInput: string; refundPolicy: RefundPolicyDraft;
+  feeSplit?: FeeSplit;
   /** Names of the images picked, so another device can say what to re-add. */
   files: { banner?: string; flyer2?: string; flyer3?: string; headerBanner?: string; venueProof?: string; lineup?: Record<string, string> };
 }
@@ -127,7 +130,9 @@ export default function CreateEventPage() {
   const [policyConfirmed, setPolicyConfirmed] = useState(false);
   const [accuracyConfirmed, setAccuracyConfirmed] = useState(false);
   const [displayName, setDisplayName] = useState('');
-  const [me, setMe] = useState<{ id?: string; name?: string; verified?: boolean; handle?: string | null; avatar_url?: string | null; member_since?: string; socials?: Record<string, string> } | null>(null);
+  const [me, setMe] = useState<{ id?: string; name?: string; verified?: boolean; handle?: string | null; avatar_url?: string | null; member_since?: string; socials?: Record<string, string>; platform_fee_rate?: number | null } | null>(null);
+  // Who pays Ventry's 5% (062).
+  const [feeSplit, setFeeSplit] = useState<FeeSplit>(DEFAULT_FEE_SPLIT);
   const [previewing, setPreviewing] = useState(false);
 
   // ── Drafts ──────────────────────────────────────────────────
@@ -160,14 +165,14 @@ export default function CreateEventPage() {
     locationHidden, venueTba, lga, revealAt, goLiveScheduled, goLiveAt, goLiveInactive, meetingLink, meetingPasscode,
     venueContactName, venueContactPhone, tiers, accentColor, accentAutoDetected, colorManuallySet,
     lineup: lineup.map(a => ({ id: a.id, name: a.name, role: a.role, liability: a.liability })),
-    restrictedDomainsInput, refundPolicy,
+    restrictedDomainsInput, refundPolicy, feeSplit,
     files: {
       banner: banner?.name, flyer2: moreFlyers[0]?.name, flyer3: moreFlyers[1]?.name, headerBanner: headerBanner?.name, venueProof: venueProof?.name,
       lineup: Object.fromEntries(lineup.filter(a => a.photoFile).map(a => [a.id, a.photoFile!.name])),
     },
   }), [name, category, description, date, time, eventMode, venue, address, city, landmark, locationHidden, venueTba, lga, revealAt,
     goLiveScheduled, goLiveAt, goLiveInactive, meetingLink, meetingPasscode, venueContactName, venueContactPhone, tiers, accentColor,
-    accentAutoDetected, colorManuallySet, lineup, restrictedDomainsInput, refundPolicy, banner, moreFlyers, headerBanner, venueProof]);
+    accentAutoDetected, colorManuallySet, lineup, restrictedDomainsInput, refundPolicy, feeSplit, banner, moreFlyers, headerBanner, venueProof]);
 
   // Only start a draft once the organiser has actually entered something; the
   // refund-contact email pre-fill alone shouldn't create one.
@@ -254,6 +259,7 @@ export default function CreateEventPage() {
     if (Array.isArray(d.tiers) && d.tiers.length) setTiers(d.tiers.map(t => ({ ...t, gates: t.gates ?? EMPTY_GATES })));
     setAccentColor(d.accentColor ?? null); setAccentAutoDetected(!!d.accentAutoDetected); setColorManuallySet(!!d.colorManuallySet);
     setRestrictedDomainsInput(d.restrictedDomainsInput ?? '');
+    if (isFeeSplit(d.feeSplit)) setFeeSplit(d.feeSplit);
     if (d.refundPolicy) setRefundPolicy(d.refundPolicy);
     setBanner(files.banner ?? null);
     setMoreFlyers([files.flyer2, files.flyer3].filter((f): f is File => !!f));
@@ -414,6 +420,7 @@ export default function CreateEventPage() {
     flyerUrls: [flyerUrl, ...moreFlyerUrls].filter((u): u is string => !!u),
     headerBannerUrl: headerUrl,
     accentColor,
+    buyerFeeRate: feeRatesFor(feeSplit, me?.platform_fee_rate ?? null).buyer,
     verified: false,
     refundPolicy: policyCheck.ok ? policyCheck.value : null,
     allowedEmailDomains: restrictedDomainsInput.split(',').map(d => d.trim()).filter(Boolean),
@@ -503,6 +510,7 @@ export default function CreateEventPage() {
       fd.append('tiers', JSON.stringify(tiers.map(t => ({ name: t.name, price: t.price, quantity: t.quantity, description: t.description ?? null, ...gatesPayload(t.gates) }))));
       if (accentColor) fd.append('accentColor', accentColor);
       fd.append('refundPolicy', JSON.stringify(policyCheck.value));
+      fd.append('feeSplit', feeSplit);
       fd.append('confirmAccurate', 'true');
       if (goLiveInactive) fd.append('goesLiveAt', INACTIVE_GO_LIVE);
       else if (goLiveScheduled && goLiveAt) fd.append('goesLiveAt', fromLagosInput(goLiveAt) ?? '');
@@ -920,6 +928,10 @@ export default function CreateEventPage() {
         <button type="button" onClick={addTier} className="flex items-center gap-2 text-sm font-medium" style={{ color: 'var(--color-purple-light)' }}>
           <Plus size={16} />Add Another Tier
         </button>
+        <div className="pt-2 border-t" style={{ borderColor: 'var(--color-border)' }}>
+          <FeeSplitField value={feeSplit} onChange={setFeeSplit} organizerRate={me?.platform_fee_rate ?? null}
+            examplePrice={Number(tiers.find(t => Number(t.price) > 0)?.price) || undefined} />
+        </div>
       </section>
 
       <section className="rounded-xl border p-6 flex flex-col gap-5" style={{ backgroundColor: 'var(--color-surface)', borderColor: 'var(--color-border)' }}>

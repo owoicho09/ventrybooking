@@ -55,13 +55,14 @@ async function allTickets(db: SupabaseClient, eventId: string): Promise<TicketRo
 export async function buildMonitorSnapshot(db: SupabaseClient, eventId: string, label: string | null): Promise<MonitorSnapshot | null> {
   const { data: ev } = await db
     .from('events')
-    .select('event_name, date, time, event_mode, venue, city, banner_url, status, goes_live_at, organizer:users!events_organizer_id_fkey(name, platform_fee_rate), tiers:ticket_tiers(id, name, price, available, sold)')
+    .select('event_name, date, time, event_mode, venue, city, banner_url, status, goes_live_at, host_fee_rate, organizer:users!events_organizer_id_fkey(name, platform_fee_rate), tiers:ticket_tiers(id, name, price, available, sold)')
     .eq('id', eventId)
     .maybeSingle();
   if (!ev) return null;
 
   const org = (Array.isArray(ev.organizer) ? ev.organizer[0] : ev.organizer) as { name: string | null; platform_fee_rate: number | null } | null;
-  const rate = feeRateOf({ platform_fee_rate: org?.platform_fee_rate ?? null });
+  // The event's own host rate from its fee split (062), else the account rate.
+  const rate = ev.host_fee_rate != null ? Number(ev.host_fee_rate) : feeRateOf({ platform_fee_rate: org?.platform_fee_rate ?? null });
   const tiers = ((ev.tiers ?? []) as { id: string; name: string; price: number; available: number; sold: number }[])
     .sort((a, b) => Number(a.price) - Number(b.price));
   const tickets = await allTickets(db, eventId);

@@ -4,6 +4,7 @@ import { getAuthUser } from '@/lib/server/auth';
 import { getServerSupabase } from '@/lib/supabase/server';
 import { sendLocationUpdatedEmail, sendMeetingLinkUpdatedEmail, sendVenueAnnouncedEmail } from '@/lib/server/email';
 import { VENUE_TBA_LABEL } from '@/lib/venueTba';
+import { feeRatesFor, isFeeSplit } from '@/lib/feeSplit';
 import { isValidAccentColor } from '@/lib/accentColors';
 import { normalizeLineup, type LineupAct } from '@/lib/server/lineup';
 import { normalizeEmailDomains } from '@/lib/server/domainRestriction';
@@ -32,7 +33,7 @@ export async function GET(
       .from('events')
       .select(`
         id, slug, event_name, category, description, date, time, event_mode, venue, address, city, landmark,
-        location_hidden, meeting_link, meeting_passcode, status, total_sold, banner_color, banner_url, header_banner_url, accent_color, price_before_fees, sales_paused_reason, cancel_requested_at, cancel_request_reason, venue_tba, flyer_urls, lineup, allowed_email_domains, organizer_id, created_at, refund_policy, refund_policy_set_at, verified, venue_proof_url, venue_contact_name, venue_contact_phone, lga, address_reveal_at, goes_live_at, submitted_at, rejection_reason,
+        location_hidden, meeting_link, meeting_passcode, status, total_sold, banner_color, banner_url, header_banner_url, accent_color, price_before_fees, fee_split, buyer_fee_rate, host_fee_rate, sales_paused_reason, cancel_requested_at, cancel_request_reason, venue_tba, flyer_urls, lineup, allowed_email_domains, organizer_id, created_at, refund_policy, refund_policy_set_at, verified, venue_proof_url, venue_contact_name, venue_contact_phone, lga, address_reveal_at, goes_live_at, submitted_at, rejection_reason,
         tiers:ticket_tiers(id, name, price, description, available, sold, requires_code, allowed_email_domains)
       `)
       .eq('id', id)
@@ -96,7 +97,26 @@ export async function PATCH(
       allowedFields = ['event_name', 'description', 'date', 'time', 'venue', 'address', 'city', 'landmark', 'location_hidden', 'meeting_link', 'meeting_passcode', 'category', 'banner_url', 'accent_color', 'lineup', 'allowed_email_domains', 'venue_contact_name', 'venue_contact_phone', 'lga', 'address_reveal_at'];
     }
 
-    const updates: Record<string, string | boolean | null | LineupAct[] | string[] | RefundPolicyAnswers> = {};
+    const updates: Record<string, string | number | boolean | null | LineupAct[] | string[] | RefundPolicyAnswers> = {};
+
+    // Fee split (062): who pays Ventry's 5%. Fixed once a ticket sells, and
+    // while a recent checkout could still complete at the old rate.
+    if (body.fee_split !== undefined) {
+      if (!isFeeSplit(body.fee_split)) return NextResponse.json({ error: 'Choose who pays the Ventry fee' }, { status: 400 });
+      if (hasSales) {
+        return NextResponse.json({ error: 'Tickets have been sold under this fee split, so it can\u2019t be changed.' }, { status: 409 });
+      }
+      const since = new Date(Date.now() - 48 * 3600 * 1000).toISOString();
+      const { count: recent } = await db.from('pending_orders').select('reference', { count: 'exact', head: true }).eq('event_id', id).gt('created_at', since);
+      if ((recent ?? 0) > 0) {
+        return NextResponse.json({ error: 'Someone started checkout for this event in the last 48 hours, so the fee split can\u2019t change right now.' }, { status: 409 });
+      }
+      const { data: orgRate } = await db.from('users').select('platform_fee_rate').eq('id', user.sub).maybeSingle();
+      const rates = feeRatesFor(body.fee_split, orgRate?.platform_fee_rate == null ? null : Number(orgRate.platform_fee_rate));
+      updates.fee_split = body.fee_split;
+      updates.buyer_fee_rate = rates.buyer;
+      updates.host_fee_rate = rates.host;
+    }
 
     // Refund policy (Organiser Terms 4.4): free to set or change until a
     // ticket is sold; an event already selling without one may set it once.

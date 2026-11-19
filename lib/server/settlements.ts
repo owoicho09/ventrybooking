@@ -242,8 +242,17 @@ export interface PendingSummary {
   adjustmentsOwed: number;
 }
 
-type DayRow = { organizer_id: string; sale_date: string; gross: number; ticket_count: number };
-type OwedRow = { organizer_id: string; gross: number; ticket_count: number };
+// fee_raw (062): the unrounded host fee those tickets carry, each at the rate
+// it was sold under (the organiser's rate for tickets sold before 062).
+type DayRow = { organizer_id: string; sale_date: string; gross: number; ticket_count: number; fee_raw?: number };
+type OwedRow = { organizer_id: string; gross: number; ticket_count: number; fee_raw?: number };
+
+/** Host fee for a set of rows, rounded once, like claim_settlement. */
+function feeOf(rows: { gross: number; fee_raw?: number }[], feeRate: number, less?: { gross: number; fee_raw?: number } | null) {
+  const raw = (r: { gross: number; fee_raw?: number }) => (typeof r.fee_raw === 'number' && Number.isFinite(r.fee_raw) ? r.fee_raw : r.gross * feeRate);
+  const total = rows.reduce((s, r) => s + raw(r), 0) - (less ? raw(less) : 0);
+  return Math.round(Math.max(total, 0));
+}
 
 export async function loadUnsettled(db: Db, organizerId?: string) {
   const args = organizerId ? { p_organizer_id: organizerId } : {};
@@ -259,12 +268,12 @@ export async function loadUnsettled(db: Db, organizerId?: string) {
   const entry = (id: string) => byOrg.get(id) ?? { days: [], owed: null, adjustments: 0 };
   for (const r of (days.data ?? []) as DayRow[]) {
     const e = entry(r.organizer_id);
-    e.days.push({ ...r, gross: Number(r.gross), ticket_count: Number(r.ticket_count) });
+    e.days.push({ ...r, gross: Number(r.gross), ticket_count: Number(r.ticket_count), fee_raw: r.fee_raw == null ? undefined : Number(r.fee_raw) });
     byOrg.set(r.organizer_id, e);
   }
   for (const r of (owed.data ?? []) as OwedRow[]) {
     const e = entry(r.organizer_id);
-    e.owed = { ...r, gross: Number(r.gross), ticket_count: Number(r.ticket_count) };
+    e.owed = { ...r, gross: Number(r.gross), ticket_count: Number(r.ticket_count), fee_raw: r.fee_raw == null ? undefined : Number(r.fee_raw) };
     byOrg.set(r.organizer_id, e);
   }
   for (const r of (adj.data ?? []) as { organizer_id: string; amount: number }[]) {
@@ -291,7 +300,8 @@ export function summarizePending(
   if (eligible.length > 0) {
     const salesGross = eligible.reduce((s, d) => s + d.gross, 0);
     const gross = salesGross - refundsOwed.gross;
-    const { fee, net } = splitFee(gross, feeRate);
+    const fee = feeOf(eligible, feeRate, owed);
+    const net = gross - fee;
     releasable = {
       salesGross, refundsDeducted: refundsOwed.gross, gross, fee,
       adjustmentsDeducted: adjustmentsOwed, net: net - adjustmentsOwed,
@@ -311,11 +321,12 @@ export function summarizePending(
     .map(([eligibleOn, rows]) => {
       const sorted = rows.sort((a, b) => a.sale_date.localeCompare(b.sale_date));
       const gross = rows.reduce((s, d) => s + d.gross, 0);
+      const fee = feeOf(rows, feeRate);
       return {
         eligibleOn,
         periodStart: sorted[0].sale_date,
         periodEnd:   sorted[sorted.length - 1].sale_date,
-        ...splitFee(gross, feeRate),
+        gross, fee, net: gross - fee,
         ticketCount: rows.reduce((s, d) => s + d.ticket_count, 0),
       };
     });
@@ -346,7 +357,7 @@ export async function organizerFundsFigures(db: Db, organizerId: string, feeRate
 
   const u = unsettled.get(organizerId);
   const unsettledGross = (u?.days ?? []).reduce((s, d) => s + d.gross, 0) - (u?.owed?.gross ?? 0);
-  const pending = splitFee(unsettledGross, feeRate).net - (u?.adjustments ?? 0) + inFlight;
+  const pending = unsettledGross - feeOf(u?.days ?? [], feeRate, u?.owed ?? null) - (u?.adjustments ?? 0) + inFlight;
 
   return { settled, pending };
 }

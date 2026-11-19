@@ -27,6 +27,8 @@ import type { DetailEvent } from '@/components/events/EventDetailContent';
 import type { EventCategory } from '@/types';
 import { BannerCropInput } from '@/components/organizer/BannerCropInput';
 import { FlyersField } from '@/components/organizer/FlyersField';
+import { FeeSplitField } from '@/components/organizer/FeeSplitField';
+import { DEFAULT_FEE_SPLIT, isFeeSplit, type FeeSplit } from '@/lib/feeSplit';
 import { EventQRCode } from '@/components/organizer/EventQRCode';
 import { GoLiveField } from '@/components/organizer/GoLiveField';
 import { VENUE_DEADLINE_DAYS, fmtVenueDeadline } from '@/lib/venueTba';
@@ -56,6 +58,9 @@ interface OrgEvent {
   status: string; total_sold: number; banner_url: string | null; header_banner_url: string | null; banner_color: string;
   accent_color: string | null; lineup: LineupAct[]; allowed_email_domains: string[] | null;
   price_before_fees?: boolean;
+  fee_split?: string | null;
+  buyer_fee_rate?: number | null;
+  host_fee_rate?: number | null;
   sales_paused_reason?: string | null;
   cancel_requested_at?: string | null;
   cancel_request_reason?: string | null;
@@ -205,6 +210,7 @@ export default function OrganizerEventDetailPage() {
   const [goLiveInactive, setGoLiveInactive] = useState(false);
   const [savingGoLive, setSavingGoLive] = useState(false);
   const [resubmitting, setResubmitting] = useState(false);
+  const [feeSaving, setFeeSaving] = useState(false);
   const [cancelOpen, setCancelOpen] = useState(false);
   const [cancelReason, setCancelReason] = useState('');
   const [cancelBusy, setCancelBusy] = useState(false);
@@ -415,6 +421,24 @@ export default function OrganizerEventDetailPage() {
     }
   };
 
+  // Who pays Ventry's 5% (062): changeable until the first ticket sells.
+  const handleFeeSplit = async (next: FeeSplit) => {
+    setFeeSaving(true);
+    try {
+      const res = await fetch(`/api/organizer/events/${id}`, {
+        method: 'PATCH',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ fee_split: next }),
+      });
+      const data = await res.json().catch(() => ({}));
+      if (!res.ok) { toast(data.error || 'Could not change who pays the fee', 'error'); return; }
+      toast('Saved: buyers see the new prices straight away', 'success');
+      load();
+    } finally {
+      setFeeSaving(false);
+    }
+  };
+
   const handleResubmit = async () => {
     setResubmitting(true);
     try {
@@ -477,6 +501,7 @@ export default function OrganizerEventDetailPage() {
     headerBannerUrl: event.header_banner_url,
     accentColor,
     priceBeforeFees: event.price_before_fees === true,
+    buyerFeeRate: event.buyer_fee_rate == null ? null : Number(event.buyer_fee_rate),
     flyerUrls: (event.flyer_urls ?? []).filter(Boolean).length ? (event.flyer_urls ?? []).filter(Boolean) : (event.banner_url ? [event.banner_url] : []),
     verified: false,
     refundPolicy: draftPolicy.ok ? draftPolicy.value : event.refund_policy,
@@ -913,7 +938,7 @@ export default function OrganizerEventDetailPage() {
         {[
           { label: 'Total Sold', value: totalSold.toLocaleString() },
           { label: 'Total Available', value: totalAvailable.toLocaleString() },
-          { label: 'Net Revenue', value: formatNGN(Math.round(event.tiers.reduce((s, t) => s + t.price * t.sold, 0) * (1 - platformFeeRate))) },
+          { label: 'Net Revenue', value: formatNGN(Math.round(event.tiers.reduce((s, t) => s + t.price * t.sold, 0) * (1 - (event.host_fee_rate == null ? platformFeeRate : Number(event.host_fee_rate))))) },
         ].map(({ label, value }) => (
           <div key={label} className="rounded-xl border p-4"
             style={{ backgroundColor: 'var(--color-surface)', borderColor: 'var(--color-border)' }}>
@@ -921,6 +946,18 @@ export default function OrganizerEventDetailPage() {
             <p className="text-xl font-bold" style={{ color: 'var(--color-text)' }}>{value}</p>
           </div>
         ))}
+      </div>
+
+      {/* Fee split (062) */}
+      <div className="rounded-xl border p-5" style={{ backgroundColor: 'var(--color-surface)', borderColor: 'var(--color-border)' }}>
+        <FeeSplitField
+          value={isFeeSplit(event.fee_split) ? event.fee_split : DEFAULT_FEE_SPLIT}
+          onChange={handleFeeSplit}
+          organizerRate={platformFeeRate}
+          examplePrice={[...event.tiers].map(t => Number(t.price)).filter(p => p > 0).sort((a, b) => a - b)[0]}
+          disabled={hasSales || feeSaving}
+          lockedReason={hasSales ? 'Tickets have been sold under this setting, so it can’t be changed.' : undefined}
+        />
       </div>
 
       {/* Ticket tiers */}

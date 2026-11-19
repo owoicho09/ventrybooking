@@ -1,5 +1,5 @@
 import { getServerSupabase } from '@/lib/supabase/server';
-import { lagosDate, nextWorkingDay, splitFee, type SettlementStatus } from '@/lib/server/settlements';
+import { lagosDate, nextWorkingDay, type SettlementStatus } from '@/lib/server/settlements';
 
 type Db = ReturnType<typeof getServerSupabase>;
 
@@ -49,6 +49,8 @@ export interface EventPayoutSummary {
 
 type TicketRow = {
   id: string; event_id: string; status: string; subtotal: number | null; purchased_at: string; settlement_id: string | null;
+  /** Host rate stamped at sale (062); null = the organiser's rate. */
+  host_fee_rate: number | null;
   tier: { price: number } | { price: number }[] | null;
 };
 type SettlementRow = {
@@ -77,7 +79,7 @@ export async function eventPayoutBreakdown(
   if (onlyEventId) eventsQ = eventsQ.eq('id', onlyEventId);
 
   let ticketsQ = db.from('tickets')
-    .select('id, event_id, status, subtotal, purchased_at, settlement_id, tier:ticket_tiers!tickets_tier_id_fkey(price)')
+    .select('id, event_id, status, subtotal, purchased_at, settlement_id, host_fee_rate, tier:ticket_tiers!tickets_tier_id_fkey(price)')
     .eq('organizer_id', organizerId);
   if (onlyEventId) ticketsQ = ticketsQ.eq('event_id', onlyEventId);
 
@@ -105,7 +107,7 @@ export async function eventPayoutBreakdown(
         const ids = [...new Set(tickets.map(t => t.settlement_id).filter((x): x is string => !!x))];
         if (ids.length === 0) return [] as TicketRow[];
         const { data } = await db.from('tickets')
-          .select('id, event_id, status, subtotal, purchased_at, settlement_id, tier:ticket_tiers!tickets_tier_id_fkey(price)')
+          .select('id, event_id, status, subtotal, purchased_at, settlement_id, host_fee_rate, tier:ticket_tiers!tickets_tier_id_fkey(price)')
           .in('settlement_id', ids);
         return (data ?? []) as unknown as TicketRow[];
       })()
@@ -169,7 +171,8 @@ export async function eventPayoutBreakdown(
       refundedTickets: evTickets.filter(t => t.status === 'refunded').length,
       sales: paid.reduce((s, t) => s + price(t), 0),
       paidOut: payouts.filter(p => p.status === 'successful').reduce((s, p) => s + p.amount, 0),
-      pending: splitFee(pendingValue, feeRate).net,
+      // Each ticket nets at its own host rate (062), rounded once.
+      pending: pendingValue - Math.round(unpaid.reduce((s, t) => s + price(t) * (t.host_fee_rate == null ? feeRate : Number(t.host_fee_rate)), 0)),
       pendingTickets: unpaid.length,
       nextPayoutOn,
       payouts,

@@ -46,7 +46,7 @@ export async function POST(req: NextRequest) {
     // Verify event is approved
     const { data: event, error: eventErr } = await db
       .from('events')
-      .select('id, event_name, status, organizer_id, allowed_email_domains, goes_live_at, sales_paused_reason')
+      .select('id, event_name, status, organizer_id, allowed_email_domains, goes_live_at, sales_paused_reason, buyer_fee_rate')
       .eq('id', eventId)
       .maybeSingle();
 
@@ -136,8 +136,11 @@ export async function POST(req: NextRequest) {
       }
     }
 
+    // The event's buyer share of the fee (062); 2% for events created before it.
+    const buyerRate = event.buyer_fee_rate == null ? undefined : Number(event.buyer_fee_rate);
     const { subtotal, serviceFee, processingFee, total } = buyerTotalForItems(
       cartItems.map(i => ({ price: tierById.get(i.tierId)!.price, quantity: i.quantity })),
+      buyerRate,
     );
     if (total === 0) {
       return NextResponse.json({ error: 'Use the free checkout endpoint for free tickets' }, { status: 400 });

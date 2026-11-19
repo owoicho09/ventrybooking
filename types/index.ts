@@ -85,6 +85,8 @@ export interface Event {
   accentColor?: string | null;
   /** Advertise exact tier prices; fees are itemised at checkout (060). */
   priceBeforeFees?: boolean;
+  /** Buyer share of Ventry's fee for this event (062); absent = 2%. */
+  buyerFeeRate?: number | null;
   /** Non-null while checkout is paused (061); the page stays visible. */
   salesPausedMessage?: string | null;
   /** Venue to be announced: city + LGA only for now (061). */

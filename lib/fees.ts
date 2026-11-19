@@ -17,9 +17,20 @@ export const PROCESSING_FEE_FLAT      = 100;
 export const PROCESSING_FEE_THRESHOLD = 2_500;
 export const PROCESSING_FEE_CAP       = 2_000;
 
-/** Buyer service fee for a single ticket at this price. */
-export function serviceFeePerTicket(ticketPrice: number) {
-  return Math.min(Math.round(ticketPrice * SERVICE_FEE_RATE), SERVICE_FEE_FLAT);
+/**
+ * Buyer service fee for a single ticket at this price. `buyerRate` is the
+ * event's buyer share of the fee (062; default 2%). The cap scales with the
+ * rate and still starts at ₦150,000: 2% → ₦3,000, 3% → ₦4,500, 5% → ₦7,500.
+ */
+export function serviceFeePerTicket(ticketPrice: number, buyerRate: number = SERVICE_FEE_RATE) {
+  if (buyerRate <= 0) return 0;
+  return Math.min(Math.round(ticketPrice * buyerRate), Math.round(SERVICE_FEE_THRESHOLD * buyerRate));
+}
+
+/** The buyer rate an event charges (062): its own, or the standard 2%. */
+export function buyerRateOf(ev: { buyerFeeRate?: number | null } | null | undefined): number {
+  const r = ev?.buyerFeeRate;
+  return typeof r === 'number' && Number.isFinite(r) && r >= 0 ? r : SERVICE_FEE_RATE;
 }
 
 
@@ -28,9 +39,9 @@ export function serviceFeePerTicket(ticketPrice: number) {
  * This does not include the Paystack processing fee, which is computed on
  * the final pre-processing amount at checkout.
  */
-export function ticketPriceWithService(ticketPrice: number): number {
+export function ticketPriceWithService(ticketPrice: number, buyerRate: number = SERVICE_FEE_RATE): number {
   if (ticketPrice <= 0) return ticketPrice;
-  return ticketPrice + serviceFeePerTicket(ticketPrice);
+  return ticketPrice + serviceFeePerTicket(ticketPrice, buyerRate);
 }
 
 /**
@@ -39,8 +50,8 @@ export function ticketPriceWithService(ticketPrice: number): number {
  * exact tier price and itemises every fee at checkout instead. The amount
  * charged is the same either way.
  */
-export function listedTicketPrice(ticketPrice: number, priceBeforeFees?: boolean | null): number {
-  return priceBeforeFees ? ticketPrice : ticketPriceWithService(ticketPrice);
+export function listedTicketPrice(ticketPrice: number, priceBeforeFees?: boolean | null, buyerRate: number = SERVICE_FEE_RATE): number {
+  return priceBeforeFees ? ticketPrice : ticketPriceWithService(ticketPrice, buyerRate);
 }
 
 /**
@@ -65,17 +76,17 @@ export function processingFee(preProcessingAmount: number): number {
  * so the four displayed lines always sum exactly to the total, and the
  * amount sent to the payment processor is always a clean integer.
  */
-export function buyerTotalForItems(items: { price: number; quantity: number }[]) {
+export function buyerTotalForItems(items: { price: number; quantity: number }[], buyerRate: number = SERVICE_FEE_RATE) {
   const subtotal            = items.reduce((s, i) => s + i.price * i.quantity, 0);
-  const serviceFee          = items.reduce((s, i) => s + serviceFeePerTicket(i.price) * i.quantity, 0);
+  const serviceFee          = items.reduce((s, i) => s + serviceFeePerTicket(i.price, buyerRate) * i.quantity, 0);
   const preProcessingAmount = subtotal + serviceFee;
   const total               = Math.round(preProcessingAmount + processingFee(preProcessingAmount));
   return { subtotal, serviceFee, processingFee: total - preProcessingAmount, total };
 }
 
 /** Single-tier convenience wrapper around {@link buyerTotalForItems}. */
-export function buyerTotalWithProcessing(ticketPrice: number, quantity: number) {
-  return buyerTotalForItems([{ price: ticketPrice, quantity }]);
+export function buyerTotalWithProcessing(ticketPrice: number, quantity: number, buyerRate: number = SERVICE_FEE_RATE) {
+  return buyerTotalForItems([{ price: ticketPrice, quantity }], buyerRate);
 }
 
 /**

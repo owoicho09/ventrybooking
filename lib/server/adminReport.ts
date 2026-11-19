@@ -86,12 +86,13 @@ async function count(q: PromiseLike<{ count: number | null; error: { message: st
   return c ?? 0;
 }
 
-type TicketRow = { event_id: string; organizer_id: string; subtotal: number | null; service_fee: number | null; total_paid: number | null; buyer_email: string | null; paystack_reference: string | null; purchased_at: string };
+type TicketRow = { event_id: string; organizer_id: string; subtotal: number | null; service_fee: number | null; total_paid: number | null; buyer_email: string | null; paystack_reference: string | null; purchased_at: string; host_fee_rate?: number | null };
 
 function salesOf(rows: TicketRow[], rate: (orgId: string) => number): SalesFigures {
   let gross = 0, ventry = 0, net = 0, paid = 0;
   for (const t of rows) {
-    const sub = Number(t.subtotal ?? 0), fee = Number(t.service_fee ?? 0), r = rate(t.organizer_id);
+    // The host rate stamped at sale (062), else the organiser's account rate.
+    const sub = Number(t.subtotal ?? 0), fee = Number(t.service_fee ?? 0), r = t.host_fee_rate != null ? Number(t.host_fee_rate) : rate(t.organizer_id);
     gross += Number(t.total_paid ?? 0);
     ventry += fee + sub * r;
     net += sub * (1 - r);
@@ -121,7 +122,7 @@ export async function buildAdminReport(db: SupabaseClient, period: ReportPeriod,
   const in7d = new Date(Date.now() + 7 * DAY).toISOString();
 
   const tickets = await all<TicketRow>((f, t) => db.from('tickets')
-    .select('event_id, organizer_id, subtotal, service_fee, total_paid, buyer_email, paystack_reference, purchased_at')
+    .select('event_id, organizer_id, subtotal, service_fee, total_paid, buyer_email, paystack_reference, purchased_at, host_fee_rate')
     .gte('purchased_at', histStart).lt('purchased_at', end).order('purchased_at').range(f, t));
 
   const orgIds = [...new Set(tickets.map(t => t.organizer_id))];

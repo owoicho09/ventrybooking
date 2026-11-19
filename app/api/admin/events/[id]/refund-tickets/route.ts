@@ -5,6 +5,7 @@ import { refundTransaction } from '@/lib/server/paymentProvider';
 import { sendRefundConfirmationEmail } from '@/lib/server/email';
 import { notify } from '@/lib/server/notify';
 import { calculateFees, basePriceFromTotalPaid } from '@/lib/server/fees';
+import { eventHostRate } from '@/lib/server/hostRate';
 
 // POST — admin refunds one or more specific tickets for an event, without
 // cancelling the event or touching any other ticket. Distinct from
@@ -192,13 +193,9 @@ export async function POST(
   // Reduce the linked payout by the amount actually refunded, same as the
   // full-event-cancel and complaint-refund flows.
   if (totalRefundedAmount > 0 && payout) {
-    const { data: org } = await db
-      .from('users')
-      .select('platform_fee_rate')
-      .eq('id', event.organizer_id)
-      .maybeSingle();
+    const hostRate = await eventHostRate(db, id, event.organizer_id);
     const newGross = Math.max(0, payout.gross - totalRefundedAmount);
-    const { fee, net } = calculateFees(newGross, org?.platform_fee_rate);
+    const { fee, net } = calculateFees(newGross, hostRate);
     await db.from('payouts').update({ gross: newGross, fee, net }).eq('id', payout.id);
   }
 

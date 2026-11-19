@@ -40,6 +40,7 @@ function shapeEvent(row: any, organizer: unknown) {
     headerBannerUrl: row.header_banner_url ?? null,
     verified: row.verified === true,
     priceBeforeFees: row.price_before_fees === true,
+    buyerFeeRate: row.buyer_fee_rate == null ? null : Number(row.buyer_fee_rate),
     totalSold: row.total_sold,
     badge: computeBadge(row.tiers ?? []),
     organizer,
@@ -49,7 +50,7 @@ function shapeEvent(row: any, organizer: unknown) {
 
 const EVENT_SELECT = `
   id, slug, event_name, category, description, date, time, event_mode, venue, address, city, landmark, location_hidden, lga, address_reveal_at,
-  status, total_sold, banner_color, banner_url, header_banner_url, verified, goes_live_at, price_before_fees,
+  status, total_sold, banner_color, banner_url, header_banner_url, verified, goes_live_at, price_before_fees, buyer_fee_rate,
   tiers:ticket_tiers(id, name, price, available, sold, requires_code, allowed_email_domains)
 `;
 

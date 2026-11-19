@@ -55,7 +55,7 @@ export async function GET(req: NextRequest) {
     const { data: tickets, error } = await db
       .from('tickets')
       .select(`
-        organizer_id, event_id, tier_id,
+        organizer_id, event_id, tier_id, subtotal, host_fee_rate,
         tier:ticket_tiers!tickets_tier_id_fkey(name, price),
         event:events!tickets_event_id_fkey(event_name)
       `)
@@ -65,19 +65,23 @@ export async function GET(req: NextRequest) {
     if (error) throw error;
 
     // organiser → (event|tier) → line
-    const byOrg = new Map<string, Map<string, DailySalesLine>>();
+    const byOrg = new Map<string, Map<string, DailySalesLine & { stamped?: number }>>();
     for (const t of (tickets ?? []) as unknown as {
-      organizer_id: string; event_id: string; tier_id: string;
+      organizer_id: string; event_id: string; tier_id: string; subtotal: number | null; host_fee_rate: number | null;
       tier: { name: string; price: number } | { name: string; price: number }[] | null;
       event: { event_name: string } | { event_name: string }[] | null;
     }[]) {
       const tier = Array.isArray(t.tier) ? t.tier[0] : t.tier;
       const event = Array.isArray(t.event) ? t.event[0] : t.event;
-      const price = Number(tier?.price ?? 0);
-      const lines = byOrg.get(t.organizer_id) ?? new Map<string, DailySalesLine>();
+      const price = Number(t.subtotal ?? tier?.price ?? 0);
+      const lines = byOrg.get(t.organizer_id) ?? new Map<string, DailySalesLine & { stamped?: number }>();
       const key = `${t.event_id}|${t.tier_id}`;
       const line = lines.get(key) ?? { eventName: event?.event_name?.trim() || 'Your event', tierName: tier?.name ?? 'Ticket', paid: 0, free: 0, value: 0 };
-      if (price > 0) { line.paid += 1; line.value += price; } else { line.free += 1; }
+      if (price > 0) {
+        line.paid += 1; line.value += price;
+        // Stamped host rate (062); unstamped tickets fall back to the account rate below.
+        if (t.host_fee_rate != null) { line.fee = (line.fee ?? 0) + price * Number(t.host_fee_rate); line.stamped = (line.stamped ?? 0) + price; }
+      } else { line.free += 1; }
       lines.set(key, line);
       byOrg.set(t.organizer_id, lines);
     }
@@ -118,6 +122,12 @@ export async function GET(req: NextRequest) {
       if (wait > 0) await sleep(wait);
       lastSendAt = Date.now();
       try {
+        const rate = org.platform_fee_rate ?? PLATFORM_FEE_RATE;
+        // Unstamped (pre-062) value pays the account rate.
+        for (const l of byOrg.get(org.id)!.values()) {
+          if (l.stamped != null || l.fee != null) l.fee = (l.fee ?? 0) + (l.value - (l.stamped ?? 0)) * rate;
+          delete l.stamped;
+        }
         const lines = [...byOrg.get(org.id)!.values()].sort((a, b) => a.eventName.localeCompare(b.eventName) || (b.paid + b.free) - (a.paid + a.free));
         await sendDailySalesEmail({
           to: org.email,

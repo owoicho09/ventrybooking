@@ -34,6 +34,8 @@ interface Cart {
   eventSlug?: string | null;
   /** The event advertises prices before fees (060): itemise the service fee. */
   priceBeforeFees?: boolean;
+  /** The event's buyer share of Ventry's fee (062); absent = 2%. Display only: the server charges its own figure. */
+  buyerFeeRate?: number;
 }
 
 export default function CheckoutPage() {
@@ -93,7 +95,7 @@ export default function CheckoutPage() {
   }, [cooldown]);
 
   const { subtotal, serviceFee, processingFee, total } = cart
-    ? buyerTotalForItems(cart.items.map(i => ({ price: i.tierPrice, quantity: i.quantity })))
+    ? buyerTotalForItems(cart.items.map(i => ({ price: i.tierPrice, quantity: i.quantity })), cart.buyerFeeRate)
     : { subtotal: 0, serviceFee: 0, processingFee: 0, total: 0 };
   const isFree = total === 0;
 

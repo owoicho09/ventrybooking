@@ -44,13 +44,14 @@ function shapeEvent(row: any) {
     badge: computeBadge(row.tiers ?? [], row.status),
     organizer: row.organizer,
     priceBeforeFees: row.price_before_fees === true,
+    buyerFeeRate: row.buyer_fee_rate == null ? null : Number(row.buyer_fee_rate),
     tiers: ((row.tiers ?? []) as RawTier[]).map(({ requires_code, allowed_email_domains, ...t }) => ({ ...t, ...publicTierGates({ requires_code, allowed_email_domains }) })),
   };
 }
 
 const EVENT_SELECT = `
   id, slug, event_name, category, description, date, time, event_mode, venue, address, city, landmark, location_hidden, lga, address_reveal_at,
-  status, total_sold, banner_color, banner_url, header_banner_url, goes_live_at, price_before_fees,
+  status, total_sold, banner_color, banner_url, header_banner_url, goes_live_at, price_before_fees, buyer_fee_rate,
   organizer:users!events_organizer_id_fkey(id, name, tier, verified, member_since, events_hosted, handle),
   tiers:ticket_tiers(id, name, price, available, sold, requires_code, allowed_email_domains)
 `;

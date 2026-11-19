@@ -5,6 +5,7 @@ import { refundTransaction } from '@/lib/server/paymentProvider';
 import { sendRefundConfirmationEmail } from '@/lib/server/email';
 import { notify } from '@/lib/server/notify';
 import { calculateFees, basePriceFromTotalPaid } from '@/lib/server/fees';
+import { eventHostRate } from '@/lib/server/hostRate';
 
 export async function POST(
   req: NextRequest,
@@ -126,13 +127,9 @@ export async function POST(
       .maybeSingle();
 
     if (payout) {
-      const { data: org } = await db
-        .from('users')
-        .select('platform_fee_rate')
-        .eq('id', ticket.organizer_id)
-        .maybeSingle();
+      const hostRate = await eventHostRate(db, ticket.event_id, ticket.organizer_id);
       const newGross = Math.max(0, payout.gross - refundAmount);
-      const { fee, net } = calculateFees(newGross, org?.platform_fee_rate);
+      const { fee, net } = calculateFees(newGross, hostRate);
       const { error: payoutErr } = await db.from('payouts').update({ gross: newGross, fee, net }).eq('id', payout.id);
       if (payoutErr) {
         console.error('approve-refund: payout adjustment failed', { ticketId: ticket.id, payoutId: payout.id, payoutErr });

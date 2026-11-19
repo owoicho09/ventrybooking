@@ -1134,6 +1134,8 @@ export interface DailySalesLine {
   paid: number;      // paid tickets sold that day
   free: number;      // free tickets claimed that day
   value: number;     // base ticket value of the paid tickets, before Ventry's fee
+  /** Unrounded host fee on those tickets, each at its own rate (062). Absent = value × feeRate. */
+  fee?: number;
 }
 
 /**
@@ -1153,8 +1155,10 @@ export async function sendDailySalesEmail(params: {
   const paid  = params.lines.reduce((s, l) => s + l.paid, 0);
   const free  = params.lines.reduce((s, l) => s + l.free, 0);
   const value = params.lines.reduce((s, l) => s + l.value, 0);
-  const net   = Math.round(value * (1 - params.feeRate));
-  const feePct = +(params.feeRate * 100).toFixed(1);
+  // Each line's fee at the rate its tickets were sold under (062).
+  const feeTotal = Math.round(params.lines.reduce((s, l) => s + (typeof l.fee === 'number' ? l.fee : l.value * params.feeRate), 0));
+  const net   = value - feeTotal;
+  const feePct = value > 0 ? +((feeTotal / value) * 100).toFixed(1) : +(params.feeRate * 100).toFixed(1);
 
   // Group the tier lines under their event.
   const byEvent = new Map<string, DailySalesLine[]>();

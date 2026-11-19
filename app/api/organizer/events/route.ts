@@ -15,6 +15,7 @@ import { parseRefundPolicy } from '@/lib/refundPolicy';
 import { revealTimeProblem } from '@/lib/addressReveal';
 import { TIER_DESCRIPTION_MAX } from '@/lib/tiers';
 import { VENUE_TBA_LABEL, venueTbaProblem } from '@/lib/venueTba';
+import { DEFAULT_FEE_SPLIT, feeRatesFor, isFeeSplit } from '@/lib/feeSplit';
 
 export async function GET(req: NextRequest) {
   try {
@@ -32,7 +33,7 @@ export async function GET(req: NextRequest) {
     let qb = db
       .from('events')
       .select(`
-        id, name:event_name, category, date, time, event_mode, venue, city, status, total_sold, banner_color, goes_live_at,
+        id, name:event_name, category, date, time, event_mode, venue, city, status, total_sold, banner_color, goes_live_at, host_fee_rate,
         tiers:ticket_tiers(id, name, price, description, available, sold)
       `)
       .eq('organizer_id', user.sub)
@@ -157,6 +158,13 @@ export async function POST(req: NextRequest) {
     if (goLiveErr) return NextResponse.json({ error: goLiveErr }, { status: 400 });
     const goesLiveAt = isScheduled(goesLiveRaw) ? new Date(goesLiveRaw as string).toISOString() : null;
 
+    // Fee split (062): who pays Ventry's 5%. Rates are stored on the event,
+    // with the organiser's own rate (any discount) folded in.
+    const feeSplitRaw = String(formData.get('feeSplit') ?? '') || DEFAULT_FEE_SPLIT;
+    if (!isFeeSplit(feeSplitRaw)) return NextResponse.json({ error: 'Choose who pays the Ventry fee' }, { status: 400 });
+    const { data: orgRate } = await db.from('users').select('platform_fee_rate').eq('id', organizerId).maybeSingle();
+    const feeRates = feeRatesFor(feeSplitRaw, orgRate?.platform_fee_rate == null ? null : Number(orgRate.platform_fee_rate));
+
     const FILE_LABELS: Record<string, string> = { 'venue-proofs': 'Venue proof', banners: 'Banner image', lineup: 'Lineup photo' };
     async function uploadEventFile(file: File, folder: string, maxMb: number) {
       if (file.size > maxMb * 1024 * 1024) {
@@ -265,6 +273,9 @@ export async function POST(req: NextRequest) {
       landmark: landmark || null,
       location_hidden: locationHidden,
       venue_tba: venueTba,
+      fee_split: feeSplitRaw,
+      buyer_fee_rate: feeRates.buyer,
+      host_fee_rate: feeRates.host,
       lga: eventMode === 'physical' ? lga : null,
       address_reveal_at: eventMode === 'physical' && locationHidden ? addressRevealAt : null,
       meeting_link: eventMode === 'online' ? meetingLink : null,
