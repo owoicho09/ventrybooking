@@ -11,7 +11,7 @@ import { HeroDeck } from '@/components/landing/HeroDeck';
 import { getPublicEvents, getPlatformFigures, cityCounts, organizerSummaries } from '@/lib/server/publicEvents';
 import { eventImages, fmtDay, fmtShortDay, locationLine, naira, outcomeLabel, todayWAT, type PublicEvent } from '@/lib/publicEvents';
 import { accentForBackground, getContrastText } from '@/lib/accentColors';
-import { featuredFirst, isFeaturedEvent } from '@/lib/featuredEvents';
+import { featuredFirst, isHeroPinned, isHeroHidden } from '@/lib/featuredEvents';
 
 // Fresh enough for live counts, without a database round trip per visitor.
 export const revalidate = 60;
@@ -32,10 +32,11 @@ export default async function HomePage() {
 
   // Hero deck: three live events with artwork. Featured partners always take a
   // spot, on top of the deck (the last card renders on top).
-  const liveHeroCards = upcoming.filter(e => eventImages(e).length);
-  const heroFeatured = liveHeroCards.filter(e => isFeaturedEvent(e.id)).slice(0, 3);
+  // Pinned/hidden hero events live in lib/featuredEvents.ts.
+  const liveHeroCards = upcoming.filter(e => eventImages(e).length && !isHeroHidden(e.id));
+  const heroFeatured = liveHeroCards.filter(e => isHeroPinned(e.id)).slice(0, 3);
   const heroCards = [
-    ...liveHeroCards.filter(e => !isFeaturedEvent(e.id)).slice(0, 3 - heroFeatured.length),
+    ...liveHeroCards.filter(e => !isHeroPinned(e.id)).slice(0, 3 - heroFeatured.length),
     ...[...heroFeatured].reverse(),
   ];
 
