@@ -76,7 +76,7 @@ export default async function HomePage() {
             </p>
             <div className="v-hero-btns">
               <Link className="v-btn v-btn-solid v-btn-lg" href="/events">Discover events</Link>
-              <Link className="v-btn v-btn-ghost v-btn-lg" href="/organizer/register">List your event</Link>
+              <Link className="v-btn v-btn-ghost v-btn-lg" href="/organizers">List your event</Link>
             </div>
             <p className="v-hero-note">Free to list. Organisers are paid the next working day, and keep 97% of every ticket.</p>
           </div>

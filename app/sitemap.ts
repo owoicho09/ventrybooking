@@ -7,6 +7,7 @@ const baseUrl = 'https://www.ventrybooking.com';
 const staticRoutes: { path: string; changeFrequency: MetadataRoute.Sitemap[number]['changeFrequency']; priority: number }[] = [
   { path: '', changeFrequency: 'daily', priority: 1 },
   { path: '/events', changeFrequency: 'daily', priority: 0.9 },
+  { path: '/organizers', changeFrequency: 'monthly', priority: 0.7 },
   { path: '/blog', changeFrequency: 'daily', priority: 0.8 },
   { path: '/help', changeFrequency: 'monthly', priority: 0.5 },
   { path: '/privacy', changeFrequency: 'yearly', priority: 0.3 },

@@ -28,6 +28,7 @@ export function Footer({ cities = [], flush = false }: FooterProps) {
             </div>
             <div className="v-fcol">
               <h5>Organisers</h5>
+              <Link href="/organizers">For organizers</Link>
               <Link href="/organizer/register">List an event</Link>
               <Link href="/terms/organisers">Organiser terms</Link>
               <Link href="/affiliates">Affiliates</Link>

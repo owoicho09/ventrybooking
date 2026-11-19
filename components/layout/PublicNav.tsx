@@ -84,7 +84,7 @@ export function PublicNav() {
             <Link href="/signin" className="v-btn v-btn-ghost">Sign in</Link>
           ))}
 
-          <Link href="/organizer/register" className="v-btn v-btn-solid hide-xs">List your event</Link>
+          <Link href="/organizers" className="v-btn v-btn-solid hide-xs">List your event</Link>
 
           <button
             type="button"
@@ -103,7 +103,7 @@ export function PublicNav() {
           {NAV_LINKS.map(l => (
             <Link key={l.href} href={l.href} onClick={() => setMobileOpen(false)}>{l.label}</Link>
           ))}
-          <Link href="/organizer/register" onClick={() => setMobileOpen(false)} style={{ color: 'var(--purple-lt)' }}>List your event</Link>
+          <Link href="/organizers" onClick={() => setMobileOpen(false)} style={{ color: 'var(--purple-lt)' }}>List your event</Link>
         </div>
       )}
     </nav>

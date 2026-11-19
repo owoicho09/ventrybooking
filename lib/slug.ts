@@ -2,7 +2,7 @@
 // equal one of these, so a future real route added at that name can never
 // silently shadow an already-issued vanity URL.
 export const RESERVED_SLUGS = new Set([
-  'admin', 'api', 'blog', 'checkout', 'events', 'help', 'organizer',
+  'admin', 'api', 'blog', 'checkout', 'events', 'help', 'organizer', 'organizers',
   'payment', 'privacy', 'refund-policy', 'retrieve', 'scan', 'staff-scan',
   'studio', 'terms', 'ticket', 'tickets', 'sitemap.xml', 'robots.txt',
   'favicon.ico', 'icon', 'opengraph-image',
