@@ -189,7 +189,7 @@ export default async function HomePage() {
                   <div className="v-mail">
                     <div className="v-mail-h">{ticketShow.name} · your ticket</div>
                     {ticketShowWide.length > 0 && (
-                      <div className="v-mail-flyer" style={{ position: 'relative' }}><EventImage sources={ticketShowWide} sizes="260px" style={{ objectFit: 'cover', objectPosition: 'center top' }} /></div>
+                      <div className="v-mail-flyer" style={{ position: 'relative', height: 'auto', aspectRatio: '2 / 1' }}><EventImage sources={ticketShowWide} sizes="260px" style={{ objectFit: 'cover', objectPosition: 'center top' }} /></div>
                     )}
                     <div className="v-mail-b">
                       <h5>You&apos;re in.</h5>
