@@ -11,7 +11,8 @@ import { HeroDeck } from '@/components/landing/HeroDeck';
 import { getPublicEvents, getPlatformFigures, cityCounts, organizerSummaries } from '@/lib/server/publicEvents';
 import { eventImages, fmtDay, fmtShortDay, locationLine, naira, outcomeLabel, todayWAT, type PublicEvent } from '@/lib/publicEvents';
 import { accentForBackground, getContrastText } from '@/lib/accentColors';
-import { featuredFirst, isHeroPinned, isHeroHidden } from '@/lib/featuredEvents';
+import { featuredFirst, isHeroPinned, isHeroHidden, TICKET_CARD_EVENT_ID } from '@/lib/featuredEvents';
+import { getHeroSlotIds } from '@/lib/server/homepageHero';
 
 // Fresh enough for live counts, without a database round trip per visitor.
 export const revalidate = 60;
@@ -19,7 +20,7 @@ export const revalidate = 60;
 const PHONE_BG = '#0D0A16';
 
 export default async function HomePage() {
-  const [events, figures] = await Promise.all([getPublicEvents(), getPlatformFigures()]);
+  const [events, figures, heroSlotIds] = await Promise.all([getPublicEvents(), getPlatformFigures(), getHeroSlotIds()]);
   const today = todayWAT();
 
   // Official partners (lib/featuredEvents.ts) lead the on-sale list, then by date.
@@ -33,12 +34,18 @@ export default async function HomePage() {
   // Hero deck: three live events with artwork. Featured partners always take a
   // spot, on top of the deck (the last card renders on top).
   // Pinned/hidden hero events live in lib/featuredEvents.ts.
-  const liveHeroCards = upcoming.filter(e => eventImages(e).length && !isHeroHidden(e.id));
-  const heroFeatured = liveHeroCards.filter(e => isHeroPinned(e.id)).slice(0, 3);
-  const heroCards = [
-    ...liveHeroCards.filter(e => !isHeroPinned(e.id)).slice(0, 3 - heroFeatured.length),
-    ...[...heroFeatured].reverse(),
-  ];
+  // Admin's choice (Admin > Homepage, 063) wins; any slot that's empty or no
+  // longer on sale is filled automatically.
+  const liveHeroCards = upcoming.filter(e => eventImages(e).length);
+  const adminChosen = heroSlotIds
+    .map(id => liveHeroCards.find(e => e.id === id))
+    .filter((e): e is (typeof liveHeroCards)[number] => !!e);
+  const autoPool = liveHeroCards.filter(e => !isHeroHidden(e.id) && !adminChosen.some(c => c.id === e.id));
+  const autoPinned = autoPool.filter(e => isHeroPinned(e.id));
+  const autoRest = autoPool.filter(e => !isHeroPinned(e.id));
+  const topDown = [...adminChosen, ...autoPinned, ...autoRest].slice(0, 3);
+  // HeroDeck draws the last card on top.
+  const heroCards = [...topDown].reverse();
 
   const cities = cityCounts(events).slice(0, 5);
   const organisers = organizerSummaries(events);
@@ -49,6 +56,10 @@ export default async function HomePage() {
   const showcaseWide = showcase ? eventImages(showcase, 'wide') : [];
   const showcaseAccent = accentForBackground(showcase?.accentColor || '#7c3aed', PHONE_BG);
   const showcaseTiers = showcase ? [...showcase.tiers].sort((a, b) => a.price - b.price).slice(0, 2) : [];
+  // Card 2 ("The ticket lands") shows a chosen event's own flyer.
+  const ticketShow = upcoming.find(e => e.id === TICKET_CARD_EVENT_ID && eventImages(e).length) ?? showcase;
+  const ticketShowWide = ticketShow ? eventImages(ticketShow, 'wide') : [];
+  const ticketShowTier = ticketShow ? [...ticketShow.tiers].sort((a, b) => a.price - b.price)[0] : undefined;
   const statsEvent = [...past].sort((a, b) => (b.checkedIn - a.checkedIn) || (b.totalSold - a.totalSold))[0] ?? null;
 
   // Marquee: at least three real organisers, track repeated so it never gaps.
@@ -173,18 +184,18 @@ export default async function HomePage() {
                   <li><span className="v-tk">✓</span>Saved to their Ventry account too</li>
                 </ul>
               </div>
-              {showcase && (
+              {ticketShow && (
                 <div className="v-mock">
                   <div className="v-mail">
-                    <div className="v-mail-h">{showcase.name} · your ticket</div>
-                    {showcaseWide.length > 0 && (
-                      <div className="v-mail-flyer" style={{ position: 'relative' }}><EventImage sources={showcaseWide} sizes="260px" style={{ objectFit: 'cover', objectPosition: 'center top' }} /></div>
+                    <div className="v-mail-h">{ticketShow.name} · your ticket</div>
+                    {ticketShowWide.length > 0 && (
+                      <div className="v-mail-flyer" style={{ position: 'relative' }}><EventImage sources={ticketShowWide} sizes="260px" style={{ objectFit: 'cover', objectPosition: 'center top' }} /></div>
                     )}
                     <div className="v-mail-b">
                       <h5>You&apos;re in.</h5>
                       <p>
-                        1 {showcaseTiers[0]?.name ?? 'General'} ticket · {fmtDay(showcase.date)}{showcase.time ? `, ${showcase.time}` : ''}
-                        <br />{locationLine(showcase)}
+                        1 {ticketShowTier?.name?.trim() || 'General'} ticket · {fmtDay(ticketShow.date)}{ticketShow.time ? `, ${ticketShow.time}` : ''}
+                        <br />{locationLine(ticketShow)}
                       </p>
                       <div className="v-mail-cta">View your QR ticket</div>
                     </div>

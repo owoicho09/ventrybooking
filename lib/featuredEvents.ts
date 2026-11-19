@@ -22,6 +22,12 @@ const HERO_HIDDEN_EVENT_IDS: string[] = [
   '3fb9023d-f480-4114-872b-84b9068010ea',
 ];
 
+/**
+ * The event shown in the homepage "The ticket lands" card (the email mock).
+ * Falls back to the automatic showcase event when it isn't on sale.
+ */
+export const TICKET_CARD_EVENT_ID = '71f03524-86a3-4e8f-a5de-d5be886c1728'; // Alien Invasion
+
 export function isHeroPinned(eventId: string): boolean {
   return FEATURED_EVENT_IDS.includes(eventId) || HERO_PINNED_EVENT_IDS.includes(eventId);
 }

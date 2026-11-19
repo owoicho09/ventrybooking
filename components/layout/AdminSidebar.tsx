@@ -16,6 +16,7 @@ import { RotateCcw,
   Handshake,
   CalendarClock,
   Settings,
+  LayoutTemplate,
 } from 'lucide-react';
 import { ThemeToggle } from './ThemeToggle';
 import { NotificationBell } from '@/components/ui/NotificationBell';
@@ -24,6 +25,7 @@ const navItems = [
   { href: '/admin', label: 'Dashboard', icon: LayoutDashboard },
   { href: '/admin/organizers', label: 'KYC Review', icon: UserCheck },
   { href: '/admin/events', label: 'Events Queue', icon: CalendarCheck },
+  { href: '/admin/homepage', label: 'Homepage Hero', icon: LayoutTemplate },
   { href: '/admin/change-requests', label: 'Change Requests', icon: CalendarClock },
   { href: '/admin/buyers', label: 'Buyers', icon: Users },
   { href: '/admin/payouts', label: 'Payouts', icon: Wallet },
