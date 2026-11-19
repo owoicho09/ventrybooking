@@ -85,6 +85,12 @@ export interface Event {
   accentColor?: string | null;
   /** Advertise exact tier prices; fees are itemised at checkout (060). */
   priceBeforeFees?: boolean;
+  /** Non-null while checkout is paused (061); the page stays visible. */
+  salesPausedMessage?: string | null;
+  /** Venue to be announced: city + LGA only for now (061). */
+  venueTba?: boolean;
+  /** Up to 3 flyers in display order (061); [0] is banner_url. */
+  flyerUrls?: string[];
   /** The organiser's published refund-policy answers (lib/refundPolicy.ts); null until set. */
   refundPolicy?: import('@/lib/refundPolicy').RefundPolicyAnswers | null;
   /** Venue booking confirmed by Ventry for this event (the public Verified badge). Distinct from organizer.verified. */

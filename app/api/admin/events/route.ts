@@ -18,6 +18,7 @@ export async function GET(req: NextRequest) {
       id, name:event_name, category, date, city, event_mode, venue, address, landmark, location_hidden,
       meeting_link, meeting_passcode,
       status, submitted_at, reviewed_at, reviewed_by, rejection_reason, goes_live_at, price_before_fees,
+      sales_paused_reason, cancel_requested_at, cancel_request_reason, venue_tba, venue_deadline_extended_at,
       description, banner_url, venue_proof_url, verified, verified_at, verified_by, venue_contact_name, venue_contact_phone,
       organizer:users!events_organizer_id_fkey(id, name, tier, verified),
       tiers:ticket_tiers(id, name, price, available)

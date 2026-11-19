@@ -1,5 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { isScheduled, fmtGoLive } from '@/lib/goLive';
+import { isSalesPaused, salesPausedMessage } from '@/lib/salesPause';
 import { getServerSupabase } from '@/lib/supabase/server';
 import { initializeFlutterwaveTransaction } from '@/lib/server/flutterwave';
 import { buyerTotalForItems } from '@/lib/server/fees';
@@ -45,7 +46,7 @@ export async function POST(req: NextRequest) {
     // Verify event is approved
     const { data: event, error: eventErr } = await db
       .from('events')
-      .select('id, event_name, status, organizer_id, allowed_email_domains, goes_live_at')
+      .select('id, event_name, status, organizer_id, allowed_email_domains, goes_live_at, sales_paused_reason')
       .eq('id', eventId)
       .maybeSingle();
 
@@ -58,6 +59,9 @@ export async function POST(req: NextRequest) {
     }
     if (isScheduled(event.goes_live_at)) {
       return NextResponse.json({ error: `Tickets go on sale ${fmtGoLive(event.goes_live_at as string)}` }, { status: 400 });
+    }
+    if (isSalesPaused(event.sales_paused_reason)) {
+      return NextResponse.json({ error: salesPausedMessage(event.sales_paused_reason) }, { status: 400 });
     }
     if (!isEmailDomainAllowed(buyerEmail, event.allowed_email_domains)) {
       return NextResponse.json(

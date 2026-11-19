@@ -55,6 +55,11 @@ interface OrgEvent {
   status: string; total_sold: number; banner_url: string | null; header_banner_url: string | null; banner_color: string;
   accent_color: string | null; lineup: LineupAct[]; allowed_email_domains: string[] | null;
   price_before_fees?: boolean;
+  sales_paused_reason?: string | null;
+  cancel_requested_at?: string | null;
+  cancel_request_reason?: string | null;
+  venue_tba?: boolean;
+  flyer_urls?: string[] | null;
   refund_policy: RefundPolicyAnswers | null; refund_policy_set_at: string | null;
   verified: boolean; venue_proof_url: string | null; venue_contact_name: string | null; venue_contact_phone: string | null;
   lga: string | null; address_reveal_at: string | null; goes_live_at: string | null;
@@ -199,6 +204,9 @@ export default function OrganizerEventDetailPage() {
   const [goLiveInactive, setGoLiveInactive] = useState(false);
   const [savingGoLive, setSavingGoLive] = useState(false);
   const [resubmitting, setResubmitting] = useState(false);
+  const [cancelOpen, setCancelOpen] = useState(false);
+  const [cancelReason, setCancelReason] = useState('');
+  const [cancelBusy, setCancelBusy] = useState(false);
   const [editingTierId, setEditingTierId] = useState<string | null>(null);
   const [addingTier, setAddingTier] = useState(false);
   const [newTierName, setNewTierName] = useState('');
@@ -364,6 +372,38 @@ export default function OrganizerEventDetailPage() {
       load();
     } finally {
       setSavingGoLive(false);
+    }
+  };
+
+  // Events with sales can't be deleted; the organiser asks Ventry to cancel (061).
+  const handleCancelRequest = async () => {
+    setCancelBusy(true);
+    try {
+      const res = await fetch(`/api/organizer/events/${id}/cancel-request`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ reason: cancelReason }),
+      });
+      const data = await res.json().catch(() => ({}));
+      if (!res.ok) { toast(data.error || 'Could not send your request', 'error'); return; }
+      toast('Request sent. Ticket sales are paused while Ventry reviews it.', 'success');
+      setCancelOpen(false);
+      setCancelReason('');
+      load();
+    } finally {
+      setCancelBusy(false);
+    }
+  };
+  const handleWithdrawCancel = async () => {
+    setCancelBusy(true);
+    try {
+      const res = await fetch(`/api/organizer/events/${id}/cancel-request`, { method: 'DELETE' });
+      const data = await res.json().catch(() => ({}));
+      if (!res.ok) { toast(data.error || 'Could not withdraw your request', 'error'); return; }
+      toast('Request withdrawn. Ticket sales have resumed.', 'success');
+      load();
+    } finally {
+      setCancelBusy(false);
     }
   };
 
@@ -1370,6 +1410,56 @@ export default function OrganizerEventDetailPage() {
           </button>
         </div>
       </div>
+      {/* Cancel (061): once tickets have sold an event can't be deleted, only
+          cancelled through Ventry, which runs the normal refund process. */}
+      {event.status === 'approved' && hasSales && (
+        <div className="rounded-xl border p-5 flex flex-col gap-3"
+          style={{ backgroundColor: 'var(--color-surface)', borderColor: event.cancel_requested_at ? '#f59e0b55' : '#ef444433' }}>
+          <h2 className="font-semibold" style={{ color: 'var(--color-text)' }}>Cancel this event</h2>
+          {event.cancel_requested_at ? (
+            <>
+              <p className="text-sm" style={{ color: 'var(--color-text-muted)' }}>
+                You asked Ventry to cancel this event on {new Date(event.cancel_requested_at).toLocaleString('en-NG', { timeZone: 'Africa/Lagos', dateStyle: 'medium', timeStyle: 'short' })}.
+                Ticket sales are paused while we review it. If we cancel it, every buyer is refunded through the normal refund process and you&apos;ll be emailed.
+              </p>
+              {event.cancel_request_reason && (
+                <p className="text-xs" style={{ color: 'var(--color-text-dim)' }}>Your reason: {event.cancel_request_reason}</p>
+              )}
+              <div>
+                <Button size="sm" variant="outline" disabled={cancelBusy} onClick={handleWithdrawCancel}>
+                  {cancelBusy ? 'Working…' : 'Withdraw request and resume sales'}
+                </Button>
+              </div>
+            </>
+          ) : cancelOpen ? (
+            <>
+              <p className="text-sm" style={{ color: 'var(--color-text-muted)' }}>
+                Tickets have been sold, so this event can&apos;t be deleted. Ventry will review your request and, if it&apos;s cancelled,
+                refund buyers through the normal refund process (Organiser Terms §10). Ticket sales pause as soon as you send this.
+              </p>
+              <Textarea label="Why is the event being cancelled?" value={cancelReason} onChange={e => setCancelReason(e.target.value)} rows={3}
+                placeholder="e.g. The venue withdrew and we can't find another for this date" />
+              <div className="flex gap-2 flex-wrap">
+                <Button size="sm" variant="danger" disabled={cancelBusy || cancelReason.trim().length < 10} onClick={handleCancelRequest}>
+                  {cancelBusy ? 'Sending…' : 'Send cancellation request'}
+                </Button>
+                <Button size="sm" variant="outline" disabled={cancelBusy} onClick={() => setCancelOpen(false)}>Keep the event</Button>
+              </div>
+            </>
+          ) : (
+            <>
+              <p className="text-sm" style={{ color: 'var(--color-text-muted)' }}>
+                Tickets have been sold, so this event can&apos;t be deleted. If it can&apos;t go ahead, ask Ventry to cancel it and buyers are refunded through the normal process.
+              </p>
+              <div>
+                <Button size="sm" variant="outline" onClick={() => setCancelOpen(true)} style={{ color: 'var(--color-red)' }}>
+                  Request cancellation
+                </Button>
+              </div>
+            </>
+          )}
+        </div>
+      )}
       {previewing && previewEvent && <EventPreview event={previewEvent} onClose={() => setPreviewing(false)} />}
     </div>
   );

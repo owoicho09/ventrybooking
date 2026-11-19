@@ -7,6 +7,7 @@ import { ticketUrgency } from '@/lib/ticketUrgency';
 import { redactSurpriseNames } from '@/lib/server/lineup';
 import { readRefundPolicy } from '@/lib/refundPolicy';
 import { publicTierGates } from '@/lib/server/tierAccess';
+import { isSalesPaused, salesPausedMessage } from '@/lib/salesPause';
 
 type RawTier = { id: string; name: string; price: number; available: number; sold: number ; description?: string | null; requires_code?: boolean | null; allowed_email_domains?: string[] | null };
 
@@ -38,7 +39,7 @@ export async function GET(
       .from('events')
       .select(`
         id, slug, event_name, category, description, date, time, event_mode, venue, address, city, landmark, location_hidden, lga, address_reveal_at,
-        status, total_sold, banner_color, banner_url, header_banner_url, accent_color, price_before_fees, lineup, allowed_email_domains, verified, refund_policy,
+        status, total_sold, banner_color, banner_url, header_banner_url, accent_color, price_before_fees, sales_paused_reason, venue_tba, flyer_urls, lineup, allowed_email_domains, verified, refund_policy,
         organizer:users!events_organizer_id_fkey(id, name, tier, verified, member_since, events_hosted, handle, socials, avatar_url, cover_image_url),
         tiers:ticket_tiers(id, name, price, description, available, sold, requires_code, allowed_email_domains)
       `)
@@ -93,6 +94,9 @@ export async function GET(
       headerBannerUrl: data.header_banner_url ?? null,
       accentColor: data.accent_color ?? null,
       priceBeforeFees: data.price_before_fees === true,
+      salesPausedMessage: isSalesPaused(data.sales_paused_reason) ? salesPausedMessage(data.sales_paused_reason) : null,
+      venueTba: data.venue_tba === true,
+      flyerUrls: Array.isArray(data.flyer_urls) && data.flyer_urls.length ? data.flyer_urls : (data.banner_url ? [data.banner_url] : []),
       verified: data.verified === true,
       refundPolicy: readRefundPolicy(data.refund_policy),
       lineup: redactSurpriseNames(data.lineup),

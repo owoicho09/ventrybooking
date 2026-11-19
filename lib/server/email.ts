@@ -1320,3 +1320,68 @@ export async function sendNewEventTeaserEmail(params: {
     fromName: getOrganizerSenderName(params.organizerName),
   });
 }
+
+/**
+ * Plain notice to an organiser: cancellation-request decisions, venue
+ * deadline reminders and pauses (061). `lines` become paragraphs.
+ */
+export async function sendOrganizerNoticeEmail(params: {
+  to: string;
+  organizerName: string;
+  subject: string;
+  heading: string;
+  lines: string[];
+  ctaLabel?: string;
+  ctaPath?: string;
+  purpose: string;
+}) {
+  await sendEmail({
+    to: params.to,
+    subject: params.subject,
+    purpose: params.purpose,
+    html: emailShell(`
+      <h1 style="color:#a855f7;font-size:22px;margin:0 0 12px;">${esc(params.heading)}</h1>
+      <p style="color:#f1f0ff;">Hi ${esc(params.organizerName)},</p>
+      ${params.lines.map(l => `<p style="color:#f1f0ff;">${esc(l)}</p>`).join('\n      ')}
+      ${params.ctaPath ? `<br/><a href="${APP_URL}${params.ctaPath}" class="btn">${esc(params.ctaLabel ?? 'Open your dashboard')}</a>` : ''}
+    `),
+  });
+}
+
+/** A venue-to-be-announced event now has its venue (061). Sent to every ticket holder. */
+export async function sendVenueAnnouncedEmail(params: {
+  to: string;
+  buyerName: string;
+  eventName: string;
+  eventDate: string;
+  eventTime: string;
+  venue: string;
+  address: string;
+  city: string;
+  landmark?: string | null;
+  /** The street address stays hidden until the organiser's reveal time. */
+  addressHiddenUntil?: string | null;
+  eventSlug?: string | null;
+}) {
+  const where = params.addressHiddenUntil
+    ? `${params.venue ? `${params.venue}, ` : ''}${params.city}. The exact address will be emailed to you on ${params.addressHiddenUntil}.`
+    : [params.venue, params.address, params.city].filter(Boolean).join(', ');
+  const maps = params.addressHiddenUntil ? null
+    : `https://www.google.com/maps?q=${encodeURIComponent([params.venue, params.address, params.city].filter(Boolean).join(', '))}`;
+  await sendEmail({
+    to: params.to,
+    subject: `Venue confirmed: ${params.eventName}`,
+    fromName: params.eventName,
+    purpose: 'venue_announced',
+    html: emailShell(`
+      <h1 style="color:#a855f7;font-size:22px;margin:0 0 12px;">The venue is confirmed 📍</h1>
+      <p style="color:#f1f0ff;">Hi ${esc(params.buyerName || 'there')}, the venue for <strong>&ldquo;${esc(params.eventName)}&rdquo;</strong> has been announced.</p>
+      <p style="color:#f1f0ff;"><strong>Where:</strong> ${esc(where)}</p>
+      ${params.landmark ? `<p style="color:#f1f0ff;"><strong>Landmark:</strong> ${esc(params.landmark)}</p>` : ''}
+      <p style="color:#f1f0ff;"><strong>When:</strong> ${esc(params.eventDate)}${params.eventTime ? `, ${esc(params.eventTime)}` : ''}</p>
+      <p style="color:#c4b5fd;">Your ticket is unchanged. Bring it as usual.</p>
+      ${maps ? `<br/><a href="${maps}" class="btn">Open in Maps</a>` : ''}
+      ${params.eventSlug ? `<p style="margin-top:16px;"><a href="${APP_URL}/${params.eventSlug}" style="color:#a855f7;">View the event</a></p>` : ''}
+    `),
+  });
+}

@@ -165,6 +165,8 @@ export function EventDetailContent({ identifier, preview }: EventDetailContentPr
   // Per-event (060): advertise the exact tier prices and itemise the service
   // fee in the order summary instead of folding it into each price.
   const beforeFees = event?.priceBeforeFees === true;
+  // Checkout paused (061): organiser asked to cancel, or the venue is overdue.
+  const pausedMessage = event?.salesPausedMessage ?? null;
   const allFree = hasSelection && lines.every(l => l.tier.price === 0);
   const orderSummary = lines.length === 1 ? `${lines[0].quantity} \u00d7 ${lines[0].tier.name}` : `${ticketCount} tickets, ${lines.length} types`;
 
@@ -215,6 +217,7 @@ export function EventDetailContent({ identifier, preview }: EventDetailContentPr
 
   const handlePurchase = () => {
     if (preview) { toast('This is a preview. Checkout opens once your event is live.', 'success'); return; }
+    if (pausedMessage) { toast(pausedMessage, 'error'); return; }
     if (!event || !hasSelection || event.status === 'completed') return;
     const ref = sessionStorage.getItem(`ventry_ref_${event.id}`) || undefined;
     sessionStorage.setItem('ventry_cart', JSON.stringify({
@@ -528,7 +531,8 @@ export function EventDetailContent({ identifier, preview }: EventDetailContentPr
             </div>
           )}
 
-          <button type="button" className="v-btn v-btn-accent v-btn-block" style={{ marginTop: 14 }} disabled={!hasSelection} onClick={handlePurchase}>
+          {pausedMessage && <p className="v-paused-note" role="status">{pausedMessage}</p>}
+          <button type="button" className="v-btn v-btn-accent v-btn-block" style={{ marginTop: 14 }} disabled={!hasSelection || !!pausedMessage} onClick={handlePurchase}>
             {!minOnSale ? 'Sold out' : needsCode ? 'Enter your code to continue' : allFree ? 'Get free tickets' : 'Get tickets'}
           </button>
           <p className="v-nb">
@@ -790,7 +794,7 @@ export function EventDetailContent({ identifier, preview }: EventDetailContentPr
               {hasSelection ? (allFree ? 'Free' : formatNGN(totals.total)) : minOnSale ? (minOnSale.price === 0 ? 'Free' : `From ${formatNGN(listedTicketPrice(minOnSale.price, beforeFees))}${beforeFees ? ' + fees' : ''}`) : 'Sold out'}
               <i>{hasSelection ? `${orderSummary}${allFree ? '' : ', all fees in'} · change` : 'Choose tickets'}</i>
             </button>
-            <button type="button" className="v-btn v-btn-accent" disabled={!hasSelection} onClick={handlePurchase}>
+            <button type="button" className="v-btn v-btn-accent" disabled={!hasSelection || !!pausedMessage} onClick={handlePurchase}>
               {allFree ? 'Get free tickets' : 'Get tickets'}
             </button>
           </>

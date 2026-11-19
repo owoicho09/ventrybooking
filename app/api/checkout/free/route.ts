@@ -1,5 +1,6 @@
 import { NextRequest, NextResponse, after } from 'next/server';
 import { isScheduled, fmtGoLive } from '@/lib/goLive';
+import { isSalesPaused, salesPausedMessage } from '@/lib/salesPause';
 import { getServerSupabase } from '@/lib/supabase/server';
 import { generateTicketId, generateRefundCode } from '@/lib/server/ids';
 import { sendTicketEmail } from '@/lib/server/email';
@@ -42,7 +43,7 @@ export async function POST(req: NextRequest) {
 
     const { data: event } = await db
       .from('events')
-      .select('id, event_name, date, time, event_mode, venue, status, organizer_id, banner_url, allowed_email_domains, goes_live_at')
+      .select('id, event_name, date, time, event_mode, venue, status, organizer_id, banner_url, allowed_email_domains, goes_live_at, sales_paused_reason')
       .eq('id', eventId)
       .maybeSingle();
 
@@ -51,6 +52,9 @@ export async function POST(req: NextRequest) {
     }
     if (isScheduled(event.goes_live_at)) {
       return NextResponse.json({ error: `Tickets go on sale ${fmtGoLive(event.goes_live_at as string)}` }, { status: 400 });
+    }
+    if (isSalesPaused(event.sales_paused_reason)) {
+      return NextResponse.json({ error: salesPausedMessage(event.sales_paused_reason) }, { status: 400 });
     }
     if (!isEmailDomainAllowed(buyerEmail, event.allowed_email_domains)) {
       return NextResponse.json(

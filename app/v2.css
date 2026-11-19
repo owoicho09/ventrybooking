@@ -947,6 +947,7 @@ html.light .v2 .v-ed-topbar.solid .v-icbtn { background: var(--surface); color: 
 .v-preview-bar .close { background: #7C3AED; color: #fff; font-weight: 600; }
 @media (max-width: 900px) { .v-preview-bar { bottom: calc(86px + env(safe-area-inset-bottom)); } }
 @media (max-width: 420px) { .v-preview-bar .lab { display: none; } }
+.v-paused-note { font-size: 13px; color: var(--head); background: color-mix(in srgb, #f59e0b 14%, var(--surface-2)); border: 1px solid color-mix(in srgb, #f59e0b 45%, transparent); border-radius: 10px; padding: 10px 12px; margin-top: 12px; text-align: center; }
 .v-preview-note { font-size: 12px; color: var(--muted); background: var(--surface-2); border: 1px dashed var(--line-hi); border-radius: 10px; padding: 9px 12px; margin-top: 12px; text-align: center; }
 
 

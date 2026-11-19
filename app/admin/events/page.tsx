@@ -45,6 +45,11 @@ interface EventData {
   submitted_at?: string | null; reviewed_at?: string | null; reviewed_by?: string | null;
   rejection_reason?: string | null; goes_live_at?: string | null;
   price_before_fees?: boolean;
+  sales_paused_reason?: string | null;
+  cancel_requested_at?: string | null;
+  cancel_request_reason?: string | null;
+  venue_tba?: boolean;
+  venue_deadline_extended_at?: string | null;
   tiers?: { id: string; name: string; price: number; available: number }[];
   organizer: { name: string; tier?: string; verified?: boolean };
 }
@@ -98,6 +103,32 @@ export default function AdminEventsPage() {
   };
   // Per-event price display (060): exact tier prices, fees itemised at checkout.
   const [priceBusy, setPriceBusy] = useState(false);
+  // Organiser cancellation requests (061): decline here, or accept with the
+  // normal Cancel Event flow below.
+  const [declineNote, setDeclineNote] = useState('');
+  const [declineBusy, setDeclineBusy] = useState(false);
+  const declineCancelRequest = async (ev: EventData) => {
+    if (declineBusy) return;
+    setDeclineBusy(true);
+    try {
+      const res = await fetch(`/api/admin/events/${ev.id}/cancel-request`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ note: declineNote }),
+      });
+      const d = await res.json().catch(() => ({}));
+      if (!res.ok || !d.success) { toast(d.error ?? 'Could not decline the request', 'error'); return; }
+      const patchEv = (e: EventData) => (e.id === ev.id ? { ...e, cancel_requested_at: null, cancel_request_reason: null, sales_paused_reason: e.sales_paused_reason === 'cancel_requested' ? null : e.sales_paused_reason } : e);
+      setEvents(list => list.map(patchEv));
+      setSelectedEvent(cur => (cur ? patchEv(cur) : cur));
+      setDeclineNote('');
+      toast('Request declined. The organiser has been emailed and sales resumed.', 'success');
+    } catch {
+      toast('Network error', 'error');
+    } finally {
+      setDeclineBusy(false);
+    }
+  };
   const setPriceBeforeFees = async (ev: EventData, on: boolean) => {
     if (priceBusy) return;
     setPriceBusy(true);
@@ -444,6 +475,27 @@ export default function AdminEventsPage() {
                       Needs {[!selectedEvent.venue_proof_url && 'venue proof', !selectedEvent.venue_contact_phone && 'a venue contact to call'].filter(Boolean).join(' and ')} first.
                     </p>
                   )}
+                </div>
+              </div>
+            )}
+
+            {/* Organiser cancellation request (061) */}
+            {selectedEvent.cancel_requested_at && (
+              <div className="rounded-lg border p-3 flex flex-col gap-2" style={{ backgroundColor: '#ef444410', borderColor: '#ef444455' }}>
+                <p className="text-sm font-semibold" style={{ color: 'var(--color-text)' }}>
+                  Organiser asked to cancel · {new Date(selectedEvent.cancel_requested_at).toLocaleString('en-NG', { timeZone: 'Africa/Lagos', dateStyle: 'medium', timeStyle: 'short' })}
+                </p>
+                {selectedEvent.cancel_request_reason && (
+                  <p className="text-sm" style={{ color: 'var(--color-text-muted)' }}>&ldquo;{selectedEvent.cancel_request_reason}&rdquo;</p>
+                )}
+                <p className="text-xs" style={{ color: 'var(--color-text-dim)' }}>
+                  Ticket sales are paused. To accept, use <strong>Cancel Event &amp; Refund All Buyers</strong> below. To decline, add a note for the organiser; sales resume.
+                </p>
+                <Textarea value={declineNote} onChange={e => setDeclineNote(e.target.value)} rows={2} placeholder="Note to the organiser (required to decline)" />
+                <div>
+                  <Button size="sm" variant="outline" disabled={declineBusy || !declineNote.trim()} onClick={() => declineCancelRequest(selectedEvent)}>
+                    {declineBusy ? 'Saving…' : 'Decline request and resume sales'}
+                  </Button>
                 </div>
               </div>
             )}
