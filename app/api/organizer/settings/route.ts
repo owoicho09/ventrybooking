@@ -12,15 +12,23 @@ export async function PATCH(req: NextRequest) {
 
   try {
     const db = getServerSupabase();
-    // Every settings change needs a fresh emailed-code grant (055).
-    const denied = await requireChangeGrant(db, user.sub, req);
-    if (denied) return denied;
-
     const body = await req.json();
     const allowed = ['name', 'phone', 'bio', 'email_notifications', 'sms_alerts', 'handle', 'socials'];
     const updates: Record<string, unknown> = {};
     for (const key of allowed) {
       if (body[key] !== undefined) updates[key] = body[key];
+    }
+
+    // Identity changes (name, phone, the public @handle) need a fresh
+    // emailed-code grant (055). Bio, socials and notification switches don't.
+    // The form sends every field, so only a real change counts.
+    const { data: current } = await db.from('users').select('name, phone, handle').eq('id', user.sub).maybeSingle();
+    const norm = (v: unknown) => String(v ?? '').trim();
+    const changed = (k: 'name' | 'phone' | 'handle') =>
+      updates[k] !== undefined && norm(k === 'handle' ? slugify(String(updates[k] ?? '')) : updates[k]) !== norm(current?.[k]);
+    if (changed('name') || changed('phone') || changed('handle')) {
+      const denied = await requireChangeGrant(db, user.sub, req);
+      if (denied) return denied;
     }
 
     if (typeof updates.handle === 'string') {

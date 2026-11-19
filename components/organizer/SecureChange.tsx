@@ -13,7 +13,7 @@ import { Button } from '@/components/ui/Button';
  *   if (!res) return;            // they closed the code window
  *   {secureModal}                // render once on the page
  *
- * The first protected action emails a 6-digit code; once it's verified, the
+ * The first change the server marks as protected emails a 6-digit code; once it's verified, the
  * grant lasts 10 minutes (shared across tabs of this session via
  * sessionStorage), so several changes in a row need only one code.
  */
@@ -58,9 +58,11 @@ export function useSecureChange() {
   }, []);
 
   const secure = useCallback(async (action: (headers: Record<string, string>) => Promise<Response>): Promise<Response | null> => {
-    let token = currentGrant()?.token ?? await askForCode();
-    if (!token) return null;
-    let res = await action({ [HEADER]: token });
+    // Ask for a code only when the server says this change needs one: name,
+    // phone, password, email, bank details etc. do; a profile picture, bio
+    // or notification switch doesn't.
+    let token: string | null = currentGrant()?.token ?? null;
+    let res = await action(token ? { [HEADER]: token } : {});
     if (res.status === 403) {
       const body = await res.clone().json().catch(() => null);
       if (body?.code === REQUIRED) {
