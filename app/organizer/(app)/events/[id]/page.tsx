@@ -29,6 +29,7 @@ import { BannerCropInput } from '@/components/organizer/BannerCropInput';
 import { FlyersField } from '@/components/organizer/FlyersField';
 import { EventQRCode } from '@/components/organizer/EventQRCode';
 import { GoLiveField } from '@/components/organizer/GoLiveField';
+import { VENUE_DEADLINE_DAYS, fmtVenueDeadline } from '@/lib/venueTba';
 import { isScheduled, isInactive, INACTIVE_GO_LIVE, fmtGoLive, toLagosInput, fromLagosInput } from '@/lib/goLive';
 
 interface Tier { id: string; name: string; price: number; available: number; sold: number; description?: string | null; requires_code?: boolean | null; allowed_email_domains?: string[] | null; }
@@ -272,8 +273,9 @@ export default function OrganizerEventDetailPage() {
           setCategory(d.data.category ?? 'Concert');
           setDate(d.data.date);
           setTime(d.data.time);
-          setVenue(d.data.venue);
-          setAddress(d.data.address);
+          // Venue to be announced (061): start with empty fields to fill in.
+          setVenue(d.data.venue_tba ? '' : d.data.venue);
+          setAddress(d.data.venue_tba ? '' : d.data.address);
           setCity(d.data.city);
           setLandmark(d.data.landmark ?? '');
           setLga(d.data.lga ?? '');
@@ -336,10 +338,16 @@ export default function OrganizerEventDetailPage() {
       if (data.data?.pendingApproval) {
         toast('This event has used its 2 included changes — the venue/date change was submitted to Ventry for approval and has not been applied yet.', 'success');
       } else {
+        const announced = !!event?.venue_tba && venue.trim().length > 0;
         const venueOrDateChanged = hasSales && (
-          date !== event?.date || (event?.event_mode !== 'online' && (venue !== event?.venue || address !== event?.address || city !== event?.city))
+          date !== event?.date || (event?.event_mode !== 'online' && (
+            event?.venue_tba ? city !== event?.city : (venue !== event?.venue || address !== event?.address || city !== event?.city)))
         );
-        toast(venueOrDateChanged ? 'Event updated — buyers are being notified with a refund option' : 'Event updated', 'success');
+        toast(
+          announced ? (hasSales ? 'Venue announced. Everyone with a ticket is being emailed it.' : 'Venue added')
+            : venueOrDateChanged ? 'Event updated — buyers are being notified with a refund option' : 'Event updated',
+          'success',
+        );
       }
       setEditingInfo(false);
       load();
@@ -782,6 +790,27 @@ export default function OrganizerEventDetailPage() {
         </div>
       </div>
 
+      {/* Venue to be announced (061) */}
+      {event.venue_tba && event.event_mode !== 'online' && (
+        <div className="rounded-xl border p-5 flex items-start gap-3"
+          style={{ backgroundColor: event.sales_paused_reason === 'venue_missing' ? '#ef444410' : '#f59e0b10', borderColor: event.sales_paused_reason === 'venue_missing' ? '#ef444440' : '#f59e0b40' }}>
+          <AlertTriangle size={18} className="flex-shrink-0 mt-0.5" style={{ color: event.sales_paused_reason === 'venue_missing' ? '#ef4444' : '#f59e0b' }} />
+          <div className="text-sm flex flex-col gap-1">
+            <p className="font-semibold" style={{ color: 'var(--color-text)' }}>
+              {event.sales_paused_reason === 'venue_missing' ? 'Ticket sales are paused: the venue is overdue' : `Add your venue by ${fmtVenueDeadline(event.date, event.time)}`}
+            </p>
+            <p style={{ color: 'var(--color-text-muted)' }}>
+              {event.sales_paused_reason === 'venue_missing'
+                ? 'The venue had to be added at least 7 days before the event. Add it now under Event Details to resume sales; Ventry may otherwise cancel the event and refund buyers through the normal process.'
+                : `Buyers currently see only ${[event.lga, event.city].filter(Boolean).join(', ')}. The venue must be added at least ${VENUE_DEADLINE_DAYS} days before the event, or ticket sales pause and the event may be cancelled. When you add it under Event Details, everyone with a ticket is emailed it.`}
+            </p>
+            {!editingInfo && (
+              <div className="mt-1"><Button size="sm" onClick={() => setEditingInfo(true)}><Pencil size={13} />Add the venue</Button></div>
+            )}
+          </div>
+        </div>
+      )}
+
       {/* Review gate (053): nothing is public until an admin approves it. */}
       {event.status === 'under_review' && (
         <div className="rounded-xl border p-5 flex items-start gap-3"
@@ -1029,7 +1058,13 @@ export default function OrganizerEventDetailPage() {
               </>
             ) : (
               <>
-                <Input label="Venue Name" value={venue} onChange={e => setVenue(e.target.value)} />
+                {event.venue_tba && (
+                  <p className="text-xs rounded-lg px-3 py-2" style={{ backgroundColor: '#f59e0b10', border: '1px solid #f59e0b30', color: 'var(--color-text-muted)' }}>
+                    Venue to be announced. Fill in the venue name and address to announce it; everyone with a ticket is emailed it straight away.
+                    Leave them empty to keep it as “to be announced” (deadline {fmtVenueDeadline(event.date, event.time)}).
+                  </p>
+                )}
+                <Input label="Venue Name" value={venue} onChange={e => setVenue(e.target.value)} placeholder={event.venue_tba ? 'Not announced yet' : undefined} />
                 <Input label="Venue Address" value={address} onChange={e => setAddress(e.target.value)} />
                 <Input label="City" value={city} onChange={e => setCity(e.target.value)} />
                 <Input label="Local Government Area (LGA)" value={lga} onChange={e => setLga(e.target.value)} placeholder="e.g. Enugu East" helper="Always shown to buyers, even when the street address is hidden." />

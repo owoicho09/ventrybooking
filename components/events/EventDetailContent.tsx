@@ -339,8 +339,10 @@ export function EventDetailContent({ identifier, preview }: EventDetailContentPr
   // Cheapest on-sale price to advertise: open tiers first, so a code-only tier doesn't set "From ₦X".
   const minOnSale = sortedTiers.find(t => t.available - t.sold > 0 && !isGated(t)) ?? sortedTiers.find(t => t.available - t.sold > 0);
 
+  // Venue to be announced (061): city + LGA only, no map yet.
+  const venueTba = !isOnline && event.venueTba === true;
   const mapQuery = !isOnline
-    ? locationHidden
+    ? locationHidden || venueTba
       ? null
       : [event.venue, event.address, event.city].filter(Boolean).join(', ')
     : null;
@@ -622,7 +624,13 @@ export function EventDetailContent({ identifier, preview }: EventDetailContentPr
                     <div className="v-loc">
                       <MapPin size={19} />
                       <div>
-                        {locationHidden ? (
+                        {venueTba ? (
+                          <>
+                            <b>Venue to be announced</b>
+                            <span>{[event.lga, city].filter(Boolean).join(', ')}</span>
+                            <span>Ticket holders are emailed the venue as soon as the organiser confirms it.</span>
+                          </>
+                        ) : locationHidden ? (
                           <>
                             <b>{event.landmark ? `Near ${event.landmark}` : [event.lga, city].filter(Boolean).join(', ')}</b>
                             {event.landmark && <span>{[event.lga, city].filter(Boolean).join(', ')}</span>}
@@ -652,7 +660,7 @@ export function EventDetailContent({ identifier, preview }: EventDetailContentPr
                       </div>
                     ) : (
                       <div className="v-map abstract" role="img" aria-label={`Somewhere in ${city}; exact location hidden until you have a ticket`}>
-                        <span className="v-map-note">{city} · revealed to ticket holders</span>
+                        <span className="v-map-note">{city} · {venueTba ? 'venue to be announced' : 'revealed to ticket holders'}</span>
                       </div>
                     )}
                   </>

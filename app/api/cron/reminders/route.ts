@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { getServerSupabase } from '@/lib/supabase/server';
 import { sendReminderEmail } from '@/lib/server/email';
+import { runVenueDeadlines } from '@/lib/server/venueDeadlines';
 
 type ReminderType = '1_week' | '1_day' | '3_hours';
 
@@ -32,6 +33,11 @@ export async function GET(req: NextRequest) {
   try {
     const db  = getServerSupabase();
     const now = new Date();
+
+    // Venue-to-be-announced reminders and deadlines (061), same daily run.
+    const venue = await runVenueDeadlines({ dryRun: req.nextUrl.searchParams.get('dryRun') === '1' })
+      .catch(err => { console.error('venue deadlines failed', err); return null; });
+    if (venue?.done.length) console.log('venue deadlines', venue.done);
 
     // Look ahead 7 WAT calendar days to cover the 1-week reminder window
     const todayStr = watDateStr(now);

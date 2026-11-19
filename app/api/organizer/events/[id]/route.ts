@@ -2,7 +2,8 @@ import { NextRequest, NextResponse } from 'next/server';
 import { goLiveProblem, isScheduled } from '@/lib/goLive';
 import { getAuthUser } from '@/lib/server/auth';
 import { getServerSupabase } from '@/lib/supabase/server';
-import { sendLocationUpdatedEmail, sendMeetingLinkUpdatedEmail } from '@/lib/server/email';
+import { sendLocationUpdatedEmail, sendMeetingLinkUpdatedEmail, sendVenueAnnouncedEmail } from '@/lib/server/email';
+import { VENUE_TBA_LABEL } from '@/lib/venueTba';
 import { isValidAccentColor } from '@/lib/accentColors';
 import { normalizeLineup, type LineupAct } from '@/lib/server/lineup';
 import { normalizeEmailDomains } from '@/lib/server/domainRestriction';
@@ -65,7 +66,7 @@ export async function PATCH(
 
     const { data: event } = await db
       .from('events')
-      .select('id, slug, organizer_id, status, event_name, date, time, event_mode, venue, address, city, landmark, location_hidden, meeting_link, meeting_passcode, refund_policy, lga, address_reveal_at, postponement_count, original_date, goes_live_at')
+      .select('id, slug, organizer_id, status, event_name, date, time, event_mode, venue, address, city, landmark, location_hidden, meeting_link, meeting_passcode, refund_policy, lga, address_reveal_at, postponement_count, original_date, goes_live_at, venue_tba, sales_paused_reason')
       .eq('id', id)
       .single();
 
@@ -194,6 +195,30 @@ export async function PATCH(
       }
     }
 
+    // Venue to be announced (061). Adding the first venue is an announcement,
+    // not a venue change: no postponement, no refund window, and every ticket
+    // holder is emailed it. Saving other details while it's still TBA keeps
+    // the placeholder.
+    let announcingVenue = false;
+    if (event.venue_tba && event.event_mode !== 'online') {
+      const v = 'venue' in updates ? String(updates.venue ?? '').trim() : '';
+      const a = 'address' in updates ? String(updates.address ?? '').trim() : '';
+      if (v && v !== VENUE_TBA_LABEL) {
+        if (!a) return NextResponse.json({ error: 'Add the venue’s street address too, so ticket holders can find it.' }, { status: 400 });
+        announcingVenue = true;
+        updates.venue = v;
+        updates.address = a;
+        updates.venue_tba = false;
+        updates.venue_announced_at = new Date().toISOString();
+        if (event.sales_paused_reason === 'venue_missing') updates.sales_paused_reason = null;
+      } else {
+        if ('venue' in updates) updates.venue = VENUE_TBA_LABEL;
+        if ('address' in updates) updates.address = '';
+      }
+    }
+    // For a TBA event only the city counts as "the venue moving".
+    const venueKeys = event.venue_tba ? ['city'] : ['venue', 'address', 'city'];
+
     const dateChanged = 'date' in updates && String(updates.date) !== String(event.date ?? '');
     if (dateChanged) {
       const todayStr = new Date().toISOString().split('T')[0];
@@ -218,7 +243,7 @@ export async function PATCH(
       const DAY = 24 * 60 * 60 * 1000;
       const now = Date.now();
       const currentStart = eventStart(String(event.date), event.time).getTime();
-      const venueMoved = event.event_mode !== 'online' && ['venue', 'address', 'city'].some(k =>
+      const venueMoved = event.event_mode !== 'online' && venueKeys.some(k =>
         k in updates && String(updates[k] ?? '') !== String(event[k as keyof typeof event] ?? ''));
       timeMoved = 'time' in updates && String(updates.time) !== String(event.time ?? '');
       isPostponement = dateChanged || venueMoved;
@@ -247,7 +272,7 @@ export async function PATCH(
       }
     }
 
-    const coreVenueChanged = event.event_mode !== 'online' && ['venue', 'address', 'city'].some((key) => {
+    const coreVenueChanged = event.event_mode !== 'online' && venueKeys.some((key) => {
       if (!(key in updates)) return false;
       return String(updates[key] ?? '') !== String(event[key as keyof typeof event] ?? '');
     });
@@ -318,7 +343,30 @@ export async function PATCH(
         return String(updates[key] ?? '') !== String(event[key as keyof typeof event] ?? '');
       });
 
-      if (hasSales && (coreVenueChanged || dateChanged)) {
+      if (announcingVenue) {
+        if (hasSales) {
+          const hidden = addressHiddenNow({
+            location_hidden: Boolean(updates.location_hidden ?? event.location_hidden),
+            address_reveal_at: (updates.address_reveal_at as string | null | undefined) ?? event.address_reveal_at,
+            date: newDate, time: newTime,
+          });
+          const revealAt = (updates.address_reveal_at as string | null | undefined) ?? event.address_reveal_at;
+          notifyTicketBuyersOfVenue(db, {
+            eventId: id,
+            eventSlug: event.slug,
+            eventName: event.event_name,
+            eventDate: newDate,
+            eventTime: newTime,
+            venue: String(updates.venue),
+            address: String(updates.address),
+            city: String(updates.city ?? event.city ?? ''),
+            landmark: String(updates.landmark ?? event.landmark ?? '') || null,
+            addressHiddenUntil: hidden && revealAt
+              ? new Date(revealAt).toLocaleString('en-GB', { weekday: 'short', day: 'numeric', month: 'short', hour: '2-digit', minute: '2-digit', timeZone: 'Africa/Lagos' })
+              : null,
+          }).catch(err => console.error('venue announced buyer notification error', err));
+        }
+      } else if (hasSales && (coreVenueChanged || dateChanged)) {
         // Buyers were told above (with any refund option).
       } else if (locationChanged) {
         // Landmark-only or hide/reveal-only change — no refund implication,
@@ -394,6 +442,36 @@ async function notifyTicketBuyersOfLocationChange(
       }).catch(err => console.error('sendLocationUpdatedEmail error', { to, err })),
     ),
   );
+}
+
+/** The venue of a venue-to-be-announced event was just added (061). */
+async function notifyTicketBuyersOfVenue(
+  db: ReturnType<typeof getServerSupabase>,
+  ev: {
+    eventId: string; eventSlug: string; eventName: string; eventDate: string; eventTime: string;
+    venue: string; address: string; city: string; landmark: string | null; addressHiddenUntil: string | null;
+  },
+) {
+  const { data: tickets, error } = await db
+    .from('tickets')
+    .select('buyer_email, buyer_name')
+    .eq('event_id', ev.eventId)
+    .in('status', ['valid', 'used']);
+  if (error) throw error;
+  // One email per buyer, however many tickets they hold.
+  const byEmail = new Map<string, string>();
+  for (const t of tickets ?? []) {
+    const email = String(t.buyer_email ?? '').trim().toLowerCase();
+    if (email && !byEmail.has(email)) byEmail.set(email, t.buyer_name ?? '');
+  }
+  const when = new Date(`${String(ev.eventDate).slice(0, 10)}T12:00:00Z`).toLocaleDateString('en-GB', { weekday: 'long', day: 'numeric', month: 'long', year: 'numeric', timeZone: 'UTC' });
+  await Promise.allSettled([...byEmail].map(([to, buyerName]) =>
+    sendVenueAnnouncedEmail({
+      to, buyerName, eventName: ev.eventName, eventDate: when, eventTime: ev.eventTime,
+      venue: ev.venue, address: ev.address, city: ev.city, landmark: ev.landmark,
+      addressHiddenUntil: ev.addressHiddenUntil, eventSlug: ev.eventSlug,
+    }).catch(err => console.error('sendVenueAnnouncedEmail error', { to, err })),
+  ));
 }
 
 async function notifyTicketBuyersOfMeetingLinkChange(

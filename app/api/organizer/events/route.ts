@@ -14,6 +14,7 @@ import { parseTierGates, type ParsedTierGates } from '@/lib/server/tierGatesInpu
 import { parseRefundPolicy } from '@/lib/refundPolicy';
 import { revealTimeProblem } from '@/lib/addressReveal';
 import { TIER_DESCRIPTION_MAX } from '@/lib/tiers';
+import { VENUE_TBA_LABEL, venueTbaProblem } from '@/lib/venueTba';
 
 export async function GET(req: NextRequest) {
   try {
@@ -90,11 +91,13 @@ export async function POST(req: NextRequest) {
     const date = formData.get('date') as string;
     const time = formData.get('time') as string;
     const eventMode = (formData.get('eventMode') as string) === 'online' ? 'online' : 'physical';
-    const venue = (formData.get('venue') as string) || '';
-    const address = (formData.get('address') as string) || '';
-    const city = formData.get('city') as string;
-    const landmark = formData.get('landmark') as string;
-    const locationHidden = formData.get('locationHidden') === 'true';
+    // Venue to be announced (061): city + LGA now, venue later.
+    const venueTba = (formData.get('eventMode') as string) !== 'online' && formData.get('venueTba') === 'true';
+    const venue = venueTba ? VENUE_TBA_LABEL : ((formData.get('venue') as string) || '').trim();
+    const address = venueTba ? '' : ((formData.get('address') as string) || '').trim();
+    const city = String(formData.get('city') ?? '').trim();
+    const landmark = venueTba ? '' : (formData.get('landmark') as string);
+    const locationHidden = !venueTba && formData.get('locationHidden') === 'true';
     const meetingLink = (formData.get('meetingLink') as string) || '';
     const meetingPasscode = (formData.get('meetingPasscode') as string) || '';
     const venueContactName = String(formData.get('venueContactName') ?? '').trim().slice(0, 120) || null;
@@ -125,7 +128,13 @@ export async function POST(req: NextRequest) {
     if (formData.get('confirmAccurate') !== 'true') {
       return NextResponse.json({ error: 'Confirm that your event information is accurate' }, { status: 400 });
     }
-    if (eventMode === 'physical' && (!venue || !address)) {
+    if (eventMode === 'physical' && !city) {
+      return NextResponse.json({ error: 'Enter the city. It is always shown, even before the venue is announced.' }, { status: 400 });
+    }
+    if (eventMode === 'physical' && venueTba) {
+      const problem = venueTbaProblem(date, time);
+      if (problem) return NextResponse.json({ error: problem }, { status: 400 });
+    } else if (eventMode === 'physical' && (!venue || !address)) {
       return NextResponse.json({ error: 'Venue name and address are required' }, { status: 400 });
     }
     // Organiser Terms 4.9: the LGA is always shown; a hidden address needs a
@@ -255,6 +264,7 @@ export async function POST(req: NextRequest) {
       city: city || '',
       landmark: landmark || null,
       location_hidden: locationHidden,
+      venue_tba: venueTba,
       lga: eventMode === 'physical' ? lga : null,
       address_reveal_at: eventMode === 'physical' && locationHidden ? addressRevealAt : null,
       meeting_link: eventMode === 'online' ? meetingLink : null,

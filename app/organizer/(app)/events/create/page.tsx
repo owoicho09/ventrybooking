@@ -17,6 +17,7 @@ import { parseRefundPolicy } from '@/lib/refundPolicy';
 import { EventPreview } from '@/components/events/EventPreview';
 import { GoLiveField } from '@/components/organizer/GoLiveField';
 import { fromLagosInput, INACTIVE_GO_LIVE } from '@/lib/goLive';
+import { VENUE_DEADLINE_DAYS, VENUE_TBA_LABEL, fmtVenueDeadline, venueTbaProblem } from '@/lib/venueTba';
 import { TierGateFields, EMPTY_GATES, gatesPayload, gatesDraftProblem, type TierGateDraft } from '@/components/organizer/TierGateFields';
 import type { DetailEvent } from '@/components/events/EventDetailContent';
 import type { EventCategory } from '@/types';
@@ -47,7 +48,7 @@ interface DraftData {
   v: 1;
   name: string; category: string; description: string; date: string; time: string;
   eventMode: 'physical' | 'online'; venue: string; address: string; city: string; landmark: string;
-  locationHidden: boolean; lga: string; revealAt: string; goLiveScheduled: boolean; goLiveAt: string; goLiveInactive?: boolean;
+  locationHidden: boolean; venueTba?: boolean; lga: string; revealAt: string; goLiveScheduled: boolean; goLiveAt: string; goLiveInactive?: boolean;
   meetingLink: string; meetingPasscode: string; venueContactName: string; venueContactPhone: string;
   tiers: Tier[]; accentColor: string | null; accentAutoDetected: boolean; colorManuallySet: boolean;
   lineup: { id: string; name: string; role: string; liability: LineupLiability }[];
@@ -89,6 +90,8 @@ export default function CreateEventPage() {
   const [city, setCity] = useState('');
   const [landmark, setLandmark] = useState('');
   const [locationHidden, setLocationHidden] = useState(false);
+  // Venue to be announced (061): city + LGA now, venue at least 7 days before.
+  const [venueTba, setVenueTba] = useState(false);
   const [lga, setLga] = useState('');
   const [revealAt, setRevealAt] = useState('');
   const [goLiveScheduled, setGoLiveScheduled] = useState(false);
@@ -154,7 +157,7 @@ export default function CreateEventPage() {
 
   const draftData: DraftData = useMemo(() => ({
     v: 1, name, category, description, date, time, eventMode, venue, address, city, landmark,
-    locationHidden, lga, revealAt, goLiveScheduled, goLiveAt, goLiveInactive, meetingLink, meetingPasscode,
+    locationHidden, venueTba, lga, revealAt, goLiveScheduled, goLiveAt, goLiveInactive, meetingLink, meetingPasscode,
     venueContactName, venueContactPhone, tiers, accentColor, accentAutoDetected, colorManuallySet,
     lineup: lineup.map(a => ({ id: a.id, name: a.name, role: a.role, liability: a.liability })),
     restrictedDomainsInput, refundPolicy,
@@ -162,7 +165,7 @@ export default function CreateEventPage() {
       banner: banner?.name, flyer2: moreFlyers[0]?.name, flyer3: moreFlyers[1]?.name, headerBanner: headerBanner?.name, venueProof: venueProof?.name,
       lineup: Object.fromEntries(lineup.filter(a => a.photoFile).map(a => [a.id, a.photoFile!.name])),
     },
-  }), [name, category, description, date, time, eventMode, venue, address, city, landmark, locationHidden, lga, revealAt,
+  }), [name, category, description, date, time, eventMode, venue, address, city, landmark, locationHidden, venueTba, lga, revealAt,
     goLiveScheduled, goLiveAt, goLiveInactive, meetingLink, meetingPasscode, venueContactName, venueContactPhone, tiers, accentColor,
     accentAutoDetected, colorManuallySet, lineup, restrictedDomainsInput, refundPolicy, banner, moreFlyers, headerBanner, venueProof]);
 
@@ -244,7 +247,7 @@ export default function CreateEventPage() {
     setName(d.name ?? ''); setCategory(d.category ?? 'Concert'); setDescription(d.description ?? '');
     setDate(d.date ?? ''); setTime(d.time ?? ''); setEventMode(d.eventMode === 'online' ? 'online' : 'physical');
     setVenue(d.venue ?? ''); setAddress(d.address ?? ''); setCity(d.city ?? ''); setLandmark(d.landmark ?? '');
-    setLocationHidden(!!d.locationHidden); setLga(d.lga ?? ''); setRevealAt(d.revealAt ?? '');
+    setLocationHidden(!!d.locationHidden); setVenueTba(!!d.venueTba); setLga(d.lga ?? ''); setRevealAt(d.revealAt ?? '');
     setGoLiveScheduled(!!d.goLiveScheduled); setGoLiveAt(d.goLiveAt ?? ''); setGoLiveInactive(!!d.goLiveInactive);
     setMeetingLink(d.meetingLink ?? ''); setMeetingPasscode(d.meetingPasscode ?? '');
     setVenueContactName(d.venueContactName ?? ''); setVenueContactPhone(d.venueContactPhone ?? '');
@@ -395,8 +398,9 @@ export default function CreateEventPage() {
     date: date || new Date().toISOString().slice(0, 10),
     time,
     event_mode: eventMode,
-    venue: locationHidden ? 'Exact location undisclosed' : venue,
-    address: locationHidden ? '' : address,
+    venue: venueTba ? VENUE_TBA_LABEL : locationHidden ? 'Exact location undisclosed' : venue,
+    address: venueTba || locationHidden ? '' : address,
+    venueTba,
     city,
     lga: lga || null,
     addressRevealAt: locationHidden && revealAt ? ((v: string) => (v ? new Date(`${v}:00+01:00`).toISOString() : ''))(revealAt) : null,
@@ -475,7 +479,13 @@ export default function CreateEventPage() {
       fd.append('date', date);
       fd.append('time', time);
       fd.append('eventMode', eventMode);
-      if (eventMode === 'physical') {
+      if (eventMode === 'physical' && venueTba) {
+        fd.append('venueTba', 'true');
+        fd.append('city', city);
+        fd.append('lga', lga);
+        fd.append('venueContactName', venueContactName);
+        fd.append('venueContactPhone', venueContactPhone);
+      } else if (eventMode === 'physical') {
         fd.append('venue', venue);
         fd.append('address', address);
         fd.append('city', city);
@@ -739,6 +749,40 @@ export default function CreateEventPage() {
 
         {eventMode === 'physical' ? (
           <>
+          <div>
+            <label className="text-sm font-medium block mb-1.5" style={{ color: 'var(--color-text)' }}>Venue</label>
+            <div className="grid grid-cols-2 gap-3">
+              {([[false, 'Venue confirmed', 'I know where it is'], [true, 'Venue to be announced', 'City now, venue later']] as const).map(([v, title, sub]) => (
+                <button key={title} type="button" onClick={() => setVenueTba(v)}
+                  className="rounded-lg border px-4 py-3 text-sm font-medium text-left transition-colors"
+                  style={{
+                    borderColor: venueTba === v ? 'var(--color-purple)' : 'var(--color-border)',
+                    backgroundColor: venueTba === v ? 'var(--color-purple-dim)' : 'var(--color-surface-2)',
+                    color: venueTba === v ? 'var(--color-purple-light)' : 'var(--color-text-muted)',
+                  }}>
+                  {title}
+                  <span className="block text-xs font-normal mt-0.5" style={{ color: 'var(--color-text-dim)' }}>{sub}</span>
+                </button>
+              ))}
+            </div>
+          </div>
+          {venueTba ? (
+            <>
+              <Input label="City" value={city} onChange={e => setCity(e.target.value)} placeholder="Lagos" helper="Always shown to buyers." required />
+              <Input label="Local Government Area (LGA)" value={lga} onChange={e => setLga(e.target.value)} placeholder="e.g. Eti-Osa" helper="Always shown to buyers." required />
+              <div className="rounded-lg px-4 py-3 text-sm flex flex-col gap-1.5" style={{ backgroundColor: '#f59e0b10', border: '1px solid #f59e0b30', color: 'var(--color-text-muted)' }}>
+                <p className="font-medium" style={{ color: 'var(--color-text)' }}>How “venue to be announced” works</p>
+                <p>• Buyers see the city and LGA, with “Venue to be announced”.</p>
+                <p>• Add the venue no later than <strong style={{ color: 'var(--color-text)' }}>{VENUE_DEADLINE_DAYS} days before the event</strong>{date && time ? <> (by <strong style={{ color: 'var(--color-text)' }}>{fmtVenueDeadline(date, time)}</strong>)</> : null}. We&apos;ll remind you 10 and 8 days before.</p>
+                <p>• If it&apos;s not added by then, ticket sales pause and the event may be cancelled, with buyers refunded through the normal process.</p>
+                <p>• As soon as you add it, everyone with a ticket is emailed the venue.</p>
+                {date && time && venueTbaProblem(date, time) && (
+                  <p style={{ color: 'var(--color-red)' }}>{venueTbaProblem(date, time)}</p>
+                )}
+              </div>
+            </>
+          ) : (
+          <>
             <Input label="Venue Name" value={venue} onChange={e => setVenue(e.target.value)} placeholder="e.g. Eko Atlantic City Arena" required />
             <Input label="Venue Address" value={address} onChange={e => setAddress(e.target.value)} placeholder="Full street address" required />
             <Input label="City" value={city} onChange={e => setCity(e.target.value)} placeholder="Lagos" required />
@@ -790,6 +834,8 @@ export default function CreateEventPage() {
                 <Input label="Contact phone" type="tel" value={venueContactPhone} onChange={e => setVenueContactPhone(e.target.value)} placeholder="+234 …" />
               </div>
             </div>
+          </>
+          )}
           </>
         ) : (
           <>

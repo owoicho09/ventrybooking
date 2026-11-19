@@ -107,6 +107,26 @@ export default function AdminEventsPage() {
   // normal Cancel Event flow below.
   const [declineNote, setDeclineNote] = useState('');
   const [declineBusy, setDeclineBusy] = useState(false);
+  // Venue to be announced (061): allow more time after a missed deadline.
+  const [venueBusy, setVenueBusy] = useState(false);
+  const extendVenueDeadline = async (ev: EventData) => {
+    if (venueBusy) return;
+    setVenueBusy(true);
+    try {
+      const res = await fetch(`/api/admin/events/${ev.id}/venue-deadline`, { method: 'POST' });
+      const d = await res.json().catch(() => ({}));
+      if (!res.ok || !d.success) { toast(d.error ?? 'Could not update the event', 'error'); return; }
+      const now = new Date().toISOString();
+      const patchEv = (e: EventData) => (e.id === ev.id ? { ...e, venue_deadline_extended_at: now, sales_paused_reason: e.sales_paused_reason === 'venue_missing' ? null : e.sales_paused_reason } : e);
+      setEvents(list => list.map(patchEv));
+      setSelectedEvent(cur => (cur ? patchEv(cur) : cur));
+      toast('More time allowed. Sales resumed and the organiser was emailed.', 'success');
+    } catch {
+      toast('Network error', 'error');
+    } finally {
+      setVenueBusy(false);
+    }
+  };
   const declineCancelRequest = async (ev: EventData) => {
     if (declineBusy) return;
     setDeclineBusy(true);
@@ -476,6 +496,30 @@ export default function AdminEventsPage() {
                     </p>
                   )}
                 </div>
+              </div>
+            )}
+
+            {/* Venue to be announced (061) */}
+            {selectedEvent.venue_tba && (
+              <div className="rounded-lg border p-3 flex flex-col gap-2"
+                style={{ backgroundColor: selectedEvent.sales_paused_reason === 'venue_missing' ? '#ef444410' : '#f59e0b10', borderColor: selectedEvent.sales_paused_reason === 'venue_missing' ? '#ef444455' : '#f59e0b40' }}>
+                <p className="text-sm font-semibold" style={{ color: 'var(--color-text)' }}>
+                  {selectedEvent.sales_paused_reason === 'venue_missing' ? 'Venue overdue · ticket sales paused' : 'Venue to be announced'}
+                </p>
+                <p className="text-xs" style={{ color: 'var(--color-text-muted)' }}>
+                  {selectedEvent.sales_paused_reason === 'venue_missing'
+                    ? 'The organiser didn’t add the venue 7 days before the event. Cancel it with Cancel Event & Refund All Buyers below, or allow more time (sales resume).'
+                    : selectedEvent.venue_deadline_extended_at
+                      ? 'Deadline extended by an admin. The organiser has been asked to add the venue as soon as possible.'
+                      : 'Listed with city and LGA only. The organiser must add the venue at least 7 days before the event; they’re reminded at 10 and 8 days.'}
+                </p>
+                {selectedEvent.sales_paused_reason === 'venue_missing' && (
+                  <div>
+                    <Button size="sm" variant="outline" disabled={venueBusy} onClick={() => extendVenueDeadline(selectedEvent)}>
+                      {venueBusy ? 'Saving…' : 'Allow more time and resume sales'}
+                    </Button>
+                  </div>
+                )}
               </div>
             )}
 
