@@ -2,6 +2,13 @@
 // organiser chooses who pays it. Shared by the create/edit forms (labels,
 // previews) and the server (stored rates).
 
+/**
+ * Off until the client signs off: organisers can't pick a split, and new
+ * events are stored exactly as before 062 (no split, buyer 2%, the
+ * organiser's own host rate). Settlement and checkout support stays in place.
+ */
+export const FEE_SPLIT_ENABLED = false;
+
 export type FeeSplit = 'buyer_5' | 'host_5' | 'even' | 'host3_buyer2' | 'host2_buyer3';
 
 /** The long-standing arrangement: buyer 2%, host 3%. */

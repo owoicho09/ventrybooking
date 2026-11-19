@@ -4,7 +4,7 @@ import { getAuthUser } from '@/lib/server/auth';
 import { getServerSupabase } from '@/lib/supabase/server';
 import { sendLocationUpdatedEmail, sendMeetingLinkUpdatedEmail, sendVenueAnnouncedEmail } from '@/lib/server/email';
 import { VENUE_TBA_LABEL } from '@/lib/venueTba';
-import { feeRatesFor, isFeeSplit } from '@/lib/feeSplit';
+import { FEE_SPLIT_ENABLED, feeRatesFor, isFeeSplit } from '@/lib/feeSplit';
 import { isValidAccentColor } from '@/lib/accentColors';
 import { normalizeLineup, type LineupAct } from '@/lib/server/lineup';
 import { normalizeEmailDomains } from '@/lib/server/domainRestriction';
@@ -102,6 +102,7 @@ export async function PATCH(
     // Fee split (062): who pays Ventry's 5%. Fixed once a ticket sells, and
     // while a recent checkout could still complete at the old rate.
     if (body.fee_split !== undefined) {
+      if (!FEE_SPLIT_ENABLED) return NextResponse.json({ error: 'Choosing who pays the Ventry fee isn\u2019t available yet.' }, { status: 400 });
       if (!isFeeSplit(body.fee_split)) return NextResponse.json({ error: 'Choose who pays the Ventry fee' }, { status: 400 });
       if (hasSales) {
         return NextResponse.json({ error: 'Tickets have been sold under this fee split, so it can\u2019t be changed.' }, { status: 409 });

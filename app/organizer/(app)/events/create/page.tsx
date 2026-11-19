@@ -12,7 +12,7 @@ import { ACCENT_COLOR_PRESETS } from '@/lib/accentColors';
 import { BannerCropInput } from '@/components/organizer/BannerCropInput';
 import { FlyersField } from '@/components/organizer/FlyersField';
 import { FeeSplitField } from '@/components/organizer/FeeSplitField';
-import { DEFAULT_FEE_SPLIT, feeRatesFor, isFeeSplit, type FeeSplit } from '@/lib/feeSplit';
+import { DEFAULT_FEE_SPLIT, FEE_SPLIT_ENABLED, feeRatesFor, isFeeSplit, type FeeSplit } from '@/lib/feeSplit';
 import { compressImageFile } from '@/lib/compressImage';
 import { RefundPolicyFields, type RefundPolicyDraft } from '@/components/organizer/RefundPolicyFields';
 import { parseRefundPolicy } from '@/lib/refundPolicy';
@@ -420,7 +420,7 @@ export default function CreateEventPage() {
     flyerUrls: [flyerUrl, ...moreFlyerUrls].filter((u): u is string => !!u),
     headerBannerUrl: headerUrl,
     accentColor,
-    buyerFeeRate: feeRatesFor(feeSplit, me?.platform_fee_rate ?? null).buyer,
+    buyerFeeRate: FEE_SPLIT_ENABLED ? feeRatesFor(feeSplit, me?.platform_fee_rate ?? null).buyer : null,
     verified: false,
     refundPolicy: policyCheck.ok ? policyCheck.value : null,
     allowedEmailDomains: restrictedDomainsInput.split(',').map(d => d.trim()).filter(Boolean),
@@ -510,7 +510,7 @@ export default function CreateEventPage() {
       fd.append('tiers', JSON.stringify(tiers.map(t => ({ name: t.name, price: t.price, quantity: t.quantity, description: t.description ?? null, ...gatesPayload(t.gates) }))));
       if (accentColor) fd.append('accentColor', accentColor);
       fd.append('refundPolicy', JSON.stringify(policyCheck.value));
-      fd.append('feeSplit', feeSplit);
+      if (FEE_SPLIT_ENABLED) fd.append('feeSplit', feeSplit);
       fd.append('confirmAccurate', 'true');
       if (goLiveInactive) fd.append('goesLiveAt', INACTIVE_GO_LIVE);
       else if (goLiveScheduled && goLiveAt) fd.append('goesLiveAt', fromLagosInput(goLiveAt) ?? '');
@@ -928,10 +928,12 @@ export default function CreateEventPage() {
         <button type="button" onClick={addTier} className="flex items-center gap-2 text-sm font-medium" style={{ color: 'var(--color-purple-light)' }}>
           <Plus size={16} />Add Another Tier
         </button>
-        <div className="pt-2 border-t" style={{ borderColor: 'var(--color-border)' }}>
-          <FeeSplitField value={feeSplit} onChange={setFeeSplit} organizerRate={me?.platform_fee_rate ?? null}
-            examplePrice={Number(tiers.find(t => Number(t.price) > 0)?.price) || undefined} />
-        </div>
+        {FEE_SPLIT_ENABLED && (
+          <div className="pt-2 border-t" style={{ borderColor: 'var(--color-border)' }}>
+            <FeeSplitField value={feeSplit} onChange={setFeeSplit} organizerRate={me?.platform_fee_rate ?? null}
+              examplePrice={Number(tiers.find(t => Number(t.price) > 0)?.price) || undefined} />
+          </div>
+        )}
       </section>
 
       <section className="rounded-xl border p-6 flex flex-col gap-5" style={{ backgroundColor: 'var(--color-surface)', borderColor: 'var(--color-border)' }}>

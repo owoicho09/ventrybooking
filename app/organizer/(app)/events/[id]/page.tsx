@@ -28,7 +28,7 @@ import type { EventCategory } from '@/types';
 import { BannerCropInput } from '@/components/organizer/BannerCropInput';
 import { FlyersField } from '@/components/organizer/FlyersField';
 import { FeeSplitField } from '@/components/organizer/FeeSplitField';
-import { DEFAULT_FEE_SPLIT, isFeeSplit, type FeeSplit } from '@/lib/feeSplit';
+import { DEFAULT_FEE_SPLIT, FEE_SPLIT_ENABLED, isFeeSplit, type FeeSplit } from '@/lib/feeSplit';
 import { EventQRCode } from '@/components/organizer/EventQRCode';
 import { GoLiveField } from '@/components/organizer/GoLiveField';
 import { VENUE_DEADLINE_DAYS, fmtVenueDeadline } from '@/lib/venueTba';
@@ -948,7 +948,8 @@ export default function OrganizerEventDetailPage() {
         ))}
       </div>
 
-      {/* Fee split (062) */}
+      {/* Fee split (062), switched off until the client signs off */}
+      {FEE_SPLIT_ENABLED && (
       <div className="rounded-xl border p-5" style={{ backgroundColor: 'var(--color-surface)', borderColor: 'var(--color-border)' }}>
         <FeeSplitField
           value={isFeeSplit(event.fee_split) ? event.fee_split : DEFAULT_FEE_SPLIT}
@@ -959,6 +960,7 @@ export default function OrganizerEventDetailPage() {
           lockedReason={hasSales ? 'Tickets have been sold under this setting, so it can’t be changed.' : undefined}
         />
       </div>
+      )}
 
       {/* Ticket tiers */}
       <div className="rounded-xl border p-5 flex flex-col gap-4"

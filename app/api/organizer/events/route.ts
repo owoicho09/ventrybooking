@@ -15,7 +15,7 @@ import { parseRefundPolicy } from '@/lib/refundPolicy';
 import { revealTimeProblem } from '@/lib/addressReveal';
 import { TIER_DESCRIPTION_MAX } from '@/lib/tiers';
 import { VENUE_TBA_LABEL, venueTbaProblem } from '@/lib/venueTba';
-import { DEFAULT_FEE_SPLIT, feeRatesFor, isFeeSplit } from '@/lib/feeSplit';
+import { DEFAULT_FEE_SPLIT, FEE_SPLIT_ENABLED, feeRatesFor, isFeeSplit } from '@/lib/feeSplit';
 
 export async function GET(req: NextRequest) {
   try {
@@ -160,7 +160,7 @@ export async function POST(req: NextRequest) {
 
     // Fee split (062): who pays Ventry's 5%. Rates are stored on the event,
     // with the organiser's own rate (any discount) folded in.
-    const feeSplitRaw = String(formData.get('feeSplit') ?? '') || DEFAULT_FEE_SPLIT;
+    const feeSplitRaw = (FEE_SPLIT_ENABLED && String(formData.get('feeSplit') ?? '')) || DEFAULT_FEE_SPLIT;
     if (!isFeeSplit(feeSplitRaw)) return NextResponse.json({ error: 'Choose who pays the Ventry fee' }, { status: 400 });
     const { data: orgRate } = await db.from('users').select('platform_fee_rate').eq('id', organizerId).maybeSingle();
     const feeRates = feeRatesFor(feeSplitRaw, orgRate?.platform_fee_rate == null ? null : Number(orgRate.platform_fee_rate));
@@ -273,9 +273,9 @@ export async function POST(req: NextRequest) {
       landmark: landmark || null,
       location_hidden: locationHidden,
       venue_tba: venueTba,
-      fee_split: feeSplitRaw,
-      buyer_fee_rate: feeRates.buyer,
-      host_fee_rate: feeRates.host,
+      // With fee splits switched off, leave all three NULL: the event behaves
+      // exactly as events did before 062.
+      ...(FEE_SPLIT_ENABLED ? { fee_split: feeSplitRaw, buyer_fee_rate: feeRates.buyer, host_fee_rate: feeRates.host } : {}),
       lga: eventMode === 'physical' ? lga : null,
       address_reveal_at: eventMode === 'physical' && locationHidden ? addressRevealAt : null,
       meeting_link: eventMode === 'online' ? meetingLink : null,
