@@ -23,6 +23,7 @@ import { getContrastText, accentForBackground } from '@/lib/accentColors';
 import { categoryMeta } from '@/lib/categories';
 import { fmtDayYear, normalizeCity, initial } from '@/lib/publicEvents';
 import { describeRefundPolicy, MINIMUM_STANDARDS } from '@/lib/refundPolicy';
+import { FlyerCarousel } from '@/components/events/FlyerCarousel';
 
 // The two fixed v2 page backgrounds (app/v2.css --bg) — not user input, so
 // safe to hardcode for the contrast walk.
@@ -71,6 +72,8 @@ export function EventDetailContent({ identifier, preview }: EventDetailContentPr
   // The code-gated tier whose promo-code box is open.
   const [codeOpenId, setCodeOpenId] = useState<string | null>(null);
   const [feeOpenId, setFeeOpenId] = useState<string | null>(null);
+  // The blurred hero backdrop follows the flyer currently on show.
+  const [heroBg, setHeroBg] = useState<string | null>(null);
   // Gated tiers (054). unlocked: tierId -> the promo code that unlocked it.
   const [unlocked, setUnlocked] = useState<Record<string, string>>({});
   const [gateInfoId, setGateInfoId] = useState<string | null>(null);
@@ -330,6 +333,9 @@ export function EventDetailContent({ identifier, preview }: EventDetailContentPr
   const banner = event.headerBannerUrl || null;
   // No flyer? Fall back to any other picture the organiser has given us.
   const flyer = event.banner_url || event.organizer?.cover_image_url || null;
+  // Up to 3 flyers (061); only events with more than one get the carousel.
+  const flyers = (event.flyerUrls ?? []).filter(Boolean).slice(0, 3);
+  const multiFlyer = flyers.length > 1;
   // Cheapest on-sale price to advertise: open tiers first, so a code-only tier doesn't set "From ₦X".
   const minOnSale = sortedTiers.find(t => t.available - t.sold > 0 && !isGated(t)) ?? sortedTiers.find(t => t.available - t.sold > 0);
 
@@ -559,8 +565,10 @@ export function EventDetailContent({ identifier, preview }: EventDetailContentPr
         </>
       ) : (
         <div className="v-ed-hero">
-          {flyer && <div className="v-ed-hero-bg" style={{ backgroundImage: `url("${flyer}")` }} aria-hidden="true" />}
-          {flyer
+          {flyer && <div className="v-ed-hero-bg" style={{ backgroundImage: `url("${(multiFlyer && heroBg) || flyer}")` }} aria-hidden="true" />}
+          {multiFlyer
+            ? <FlyerCarousel urls={flyers} alt={`${event.name} flyer`} onSlideChange={setHeroBg} />
+            : flyer
             // eslint-disable-next-line @next/next/no-img-element
             ? <img className="v-ed-hero-img" src={flyer} alt={`${event.name} flyer`} fetchPriority="high" />
             : <div className="v-ed-hero-ph" style={{ background: `linear-gradient(150deg, var(--cat-${cat.key}-solid), var(--cat-${cat.key}-deep))` }}>{initial(event.name)}</div>}
@@ -672,6 +680,14 @@ export function EventDetailContent({ identifier, preview }: EventDetailContentPr
                       );
                     })}
                   </div>
+                </div>
+              )}
+
+              {/* With a header banner the flyers aren't in the hero, so several
+                  flyers get their own swipeable spot here. */}
+              {banner && multiFlyer && (
+                <div className="v-fc-section">
+                  <FlyerCarousel urls={flyers} alt={`${event.name} flyer`} />
                 </div>
               )}
 

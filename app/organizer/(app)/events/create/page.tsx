@@ -10,7 +10,7 @@ import { Button } from '@/components/ui/Button';
 import { useToast } from '@/components/ui/Toast';
 import { ACCENT_COLOR_PRESETS } from '@/lib/accentColors';
 import { BannerCropInput } from '@/components/organizer/BannerCropInput';
-import { FlyerUploadInput } from '@/components/organizer/FlyerUploadInput';
+import { FlyersField } from '@/components/organizer/FlyersField';
 import { compressImageFile } from '@/lib/compressImage';
 import { RefundPolicyFields, type RefundPolicyDraft } from '@/components/organizer/RefundPolicyFields';
 import { parseRefundPolicy } from '@/lib/refundPolicy';
@@ -53,7 +53,7 @@ interface DraftData {
   lineup: { id: string; name: string; role: string; liability: LineupLiability }[];
   restrictedDomainsInput: string; refundPolicy: RefundPolicyDraft;
   /** Names of the images picked, so another device can say what to re-add. */
-  files: { banner?: string; headerBanner?: string; venueProof?: string; lineup?: Record<string, string> };
+  files: { banner?: string; flyer2?: string; flyer3?: string; headerBanner?: string; venueProof?: string; lineup?: Record<string, string> };
 }
 
 /** The device copy remembers whether its latest edit reached the server. */
@@ -97,6 +97,8 @@ export default function CreateEventPage() {
   const [meetingLink, setMeetingLink] = useState('');
   const [meetingPasscode, setMeetingPasscode] = useState('');
   const [banner, setBanner] = useState<File | null>(null);
+  // Flyers 2 and 3 (061); `banner` stays the main flyer.
+  const [moreFlyers, setMoreFlyers] = useState<File[]>([]);
   const [headerBanner, setHeaderBanner] = useState<File | null>(null);
   const [venueProof, setVenueProof] = useState<File | null>(null);
   const [venueContactName, setVenueContactName] = useState('');
@@ -157,12 +159,12 @@ export default function CreateEventPage() {
     lineup: lineup.map(a => ({ id: a.id, name: a.name, role: a.role, liability: a.liability })),
     restrictedDomainsInput, refundPolicy,
     files: {
-      banner: banner?.name, headerBanner: headerBanner?.name, venueProof: venueProof?.name,
+      banner: banner?.name, flyer2: moreFlyers[0]?.name, flyer3: moreFlyers[1]?.name, headerBanner: headerBanner?.name, venueProof: venueProof?.name,
       lineup: Object.fromEntries(lineup.filter(a => a.photoFile).map(a => [a.id, a.photoFile!.name])),
     },
   }), [name, category, description, date, time, eventMode, venue, address, city, landmark, locationHidden, lga, revealAt,
     goLiveScheduled, goLiveAt, goLiveInactive, meetingLink, meetingPasscode, venueContactName, venueContactPhone, tiers, accentColor,
-    accentAutoDetected, colorManuallySet, lineup, restrictedDomainsInput, refundPolicy, banner, headerBanner, venueProof]);
+    accentAutoDetected, colorManuallySet, lineup, restrictedDomainsInput, refundPolicy, banner, moreFlyers, headerBanner, venueProof]);
 
   // Only start a draft once the organiser has actually entered something; the
   // refund-contact email pre-fill alone shouldn't create one.
@@ -251,6 +253,7 @@ export default function CreateEventPage() {
     setRestrictedDomainsInput(d.restrictedDomainsInput ?? '');
     if (d.refundPolicy) setRefundPolicy(d.refundPolicy);
     setBanner(files.banner ?? null);
+    setMoreFlyers([files.flyer2, files.flyer3].filter((f): f is File => !!f));
     setHeaderBanner(files.headerBanner ?? null);
     setVenueProof(files.venueProof ?? null);
     setLineup((d.lineup ?? []).map(a => {
@@ -260,6 +263,8 @@ export default function CreateEventPage() {
     // Images picked on another device (or cleared from this browser) need re-adding.
     const missing: string[] = [];
     if (d.files?.banner && !files.banner) missing.push('event flyer');
+    const lostFlyers = [d.files?.flyer2 && !files.flyer2, d.files?.flyer3 && !files.flyer3].filter(Boolean).length;
+    if (lostFlyers) missing.push(`${lostFlyers} more flyer${lostFlyers > 1 ? 's' : ''}`);
     if (d.files?.headerBanner && !files.headerBanner) missing.push('header banner');
     if (d.files?.venueProof && !files.venueProof) missing.push('venue proof');
     const lostPhotos = Object.keys(d.files?.lineup ?? {}).filter(k => !files[`lineup:${k}`]).length;
@@ -350,7 +355,16 @@ export default function CreateEventPage() {
     if (!file && !draftIdRef.current) return;
     void putDraftFile(ensureDraftId(), slot, file);
   };
-  const pickBanner = (f: File | null) => { setBanner(f); persistFile('banner', f); };
+  /** Replace the whole flyer list (main first) and keep the draft's copies in step. */
+  const setFlyers = (list: File[]) => {
+    const [main, ...rest] = list.slice(0, 3);
+    setBanner(main ?? null);
+    setMoreFlyers(rest);
+    persistFile('banner', main ?? null);
+    persistFile('flyer2', rest[0] ?? null);
+    persistFile('flyer3', rest[1] ?? null);
+  };
+  const allFlyers = [banner, ...moreFlyers].filter((f): f is File => !!f);
   const pickHeaderBanner = (f: File | null) => { setHeaderBanner(f); persistFile('headerBanner', f); };
   const pickVenueProof = (f: File | null) => { setVenueProof(f); persistFile('venueProof', f); };
 
@@ -364,6 +378,8 @@ export default function CreateEventPage() {
   };
 
   const flyerUrl = useMemo(() => (banner ? URL.createObjectURL(banner) : null), [banner]);
+  const moreFlyerUrls = useMemo(() => moreFlyers.map(f => URL.createObjectURL(f)), [moreFlyers]);
+  useEffect(() => () => { moreFlyerUrls.forEach(u => URL.revokeObjectURL(u)); }, [moreFlyerUrls]);
   const headerUrl = useMemo(() => (headerBanner ? URL.createObjectURL(headerBanner) : null), [headerBanner]);
   useEffect(() => () => { if (flyerUrl) URL.revokeObjectURL(flyerUrl); }, [flyerUrl]);
   useEffect(() => () => { if (headerUrl) URL.revokeObjectURL(headerUrl); }, [headerUrl]);
@@ -391,6 +407,7 @@ export default function CreateEventPage() {
     totalSold: 0,
     bannerColor: 'from-purple-900 to-indigo-900',
     banner_url: flyerUrl,
+    flyerUrls: [flyerUrl, ...moreFlyerUrls].filter((u): u is string => !!u),
     headerBannerUrl: headerUrl,
     accentColor,
     verified: false,
@@ -490,6 +507,8 @@ export default function CreateEventPage() {
         }
       }
       if (banner) fd.append('banner', banner);
+      if (moreFlyers[0]) fd.append('flyer2', moreFlyers[0]);
+      if (moreFlyers[1]) fd.append('flyer3', moreFlyers[1]);
       if (headerBanner) fd.append('headerBanner', headerBanner);
 
       // Vercel hard-caps the function request body at 4.5MB regardless of the
@@ -590,11 +609,13 @@ export default function CreateEventPage() {
         <Input label="Event Name" value={name} onChange={e => setName(e.target.value)} placeholder="e.g. Afrobeat Vibes Festival 2026" required />
         <Select label="Event Type" options={eventTypes} value={category} onChange={e => setCategory(e.target.value)} />
         <Textarea label="Description" value={description} onChange={e => setDescription(e.target.value)} placeholder="Tell attendees what to expect..." rows={4} />
-        <FlyerUploadInput
-          label="Event Flyer"
-          onFile={pickBanner}
+        <FlyersField
+          items={[flyerUrl, ...moreFlyerUrls].filter((u): u is string => !!u).map((u, i) => ({ key: `${i}-${u}`, src: u }))}
+          onAdd={f => setFlyers([...allFlyers, f])}
+          onReplace={(i, f) => setFlyers(allFlyers.map((x, j) => (j === i ? f : x)))}
+          onRemove={i => setFlyers(allFlyers.filter((_, j) => j !== i))}
+          onMove={(from, to) => { const next = [...allFlyers]; [next[from], next[to]] = [next[to], next[from]]; setFlyers(next); }}
           onColorExtracted={handleColorExtracted}
-          buttonText={banner ? `${banner.name} — click to replace` : undefined}
         />
         <div>
           <BannerCropInput

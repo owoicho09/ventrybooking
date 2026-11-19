@@ -18,7 +18,7 @@ export async function POST(
 
     const { data: event } = await db
       .from('events')
-      .select('id, organizer_id')
+      .select('id, organizer_id, flyer_urls')
       .eq('id', id)
       .single();
 
@@ -49,7 +49,10 @@ export async function POST(
     const { data: urlData } = db.storage.from('event-assets').getPublicUrl(path);
     const bannerUrl = urlData.publicUrl;
 
-    await db.from('events').update({ banner_url: bannerUrl }).eq('id', id);
+    // The banner is the first flyer (061): replace it in the flyer list too.
+    const flyers: string[] = Array.isArray(event.flyer_urls) ? event.flyer_urls.filter(Boolean) : [];
+    const nextFlyers = flyers.length ? [bannerUrl, ...flyers.slice(1)] : [bannerUrl];
+    await db.from('events').update({ banner_url: bannerUrl, flyer_urls: nextFlyers }).eq('id', id);
 
     return NextResponse.json({ success: true, data: { bannerUrl } });
   } catch (err) {

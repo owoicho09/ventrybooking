@@ -170,6 +170,15 @@ export async function POST(req: NextRequest) {
     if (bannerFile && bannerFile.size > 0) {
       bannerUrl = await uploadEventFile(bannerFile, 'banners', 5);
     }
+    // Extra flyers (061): `flyer2`, `flyer3`, in the order the organiser chose.
+    const flyerUrls: string[] = bannerUrl ? [bannerUrl] : [];
+    for (const key of ['flyer2', 'flyer3']) {
+      const f = formData.get(key) as File | null;
+      if (f && f.size > 0 && flyerUrls.length < 3) {
+        if (!f.type.startsWith('image/')) return NextResponse.json({ error: 'Flyers must be images' }, { status: 400 });
+        flyerUrls.push(await uploadEventFile(f, 'banners', 5));
+      }
+    }
 
     let headerBannerUrl: string | null = null;
     if (headerBannerFile && headerBannerFile.size > 0) {
@@ -259,7 +268,8 @@ export async function POST(req: NextRequest) {
       goes_live_at: goesLiveAt,
       live_notified_at: null,
       total_sold: 0,
-      banner_url: bannerUrl,
+      banner_url: flyerUrls[0] ?? null,
+      flyer_urls: flyerUrls.length ? flyerUrls : null,
       header_banner_url: headerBannerUrl,
       venue_proof_url: venueProofUrl,
       venue_contact_name: eventMode === 'physical' ? venueContactName : null,

@@ -26,7 +26,7 @@ import { EventPreview } from '@/components/events/EventPreview';
 import type { DetailEvent } from '@/components/events/EventDetailContent';
 import type { EventCategory } from '@/types';
 import { BannerCropInput } from '@/components/organizer/BannerCropInput';
-import { FlyerUploadInput } from '@/components/organizer/FlyerUploadInput';
+import { FlyersField } from '@/components/organizer/FlyersField';
 import { EventQRCode } from '@/components/organizer/EventQRCode';
 import { GoLiveField } from '@/components/organizer/GoLiveField';
 import { isScheduled, isInactive, INACTIVE_GO_LIVE, fmtGoLive, toLagosInput, fromLagosInput } from '@/lib/goLive';
@@ -469,6 +469,7 @@ export default function OrganizerEventDetailPage() {
     headerBannerUrl: event.header_banner_url,
     accentColor,
     priceBeforeFees: event.price_before_fees === true,
+    flyerUrls: (event.flyer_urls ?? []).filter(Boolean).length ? (event.flyer_urls ?? []).filter(Boolean) : (event.banner_url ? [event.banner_url] : []),
     verified: false,
     refundPolicy: draftPolicy.ok ? draftPolicy.value : event.refund_policy,
     allowedEmailDomains: restrictedDomainsInput.split(',').map(d => d.trim()).filter(Boolean),
@@ -573,15 +574,48 @@ export default function OrganizerEventDetailPage() {
     }).catch(() => {});
   };
 
-  const handleBannerChange = async (file: File) => {
+  // Flyers (061): up to 3, saved as they change. The first is the main flyer.
+  const [flyerBusy, setFlyerBusy] = useState(false);
+  const flyerList = (): string[] => {
+    if (!event) return [];
+    const list = (event.flyer_urls ?? []).filter(Boolean);
+    return list.length ? list : (event.banner_url ? [event.banner_url] : []);
+  };
+  const flyerRequest = async (doIt: () => Promise<Response>, done: string, isMain: boolean) => {
+    setFlyerBusy(true);
+    try {
+      const res = await doIt();
+      const data = await res.json().catch(() => ({}));
+      if (!res.ok) { toast(data.error || 'Could not update flyers', 'error'); return; }
+      toast(done, 'success');
+      if (isMain) await persistExtractedColorIfAny();
+      else pendingExtractedColorRef.current = null;
+      load();
+    } finally {
+      setFlyerBusy(false);
+    }
+  };
+  const uploadFlyer = (file: File, index: number | null) => {
     const fd = new FormData();
-    fd.append('banner', file);
-    const res = await fetch(`/api/organizer/events/${id}/banner`, { method: 'POST', body: fd });
-    const data = await res.json();
-    if (!res.ok) { toast(data.error || 'Upload failed', 'error'); return; }
-    toast('Flyer updated', 'success');
-    await persistExtractedColorIfAny();
-    load();
+    fd.append('flyer', file);
+    if (index !== null) fd.append('index', String(index));
+    return fetch(`/api/organizer/events/${id}/flyers`, { method: 'POST', body: fd });
+  };
+  const handleAddFlyer = (file: File) =>
+    flyerRequest(() => uploadFlyer(file, null), 'Flyer added', flyerList().length === 0);
+  const handleReplaceFlyer = (index: number, file: File) =>
+    flyerRequest(() => uploadFlyer(file, index), 'Flyer replaced', index === 0);
+  const handleRemoveFlyer = (index: number) => {
+    if (!window.confirm('Remove this flyer?')) return;
+    return flyerRequest(() => fetch(`/api/organizer/events/${id}/flyers?index=${index}`, { method: 'DELETE' }), 'Flyer removed', false);
+  };
+  const handleMoveFlyer = (from: number, to: number) => {
+    const order = [...flyerList()];
+    if (to < 0 || to >= order.length) return;
+    [order[from], order[to]] = [order[to], order[from]];
+    return flyerRequest(() => fetch(`/api/organizer/events/${id}/flyers`, {
+      method: 'PATCH', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ order }),
+    }), to === 0 ? 'Main flyer changed' : 'Flyer order saved', false);
   };
 
   const handleHeaderBannerChange = async (file: File) => {
@@ -1080,12 +1114,14 @@ export default function OrganizerEventDetailPage() {
       {/* Flyer upload */}
       <div className="rounded-xl border p-5 flex flex-col gap-3"
         style={{ backgroundColor: 'var(--color-surface)', borderColor: 'var(--color-border)' }}>
-        <FlyerUploadInput
-          label="Event Flyer"
-          currentUrl={event.banner_url}
-          onFile={handleBannerChange}
+        <FlyersField
+          items={flyerList().map((u, i) => ({ key: `${i}-${u}`, src: u }))}
+          onAdd={handleAddFlyer}
+          onReplace={handleReplaceFlyer}
+          onRemove={handleRemoveFlyer}
+          onMove={handleMoveFlyer}
           onColorExtracted={hex => { pendingExtractedColorRef.current = hex; }}
-          buttonText={event.banner_url ? 'Click to replace flyer' : undefined}
+          busy={flyerBusy}
         />
       </div>
 
