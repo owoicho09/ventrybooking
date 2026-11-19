@@ -1,6 +1,6 @@
 import type { Metadata } from 'next';
 import Link from 'next/link';
-import { Unbounded, DM_Sans } from 'next/font/google';
+import { Unbounded } from 'next/font/google';
 import {
   TOP_SIX, REASON_GROUPS, STEPS, ORGANIZER_SIGNUP_HREF, ORGANIZER_CONTACT_EMAIL,
   type TopReason, type ReasonGroup as ReasonGroupData, type StepItem,
@@ -12,7 +12,6 @@ import './organizers.css';
 // smooth-scrolled in CSS.
 
 const display = Unbounded({ subsets: ['latin'], weight: ['600', '700', '800'], variable: '--font-org-display', display: 'swap' });
-const body = DM_Sans({ subsets: ['latin'], weight: ['400', '500', '600', '700'], variable: '--font-org-body', display: 'swap' });
 
 const TITLE = 'Become a Ventry organizer: 36 reasons';
 const DESCRIPTION = 'Free to list. 3% only when you sell. Your money lands the next working day.';
@@ -105,7 +104,7 @@ function Step({ step }: { step: StepItem }) {
 
 export default function OrganizersPage() {
   return (
-    <div className={`vorg ${display.variable} ${body.variable}`}>
+    <div className={`vorg ${display.variable}`}>
       <div className="vorg-wrap">
         <header className="vorg-header">
           <Link href="/" className="vorg-logo" aria-label="Ventry home"><span>V</span>ENTRY</Link>
