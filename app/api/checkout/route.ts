@@ -133,8 +133,9 @@ export async function POST(req: NextRequest) {
       }
     }
 
-    // The event's buyer share of the fee (062); 2% for events created before it.
-    const buyerRate = event.buyer_fee_rate == null ? undefined : Number(event.buyer_fee_rate);
+    // The event's buyer share of the fee (062); null = an event created before
+    // it (2% with the old cap). Total is rounded up to whole naira.
+    const buyerRate = event.buyer_fee_rate == null ? null : Number(event.buyer_fee_rate);
     const { subtotal, serviceFee, processingFee, total } = buyerTotalForItems(
       cartItems.map(i => ({ price: tierById.get(i.tierId)!.price, quantity: i.quantity })),
       buyerRate,

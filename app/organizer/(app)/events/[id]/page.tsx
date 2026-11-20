@@ -948,14 +948,14 @@ export default function OrganizerEventDetailPage() {
         ))}
       </div>
 
-      {/* Fee split (062), switched off until the client signs off */}
+      {/* Fee split (062): locked once a ticket sells */}
       {FEE_SPLIT_ENABLED && (
       <div className="rounded-xl border p-5" style={{ backgroundColor: 'var(--color-surface)', borderColor: 'var(--color-border)' }}>
         <FeeSplitField
           value={isFeeSplit(event.fee_split) ? event.fee_split : DEFAULT_FEE_SPLIT}
           onChange={handleFeeSplit}
           organizerRate={platformFeeRate}
-          examplePrice={[...event.tiers].map(t => Number(t.price)).filter(p => p > 0).sort((a, b) => a - b)[0]}
+          tiers={event.tiers.map(t => ({ name: t.name, price: Number(t.price) || 0 }))}
           disabled={hasSales || feeSaving}
           lockedReason={hasSales ? 'Tickets have been sold under this setting, so it can’t be changed.' : undefined}
         />

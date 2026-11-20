@@ -35,8 +35,8 @@ interface Cart {
   eventSlug?: string | null;
   /** The event advertises prices before fees (060): itemise the service fee. */
   priceBeforeFees?: boolean;
-  /** The event's buyer share of Ventry's fee (062); absent = 2%. Display only: the server charges its own figure. */
-  buyerFeeRate?: number;
+  /** The event's buyer share of Ventry's fee (062); absent/null = pre-split event. Display only: the server charges its own figure. */
+  buyerFeeRate?: number | null;
 }
 
 export default function CheckoutPage() {
@@ -231,23 +231,17 @@ export default function CheckoutPage() {
             </div>
 
             <div className="flex flex-col gap-1.5 text-sm mb-4 pt-3 border-t" style={{ borderColor: 'var(--color-border)' }}>
-              {cart.priceBeforeFees && !isFree ? (
-                <>
-                  <div className="flex justify-between">
-                    <span style={{ color: 'var(--color-text-muted)' }}>Tickets</span>
-                    <span style={{ color: 'var(--color-text)' }}>{formatNGN(subtotal)}</span>
-                  </div>
-                  <div className="flex justify-between">
-                    <span style={{ color: 'var(--color-text-muted)' }}>Service fee</span>
-                    <span style={{ color: 'var(--color-text)' }}>{formatNGN(serviceFee)}</span>
-                  </div>
-                </>
-              ) : (
+              <div className="flex justify-between">
+                <span style={{ color: 'var(--color-text-muted)' }}>Ticket price</span>
+                <span style={{ color: 'var(--color-text)' }}>{isFree ? 'Free' : formatNGN(subtotal)}</span>
+              </div>
+              {!isFree && serviceFee > 0 && (
                 <div className="flex justify-between">
-                  <span style={{ color: 'var(--color-text-muted)' }}>Tickets</span>
-                  <span style={{ color: 'var(--color-text)' }}>{isFree ? 'Free' : formatNGN(subtotal + serviceFee)}</span>
+                  <span style={{ color: 'var(--color-text-muted)' }}>Service fee</span>
+                  <span style={{ color: 'var(--color-text)' }}>{formatNGN(serviceFee)}</span>
                 </div>
-              )}{!isFree && (
+              )}
+              {!isFree && (
                 <div className="flex justify-between">
                   <span style={{ color: 'var(--color-text-muted)' }}>Processing fee</span>
                   <span style={{ color: 'var(--color-text)' }}>{formatNGN(processingFee)}</span>
@@ -287,7 +281,7 @@ export default function CheckoutPage() {
 
             {!isFree && (
               <p className="text-[10px] leading-snug mb-4" style={{ color: 'var(--color-text-dim)' }}>
-                Your ticket price includes Ventry's 2% service fee (capped at NGN 3,000 per ticket for tickets above NGN 150,000). The processing fee is added at checkout. Both are non-refundable.
+                The service fee and processing fee are non-refundable.
               </p>
             )}
 

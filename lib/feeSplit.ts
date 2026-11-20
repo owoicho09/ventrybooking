@@ -3,11 +3,11 @@
 // previews) and the server (stored rates).
 
 /**
- * Off until the client signs off: organisers can't pick a split, and new
- * events are stored exactly as before 062 (no split, buyer 2%, the
- * organiser's own host rate). Settlement and checkout support stays in place.
+ * Switched on 20 Nov 2026 (client sign-off). Applies to events created from
+ * then on, and to older events whose organiser picks a split before any
+ * ticket sells. Events with no split stored keep the pre-062 rules.
  */
-export const FEE_SPLIT_ENABLED = false;
+export const FEE_SPLIT_ENABLED = true;
 
 export type FeeSplit = 'buyer_5' | 'host_5' | 'even' | 'host3_buyer2' | 'host2_buyer3';
 
@@ -18,11 +18,11 @@ export const STANDARD_HOST_RATE = 0.03;
 export const DEFAULT_BUYER_RATE = 0.02;
 
 export const FEE_SPLITS: { value: FeeSplit; label: string; buyer: number; host: number }[] = [
-  { value: 'host3_buyer2', label: '3% to you, 2% to buyer', buyer: 0.02,  host: 0.03 },
-  { value: 'host2_buyer3', label: '2% to you, 3% to buyer', buyer: 0.03,  host: 0.02 },
-  { value: 'even',         label: 'Split evenly (2.5% each)', buyer: 0.025, host: 0.025 },
-  { value: 'buyer_5',      label: 'Full 5% to buyer',        buyer: 0.05,  host: 0 },
-  { value: 'host_5',       label: 'Full 5% to you (host)',   buyer: 0,     host: 0.05 },
+  { value: 'buyer_5',      label: 'Buyer pays 5%',              buyer: 0.05,  host: 0 },
+  { value: 'host_5',       label: 'Host pays 5%',               buyer: 0,     host: 0.05 },
+  { value: 'even',         label: 'Split evenly (2.5% / 2.5%)', buyer: 0.025, host: 0.025 },
+  { value: 'host3_buyer2', label: 'Host 3% / Buyer 2%',         buyer: 0.02,  host: 0.03 },
+  { value: 'host2_buyer3', label: 'Host 2% / Buyer 3%',         buyer: 0.03,  host: 0.02 },
 ];
 
 export function isFeeSplit(v: unknown): v is FeeSplit {
@@ -38,7 +38,7 @@ const r5 = (n: number) => Math.round(n * 100000) / 100000;
  * out. With the default split this reproduces their current rates exactly.
  */
 export function feeRatesFor(split: FeeSplit, organizerRate?: number | null): { buyer: number; host: number } {
-  const base = FEE_SPLITS.find(s => s.value === split) ?? FEE_SPLITS[0];
+  const base = FEE_SPLITS.find(s => s.value === split) ?? FEE_SPLITS.find(s => s.value === DEFAULT_FEE_SPLIT)!;
   const delta = (organizerRate ?? STANDARD_HOST_RATE) - STANDARD_HOST_RATE; // negative = discount
   let host = base.host + delta;
   let buyer = base.buyer;

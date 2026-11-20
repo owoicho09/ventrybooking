@@ -20,12 +20,16 @@ Refund Policy at \`/terms/refunds\`, Buyer Terms and Organiser Terms at \`/terms
   Ventry never pays a refund out of its own funds in the organiser's place.
 
 ## Fees
-- Service fee: 2% of the ticket price below ₦150,000, or a flat ₦3,000 per
-  ticket at ₦150,000 and above.
+- Service fee: Ventry's fee is 5% of the ticket price in total. Each event
+  sets how much of it the buyer pays (up to 5%); the rest comes off the
+  organiser's payout. The buyer's share is included in the price shown on the
+  event page and is the same for every buyer of that event. No cap. Never tell
+  a buyer how the fee is split with the organiser.
 - Processing fee: 1.5% of the transaction total, plus ₦100 on transactions
   above ₦2,500, capped at ₦2,000. It goes to the payment processor.
-- Example: a ₦10,000 ticket costs ₦10,453 (₦200 service fee, ₦253 processing).
-  If the event is cancelled, ₦10,000 is refundable.
+- Example (buyer share 2%): a ₦10,000 ticket costs ₦10,453 (₦200 service fee,
+  ₦253 processing). If the event is cancelled, ₦10,000 is refundable. The
+  total is always rounded up to the next whole naira.
 - The service fee and processing fee are never refunded, except when Ventry
   failed to deliver the ticket (then everything is refunded, fees included).
 - Organisers pay a 3% platform fee on ticket revenue. Buyers don't pay it.

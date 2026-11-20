@@ -7,9 +7,7 @@ import Link from 'next/link';
 import { ChevronLeft, MapPin, Share2, ShieldCheck, QrCode, Clock3, Info, Video, Lock, Mail, Check } from 'lucide-react';
 import { formatNGN } from '@/lib/utils';
 import {
-  buyerTotalForItems, listedTicketPrice, serviceFeePerTicket, buyerRateOf,
-  SERVICE_FEE_THRESHOLD,
-  PROCESSING_FEE_RATE, PROCESSING_FEE_FLAT, PROCESSING_FEE_THRESHOLD, PROCESSING_FEE_CAP,
+  buyerTotalForItems, buyerTotalWithProcessing, listedTicketPrice, buyerRateOf,
 } from '@/lib/fees';
 import { ticketUrgency, URGENCY_LABEL } from '@/lib/ticketUrgency';
 import type { Event, TicketTier } from '@/types';
@@ -170,6 +168,11 @@ export function EventDetailContent({ identifier, preview }: EventDetailContentPr
   // Per-event (060): advertise the exact tier prices and itemise the service
   // fee in the order summary instead of folding it into each price.
   const beforeFees = event?.priceBeforeFees === true;
+  // The summary lists each line at its advertised (whole-naira) price, so the
+  // processing line takes whatever is left: the lines always add up to the
+  // total actually charged.
+  const summaryLines = lines.reduce((s, l) => s + (l.tier.price === 0 ? 0 : listedTicketPrice(l.tier.price, beforeFees, buyerRate) * l.quantity), 0);
+  const summaryProcessing = Math.max(0, totals.total - summaryLines - (beforeFees ? totals.serviceFee : 0));
   // Checkout paused (061): organiser asked to cancel, or the venue is overdue.
   const pausedMessage = event?.salesPausedMessage ?? null;
   const allFree = hasSelection && lines.every(l => l.tier.price === 0);
@@ -490,19 +493,18 @@ export function EventDetailContent({ identifier, preview }: EventDetailContentPr
               )}
 
               {tier.price > 0 && feeOpenId === tier.id && (() => {
-                const fee = serviceFeePerTicket(tier.price, buyerRate);
-                const capped = tier.price > SERVICE_FEE_THRESHOLD;
-                const ratePct = `${Math.round(buyerRate * 1000) / 10}%`;
+                // One ticket on its own. Only the buyer's own fee is shown,
+                // never how Ventry's fee is split with the organiser.
+                const one = buyerTotalWithProcessing(tier.price, 1, buyerRate);
                 return (
                   <div className="v-fee-bd">
-                    <div><span>Ticket price</span><span>{formatNGN(tier.price)}</span></div>
-                    <div>
-                      <span>Service fee ({buyerRate <= 0 ? 'paid by the organiser' : capped ? `${ratePct}, capped at ${formatNGN(Math.round(SERVICE_FEE_THRESHOLD * buyerRate))}` : ratePct})</span>
-                      <span>{formatNGN(fee)}</span>
-                    </div>
-                    <div className="t"><span>{beforeFees ? 'With service fee' : 'Price per ticket'}</span><span>{formatNGN(tier.price + fee)}</span></div>
+                    <div><span>Ticket price</span><span>{formatNGN(one.subtotal)}</span></div>
+                    {one.serviceFee > 0 && <div><span>Service fee</span><span>{formatNGN(one.serviceFee)}</span></div>}
+                    <div><span>Processing fee</span><span>{formatNGN(one.processingFee)}</span></div>
+                    <div className="t"><span>Total for 1 ticket</span><span>{formatNGN(one.total)}</span></div>
                     <p>
-                      A payment processing fee of {PROCESSING_FEE_RATE * 100}% (+ {formatNGN(PROCESSING_FEE_FLAT)} on orders over {formatNGN(PROCESSING_FEE_THRESHOLD)}, max {formatNGN(PROCESSING_FEE_CAP)}) is added once per order and shown before you pay.
+                      The processing fee is worked out once on your whole order, so it&apos;s shown again before you pay.
+                      Service and processing fees are non-refundable.
                     </p>
                   </div>
                 );
@@ -536,7 +538,7 @@ export function EventDetailContent({ identifier, preview }: EventDetailContentPr
                   {beforeFees && totals.serviceFee > 0 && (
                     <div className="v-sum"><span>Service fee</span><span>{formatNGN(totals.serviceFee)}</span></div>
                   )}
-                  <div className="v-sum"><span>Processing fee</span><span>{formatNGN(totals.processingFee)}</span></div>
+                  <div className="v-sum"><span>Processing fee</span><span>{formatNGN(summaryProcessing)}</span></div>
                   <div className="v-sum tot"><span>Total{lines.length > 1 ? ` (${ticketCount} tickets)` : ''}</span><span>{formatNGN(totals.total)}</span></div>
                 </>
               )}

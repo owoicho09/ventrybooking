@@ -41,13 +41,13 @@ Why use Ventry instead of selling by WhatsApp and bank transfer:
 - Buyers see the organiser's refund policy before paying, and there is a set claims process if an event is cancelled. Ventry verifies organiser identity (verified tick) and venue bookings (Verified event badge), which helps buyers trust a new organiser.
 - Lost tickets can be recovered any time at /retrieve.
 - Organisers stay responsible for their event, refunds they owe and any chargebacks; Ventry provides the platform and collects payment for them.
-- Cost: listing is free; organisers pay 3% on paid tickets; buyers pay a small service and processing fee shown at checkout.`,
+- Cost: listing is free. On paid tickets Ventry's fee is 5% of the ticket price; buyers also pay a processing fee shown at checkout.`,
 
   buying_tickets: `
 - On the event page, choose a ticket tier and quantity, then check out.
-- At checkout you enter your name and email. If you're not signed in, Ventry emails a 6-digit code to confirm the address (so tickets can't go to a mistyped email). Signed-in buyers skip this.
+- At checkout you enter your name and email, then confirm on screen that the email is correct (tickets go only to that address, so check for typos). There's no code to enter.
 - Payment goes through the provider shown at checkout, using the payment methods available there. Every fee is itemised before you pay.
-- Fees: Ventry service fee 2% of the ticket price (flat ₦3,000 per ticket at ₦150,000 and above) plus a payment processing fee (1.5% + ₦100 above ₦2,500, capped at ₦2,000).
+- Fees: a Ventry service fee (a percentage of the ticket price set for each event, up to 5%, already included in the price on the event page) plus a payment processing fee (1.5% + ₦100 above ₦2,500, capped at ₦2,000). Both are itemised at checkout. Don't explain how the fee is split with the organiser.
 - After payment you get one email with a QR code per ticket. You can also see tickets at /retrieve or in your account.
 - Paid by bank transfer? The ticket is issued once the provider confirms the transfer. An abandoned or failed attempt means no money was taken.
 - Free events: up to 2 free tickets per person per event; no payment needed, the email code still applies.
@@ -71,7 +71,7 @@ Steps to sell tickets on Ventry:
 3. Choose when tickets go on sale: "Go live now" puts the event on sale the moment you publish (no waiting for Ventry approval; the team reviews after and may contact you). "Schedule" lets you pick a date and time; the event stays hidden until then, goes on sale automatically, and Ventry emails you when it's live. You can move the time as often as you like before then.
 4. Share your event link (ventrybooking.com/your-event-name) and your event QR code.
 5. Add your payout bank account and verify your identity on the Payouts page so you get paid (see payouts and verification).
-- Listing is free, and free events cost nothing. On paid tickets Ventry keeps 3% at payout; buyers pay the service and processing fees on top of your price.
+- Listing is free, and free events cost nothing. On paid tickets Ventry's fee is 5% of the ticket price, with no cap. When creating the event you pick a fee split for all its tiers: Buyer pays 5%, Host pays 5%, Split evenly (2.5% / 2.5%), Host 3% / Buyer 2% (the default), or Host 2% / Buyer 3%. The buyer's share is included in the price buyers see; your share comes off your payout. The form previews "Buyer pays / You receive" for each tier. The split locks once the first ticket sells. Buyers also pay the processing fee.
 - If your event doesn't appear: check it isn't scheduled for later, and that you confirmed your email.`,
 
   organiser_event_page: `
@@ -106,7 +106,7 @@ Open the event from My Events (/organizer/events) to manage it.
 - The event "Verified" badge is different: it comes from venue proof plus Ventry confirming the booking with the venue.`,
 
   organiser_payouts: `
-- Each day's ticket sales are paid to your bank account on the next working day (weekends and Nigerian public holidays roll to the next working day), minus Ventry's 3% platform fee. You receive 97% of the ticket price; buyer fees don't come out of your money.
+- Each day's ticket sales are paid to your bank account on the next working day (weekends and Nigerian public holidays roll to the next working day), minus your share of Ventry's fee under the event's fee split (3% on the default split, so you receive 97% of the ticket price). The buyer's share and the processing fee don't come out of your money.
 - Set up: Payouts page (/organizer/payouts) → add your bank account in your own legal name (or your business's registered name). Ventry confirms the account name with your bank. Payouts only go to an account matching your verified name.
 - Changing the bank account needs your password and a code emailed to you.
 - Choose how you're paid on the Payouts page ("How do you want to be paid?"): "Straight to my bank" (default: each day's sales paid automatically the next working day) or "Keep in my Ventry wallet" (sales build up in your wallet; tap Withdraw whenever you like and Ventry pays the whole available balance to your bank, usually the same working day). You can switch any time; switching back to bank pays the balance in the next working-day payout.
@@ -137,7 +137,7 @@ Three ways to check tickets at the door:
 - Money Ventry still holds for the event is refunded to those buyers automatically; they're marked on the list so nobody is paid twice.
 - After paying, report it on the Refunds page (/organizer/refunds) with proof (a bank statement or transfer receipts covering everyone). Ventry tells each buyer.
 - Not paying valid claims gets recorded against your account and can lead to losing the badge, held payouts, suspension or removal.
-- Ventry's 3% platform fee isn't returned on cancelled or refunded sales.`,
+- Ventry's fee (your share of it) isn't returned on cancelled or refunded sales. Buyers are refunded the base ticket price only.`,
 
   affiliate_programme: `
 - Anyone can join at /affiliates (sign up at /affiliate/register, no fee, no approval wait).

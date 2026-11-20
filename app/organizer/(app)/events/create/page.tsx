@@ -931,7 +931,7 @@ export default function CreateEventPage() {
         {FEE_SPLIT_ENABLED && (
           <div className="pt-2 border-t" style={{ borderColor: 'var(--color-border)' }}>
             <FeeSplitField value={feeSplit} onChange={setFeeSplit} organizerRate={me?.platform_fee_rate ?? null}
-              examplePrice={Number(tiers.find(t => Number(t.price) > 0)?.price) || undefined} />
+              tiers={tiers.map(t => ({ name: t.name, price: Number(t.price) || 0 }))} />
           </div>
         )}
       </section>

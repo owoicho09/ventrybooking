@@ -1,7 +1,7 @@
 import { getServerSupabase } from '@/lib/supabase/server';
 import { generateTicketId, generateRefundCode } from '@/lib/server/ids';
 import { sendTicketEmail } from '@/lib/server/email';
-import { calculateFees, serviceFeePerTicket, SERVICE_FEE_RATE, PLATFORM_FEE_RATE } from '@/lib/server/fees';
+import { calculateFees, serviceFeePerTicket, PLATFORM_FEE_RATE } from '@/lib/server/fees';
 import { notify } from '@/lib/server/notify';
 import { recordCheckoutConsent } from '@/lib/server/marketingConsent';
 import { recordAffiliateCommissionIfApplicable } from '@/lib/server/affiliateCommission';
@@ -169,8 +169,8 @@ export async function createTicketFromClaimedPayment(p: PaymentData): Promise<st
   // rounding remainder is left — same pattern the single-tier code used
   // within one tier, just generalized across tiers of differing price.
   // Fee split (062): the event's buyer and host shares; events created before
-  // it use the standard 2% buyer fee and the organiser's own rate.
-  const buyerRate = eventRow.buyer_fee_rate == null ? SERVICE_FEE_RATE : Number(eventRow.buyer_fee_rate);
+  // it use the standard 2% buyer fee (with its old cap) and the organiser's own rate.
+  const buyerRate = eventRow.buyer_fee_rate == null ? null : Number(eventRow.buyer_fee_rate);
   const hostRate  = eventRow.host_fee_rate == null ? (orgRow?.platform_fee_rate ?? PLATFORM_FEE_RATE) : Number(eventRow.host_fee_rate);
   type TicketUnit = { tierId: string; tierName: string; subtotal: number; serviceFee: number; accessCodeId: string | null };
   const units: TicketUnit[] = [];
@@ -220,7 +220,9 @@ export async function createTicketFromClaimedPayment(p: PaymentData): Promise<st
       subtotal:            unit.subtotal,
       service_fee:         unit.serviceFee,
       host_fee_rate:       hostRate,
-      processing_fee:      totalPaid - unit.subtotal - unit.serviceFee,
+      // service_fee is exact and can carry fractions of a kobo (e.g. 2.5% of
+      // ₦999); trim float noise so the three columns still sum to total_paid.
+      processing_fee:      Math.round((totalPaid - unit.subtotal - unit.serviceFee) * 10000) / 10000,
       status:              'valid',
       purchased_at:        purchasedAt,
       refund_code:         refundCodes[i],
