@@ -7,7 +7,7 @@ import { buyerTotalForItems } from '@/lib/server/fees';
 import { isEmailDomainAllowed } from '@/lib/server/domainRestriction';
 import { checkCartAccess } from '@/lib/server/tierAccess';
 import { getIp } from '@/lib/server/rateLimit';
-import { isCheckoutEmailVerified, EMAIL_NOT_VERIFIED_CODE } from '@/lib/server/checkoutEmailVerification';
+import { isPlausibleEmail, normalizeCheckoutEmail } from '@/lib/server/checkoutEmailVerification';
 import { v4 as uuidv4 } from 'uuid';
 
 // accessCode: the promo code for a code-gated tier (054), checked server-side.
@@ -15,7 +15,7 @@ interface CartItem { tierId: string; quantity: number; accessCode?: string }
 
 export async function POST(req: NextRequest) {
   try {
-    const { eventId, items, buyerEmail, buyerName, marketingConsent, ventryMarketingConsent, ref, purchasedByEmail, emailToken } = await req.json();
+    const { eventId, items, buyerEmail, buyerName, marketingConsent, ventryMarketingConsent, ref, purchasedByEmail } = await req.json();
     // Checkout now shows one box that consents to both lists. A client that
     // still sends the two flags separately (a page loaded before the change)
     // is honoured as-is; otherwise Ventry consent follows the single box.
@@ -24,11 +24,8 @@ export async function POST(req: NextRequest) {
     if (!eventId || !Array.isArray(items) || items.length === 0 || !buyerEmail) {
       return NextResponse.json({ error: 'Missing required fields' }, { status: 400 });
     }
-    if (!(await isCheckoutEmailVerified(buyerEmail, emailToken))) {
-      return NextResponse.json(
-        { error: 'Please confirm your email address to continue.', code: EMAIL_NOT_VERIFIED_CODE },
-        { status: 403 },
-      );
+    if (!isPlausibleEmail(normalizeCheckoutEmail(buyerEmail))) {
+      return NextResponse.json({ error: 'Please enter a valid email address.' }, { status: 400 });
     }
     const cartItems = items as CartItem[];
     for (const item of cartItems) {

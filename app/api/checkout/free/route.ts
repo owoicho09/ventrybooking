@@ -8,7 +8,7 @@ import { notify } from '@/lib/server/notify';
 import { isEmailDomainAllowed } from '@/lib/server/domainRestriction';
 import { checkCartAccess } from '@/lib/server/tierAccess';
 import { getIp } from '@/lib/server/rateLimit';
-import { isCheckoutEmailVerified, EMAIL_NOT_VERIFIED_CODE } from '@/lib/server/checkoutEmailVerification';
+import { isPlausibleEmail, normalizeCheckoutEmail } from '@/lib/server/checkoutEmailVerification';
 import { randomBytes } from 'crypto';
 import { recordCheckoutConsent } from '@/lib/server/marketingConsent';
 
@@ -17,16 +17,13 @@ interface CartItem { tierId: string; quantity: number; accessCode?: string }
 
 export async function POST(req: NextRequest) {
   try {
-    const { eventId, items, buyerEmail, buyerName, marketingConsent, ventryMarketingConsent, ref, purchasedByEmail, emailToken } = await req.json();
+    const { eventId, items, buyerEmail, buyerName, marketingConsent, ventryMarketingConsent, ref, purchasedByEmail } = await req.json();
 
     if (!eventId || !Array.isArray(items) || items.length === 0 || !buyerEmail) {
       return NextResponse.json({ error: 'Missing required fields' }, { status: 400 });
     }
-    if (!(await isCheckoutEmailVerified(buyerEmail, emailToken))) {
-      return NextResponse.json(
-        { error: 'Please confirm your email address to continue.', code: EMAIL_NOT_VERIFIED_CODE },
-        { status: 403 },
-      );
+    if (!isPlausibleEmail(normalizeCheckoutEmail(buyerEmail))) {
+      return NextResponse.json({ error: 'Please enter a valid email address.' }, { status: 400 });
     }
     const cartItems = items as CartItem[];
     for (const item of cartItems) {

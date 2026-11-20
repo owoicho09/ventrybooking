@@ -9,6 +9,7 @@ import { Button } from '@/components/ui/Button';
 import { Input } from '@/components/ui/Input';
 import { formatNGN } from '@/lib/utils';
 import { buyerTotalForItems } from '@/lib/fees';
+import { suggestEmailFix } from '@/lib/emailTypos';
 
 interface CartLine {
   tierId: string;
@@ -54,18 +55,11 @@ export default function CheckoutPage() {
   // rule) but the order still needs to be attributable back to this session.
   const [sessionEmail, setSessionEmail]       = useState<string | null>(null);
 
-  // Email verification. A guest must prove they can read the inbox they typed
-  // before an order is created, which catches typos like "gmil.com" up front.
-  // The token is bound to the exact email it was issued for, so editing the
-  // email afterwards invalidates it (see needsVerification below).
-  const [step, setStep]                       = useState<'details' | 'verify'>('details');
-  const [otp, setOtp]                         = useState('');
-  const [emailToken, setEmailToken]           = useState<string | null>(null);
-  const [verifiedEmail, setVerifiedEmail]     = useState<string | null>(null);
-  const [codeLength, setCodeLength]           = useState(6);
-  const [cooldown, setCooldown]               = useState(0);
-  const [resending, setResending]             = useState(false);
-  const [notice, setNotice]                   = useState('');
+  // Email confirmation. Before an order is created the buyer sees the exact
+  // address the ticket will go to and confirms it (with a "did you mean" for
+  // common domain typos). This replaced an emailed code, which caught the same
+  // mistakes but cost real drop-off.
+  const [step, setStep]                       = useState<'details' | 'confirm'>('details');
 
   useEffect(() => {
     const raw = sessionStorage.getItem('ventry_cart');
@@ -88,12 +82,6 @@ export default function CheckoutPage() {
       .catch(() => {});
   }, []);
 
-  useEffect(() => {
-    if (cooldown <= 0) return;
-    const t = setTimeout(() => setCooldown(c => c - 1), 1000);
-    return () => clearTimeout(t);
-  }, [cooldown]);
-
   const { subtotal, serviceFee, processingFee, total } = cart
     ? buyerTotalForItems(cart.items.map(i => ({ price: i.tierPrice, quantity: i.quantity })), cart.buyerFeeRate)
     : { subtotal: 0, serviceFee: 0, processingFee: 0, total: 0 };
@@ -113,35 +101,13 @@ export default function CheckoutPage() {
       : '';
 
   const normalizedEmail = email.trim().toLowerCase();
-  // A signed-in buyer is already verified server-side; guests need a token
-  // issued for exactly the email currently in the field.
-  const needsVerification = !sessionEmail && !(emailToken && verifiedEmail === normalizedEmail);
-
-  // Returns true once a code is on its way (including "one was just sent";
-  // the server's resend cooldown answers 429 with retryAfter in that case).
-  const sendCode = async (): Promise<boolean> => {
-    const res = await fetch('/api/checkout/email-otp/request', {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ email: normalizedEmail }),
-    });
-    const data = await res.json().catch(() => ({}));
-    if (res.ok) {
-      setCooldown(data.data?.cooldownSeconds ?? 60);
-      if (data.data?.codeLength) setCodeLength(data.data.codeLength);
-      return true;
-    }
-    if (res.status === 429 && typeof data.retryAfter === 'number') {
-      setCooldown(data.retryAfter);
-      return true;
-    }
-    setError(data.error || 'Could not send a code. Please try again.');
-    return false;
-  };
+  const emailSuggestion = suggestEmailFix(normalizedEmail);
+  // A signed-in buyer keeping their own account email has nothing to confirm.
+  const needsConfirm = !(sessionEmail && sessionEmail.toLowerCase() === normalizedEmail);
 
   // Creates the order (free) or the Flutterwave session (paid). Only ever called
-  // once the email is verified; the server re-checks the token regardless.
-  const placeOrder = async (token: string | null) => {
+  // once the buyer has confirmed the email.
+  const placeOrder = async () => {
     if (!cart) return;
     const endpoint = isFree ? '/api/checkout/free' : '/api/checkout';
     const res = await fetch(endpoint, {
@@ -157,16 +123,10 @@ export default function CheckoutPage() {
         ventryMarketingConsent: marketingConsent,
         ref: cart.ref,
         purchasedByEmail: sessionEmail,
-        emailToken: token,
       }),
     });
     const data = await res.json();
     if (!res.ok) {
-      if (data.code === 'EMAIL_NOT_VERIFIED') {
-        // Token expired or was rejected: start verification over.
-        setEmailToken(null);
-        setVerifiedEmail(null);
-      }
       if (data.code === 'ACCESS_CODE_INVALID' || data.code === 'ACCESS_CODE_REQUIRED') {
         // Forget the stale code, both in this cart and on the event page, so
         // the ticket shows as locked again and asks for a fresh code.
@@ -197,19 +157,22 @@ export default function CheckoutPage() {
     if (!cart) return;
     setError('');
     setCodeRejected(false);
-    setNotice('');
     if (domainBlocked) {
       setError(domainMessage);
       return;
     }
+    if (needsConfirm) {
+      setStep('confirm');
+      return;
+    }
+    await submitOrder();
+  };
+
+  const submitOrder = async () => {
+    setError('');
     setLoading(true);
     try {
-      if (needsVerification) {
-        setOtp('');
-        if (await sendCode()) setStep('verify');
-        return;
-      }
-      await placeOrder(emailToken);
+      await placeOrder();
     } catch {
       setError('Network error. Please try again.');
     } finally {
@@ -217,56 +180,13 @@ export default function CheckoutPage() {
     }
   };
 
-  const handleVerify = async (e: React.FormEvent) => {
-    e.preventDefault();
-    setError('');
-    setNotice('');
-    setLoading(true);
-    try {
-      const res = await fetch('/api/checkout/email-otp/verify', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ email: normalizedEmail, otp: otp.trim() }),
-      });
-      const data = await res.json();
-      if (!res.ok) {
-        setError(data.error || 'Could not verify that code');
-        return;
-      }
-      const token: string = data.data.emailToken;
-      setEmailToken(token);
-      setVerifiedEmail(normalizedEmail);
-      // Verified: carry straight on into the purchase, no second click.
-      await placeOrder(token);
-    } catch {
-      setError('Network error. Please try again.');
-    } finally {
-      setLoading(false);
-    }
-  };
-
-  const handleResend = async () => {
-    if (cooldown > 0 || resending) return;
-    setError('');
-    setNotice('');
-    setResending(true);
-    try {
-      if (await sendCode()) {
-        setOtp('');
-        setNotice(`A new code was sent to ${normalizedEmail}.`);
-      }
-    } catch {
-      setError('Network error. Please try again.');
-    } finally {
-      setResending(false);
-    }
+  const handleUseSuggestion = () => {
+    if (emailSuggestion) setEmail(emailSuggestion);
   };
 
   const handleChangeEmail = () => {
     setStep('details');
-    setOtp('');
     setError('');
-    setNotice('');
   };
 
   if (!cart) {
@@ -383,7 +303,7 @@ export default function CheckoutPage() {
             style={{ backgroundColor: 'var(--color-surface)', borderColor: 'var(--color-border)' }}>
             <h1 className="text-2xl font-bold mb-6"
               style={{ color: 'var(--color-text)', fontFamily: 'var(--font-syne), sans-serif' }}>
-              {step === 'verify' ? 'Confirm Your Email' : isFree ? 'Get Your Free Ticket' : 'Complete Your Order'}
+              {step === 'confirm' ? 'Is Your Email Correct?' : isFree ? 'Get Your Free Ticket' : 'Complete Your Order'}
             </h1>
             {error && (
               <div className="mb-4 rounded-lg px-4 py-3 text-sm border"
@@ -398,52 +318,39 @@ export default function CheckoutPage() {
                 )}
               </div>
             )}
-            {notice && (
-              <div className="mb-4 rounded-lg px-4 py-3 text-sm border"
-                style={{ backgroundColor: 'var(--color-purple-dim)', borderColor: 'var(--color-border)', color: 'var(--color-purple-light)' }}>
-                {notice}
-              </div>
-            )}
-            {step === 'verify' ? (
-            <form onSubmit={handleVerify} className="flex flex-col gap-5">
+            {step === 'confirm' ? (
+            <div className="flex flex-col gap-5">
               <p className="text-sm leading-relaxed" style={{ color: 'var(--color-text-muted)' }}>
-                We sent a {codeLength}-digit code to{' '}
-                <strong style={{ color: 'var(--color-text)', wordBreak: 'break-all' }}>{normalizedEmail}</strong>.
-                {' '}Enter it below to {isFree ? 'get your ticket' : 'continue to payment'}.
+                Your ticket will be sent to:
               </p>
-              <Input
-                label="Verification code"
-                value={otp}
-                onChange={e => setOtp(e.target.value.replace(/\D/g, '').slice(0, codeLength))}
-                placeholder={'0'.repeat(codeLength)}
-                inputMode="numeric"
-                autoComplete="one-time-code"
-                maxLength={codeLength}
-                autoFocus
-                required
-              />
-              <Button type="submit" size="lg" fullWidth disabled={loading || otp.length !== codeLength}>
-                {loading ? 'Verifying…' : isFree ? 'Verify & Get Free Ticket' : `Verify & Pay ${formatNGN(total)}`}
-              </Button>
-
-              <div className="rounded-lg border px-4 py-3 text-xs leading-relaxed"
-                style={{ borderColor: 'var(--color-border)', color: 'var(--color-text-muted)' }}>
-                <p className="font-semibold mb-1" style={{ color: 'var(--color-text)' }}>Didn&apos;t get the code?</p>
-                <p className="mb-3">
-                  Make sure <strong style={{ color: 'var(--color-text)', wordBreak: 'break-all' }}>{normalizedEmail}</strong>{' '}
-                  is the email address you meant to enter. A typo is the most common reason. Also check your spam or
-                  promotions folder. If it&apos;s wrong, change it; otherwise you can resend the code.
+              <div className="rounded-lg border px-4 py-3 text-center"
+                style={{ borderColor: 'var(--color-purple)', backgroundColor: 'var(--color-purple-dim)' }}>
+                <p className="text-lg font-semibold" style={{ color: 'var(--color-text)', wordBreak: 'break-all' }}>
+                  {normalizedEmail}
                 </p>
-                <div className="flex flex-wrap gap-2">
-                  <Button type="button" size="sm" variant="outline" onClick={handleResend} disabled={cooldown > 0 || resending || loading}>
-                    {resending ? 'Sending…' : cooldown > 0 ? `Resend code in ${cooldown}s` : 'Resend code'}
-                  </Button>
-                  <Button type="button" size="sm" variant="ghost" onClick={handleChangeEmail} disabled={loading}>
-                    Change email
-                  </Button>
-                </div>
               </div>
-            </form>
+              {emailSuggestion && (
+                <div className="rounded-lg border px-4 py-3 text-sm"
+                  style={{ backgroundColor: '#f59e0b15', borderColor: '#f59e0b40', color: 'var(--color-text)' }}>
+                  Did you mean <strong style={{ wordBreak: 'break-all' }}>{emailSuggestion}</strong>?{' '}
+                  <button type="button" onClick={handleUseSuggestion} className="font-semibold underline">
+                    Use this instead
+                  </button>
+                </div>
+              )}
+              <p className="text-xs leading-relaxed" style={{ color: 'var(--color-text-muted)' }}>
+                Please check it carefully. Your QR ticket is emailed here, and you&apos;ll need this exact address to
+                find your ticket later. We can&apos;t move a ticket sent to a mistyped email.
+              </p>
+              <Button type="button" size="lg" fullWidth onClick={submitOrder} disabled={loading}>
+                {loading
+                  ? (isFree ? 'Getting your ticket…' : 'Redirecting to payment…')
+                  : isFree ? 'Yes, Get Free Ticket' : `Yes, Pay ${formatNGN(total)}`}
+              </Button>
+              <Button type="button" size="lg" variant="outline" fullWidth onClick={handleChangeEmail} disabled={loading}>
+                No, change email
+              </Button>
+            </div>
             ) : (
             <form onSubmit={handleSubmit} className="flex flex-col gap-5">
               <Input
@@ -465,13 +372,21 @@ export default function CheckoutPage() {
                       ? `${cart.items.find(i => i.allowedEmailDomains?.length)!.tierName} is only for ${cart.items.find(i => i.allowedEmailDomains?.length)!.allowedEmailDomains!.map(d => `@${d}`).join(' or ')} email addresses. The ticket is sent here.`
                     : sessionEmail
                       ? "Your QR ticket will be sent here. You'll also use this to retrieve your ticket."
-                      : "Your QR ticket will be sent here. We'll email you a code to confirm it's correct before you continue."
+                      : "Your QR ticket will be sent here. Double-check it, as this is the only way to receive your ticket."
                 }
                 required
               />
               {domainBlocked && (
                 <p className="text-xs -mt-3" style={{ color: 'var(--color-red)' }}>
                   {domainMessage}
+                </p>
+              )}
+              {!domainBlocked && emailSuggestion && (
+                <p className="text-xs -mt-3" style={{ color: '#f59e0b' }}>
+                  Did you mean{' '}
+                  <button type="button" onClick={handleUseSuggestion} className="font-semibold underline" style={{ wordBreak: 'break-all' }}>
+                    {emailSuggestion}
+                  </button>?
                 </p>
               )}
 
@@ -500,9 +415,9 @@ export default function CheckoutPage() {
 
               <Button type="submit" size="lg" fullWidth disabled={loading || !email.trim() || domainBlocked}>
                 {loading
-                  ? (needsVerification ? 'Sending code…' : isFree ? 'Getting your ticket…' : 'Redirecting to payment…')
-                  : needsVerification
-                    ? 'Verify Email & Continue'
+                  ? (isFree ? 'Getting your ticket…' : 'Redirecting to payment…')
+                  : needsConfirm
+                    ? 'Continue'
                     : (isFree ? 'Get Free Ticket' : `Pay ${formatNGN(total)}`)}
               </Button>
             </form>
