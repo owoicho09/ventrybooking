@@ -29,21 +29,16 @@ export function isFeeSplit(v: unknown): v is FeeSplit {
   return FEE_SPLITS.some(s => s.value === v);
 }
 
-const r5 = (n: number) => Math.round(n * 100000) / 100000;
-
 /**
- * Effective rates for a split. An organiser whose own rate differs from the
- * standard 3% (e.g. grandfathered at 2.5%) keeps that difference, applied to
- * the host share first and to the buyer share only if the host share runs
- * out. With the default split this reproduces their current rates exactly.
+ * Rates for a split. Every option totals exactly 5%: an organiser's own
+ * account rate (some are grandfathered at 2.5%) only applies to events with
+ * no split stored, never to a split they choose. The second argument is
+ * kept so existing callers don't change; it is deliberately ignored.
  */
-export function feeRatesFor(split: FeeSplit, organizerRate?: number | null): { buyer: number; host: number } {
+// eslint-disable-next-line @typescript-eslint/no-unused-vars
+export function feeRatesFor(split: FeeSplit, _organizerRate?: number | null): { buyer: number; host: number } {
   const base = FEE_SPLITS.find(s => s.value === split) ?? FEE_SPLITS.find(s => s.value === DEFAULT_FEE_SPLIT)!;
-  const delta = (organizerRate ?? STANDARD_HOST_RATE) - STANDARD_HOST_RATE; // negative = discount
-  let host = base.host + delta;
-  let buyer = base.buyer;
-  if (host < 0) { buyer = Math.max(0, buyer + host); host = 0; }
-  return { buyer: r5(buyer), host: r5(host) };
+  return { buyer: base.buyer, host: base.host };
 }
 
 /** "2.5%" */

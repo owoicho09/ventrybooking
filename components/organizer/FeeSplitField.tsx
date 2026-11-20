@@ -1,14 +1,14 @@
 'use client';
 
-import { FEE_SPLITS, feeRatesFor, pct, type FeeSplit } from '@/lib/feeSplit';
+import { FEE_SPLITS, feeRatesFor, type FeeSplit } from '@/lib/feeSplit';
 import { ticketPriceWithService } from '@/lib/fees';
 import { formatNGN } from '@/lib/utils';
 
 /**
  * Who pays Ventry's 5% (062). One choice for the whole event, applied to
  * every tier. Under the options, a live line per tier shows what a buyer
- * pays and what the organiser receives at the chosen split, using the
- * organiser's own rate (any discount comes off their share).
+ * pays and what the organiser receives at the chosen split. Every option
+ * totals exactly 5%.
  */
 export function FeeSplitField({
   value, onChange, organizerRate, tiers, disabled = false, lockedReason,
@@ -36,7 +36,6 @@ export function FeeSplitField({
       </div>
       <div className="grid grid-cols-1 sm:grid-cols-2 gap-2.5" role="radiogroup" aria-label="Fee split">
         {FEE_SPLITS.map(opt => {
-          const r = feeRatesFor(opt.value, organizerRate);
           const on = value === opt.value;
           return (
             <button key={opt.value} type="button" role="radio" aria-checked={on} disabled={disabled}
@@ -50,11 +49,6 @@ export function FeeSplitField({
               <span className="block text-sm font-medium" style={{ color: on ? 'var(--color-purple-light)' : 'var(--color-text)' }}>
                 {opt.label}{opt.value === 'host3_buyer2' ? ' (default)' : ''}
               </span>
-              {(r.buyer !== opt.buyer || r.host !== opt.host) && (
-                <span className="block text-xs mt-1" style={{ color: 'var(--color-text-muted)' }}>
-                  With your rate: buyer {pct(r.buyer)} · you {pct(r.host)}
-                </span>
-              )}
             </button>
           );
         })}

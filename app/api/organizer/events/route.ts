@@ -159,7 +159,7 @@ export async function POST(req: NextRequest) {
     const goesLiveAt = isScheduled(goesLiveRaw) ? new Date(goesLiveRaw as string).toISOString() : null;
 
     // Fee split (062): who pays Ventry's 5%. Rates are stored on the event,
-    // with the organiser's own rate (any discount) folded in.
+    // with every option totalling exactly 5% (account rates don't apply).
     const feeSplitRaw = (FEE_SPLIT_ENABLED && String(formData.get('feeSplit') ?? '')) || DEFAULT_FEE_SPLIT;
     if (!isFeeSplit(feeSplitRaw)) return NextResponse.json({ error: 'Choose who pays the Ventry fee' }, { status: 400 });
     const { data: orgRate } = await db.from('users').select('platform_fee_rate').eq('id', organizerId).maybeSingle();
